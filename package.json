@@ -4,22 +4,23 @@
   "type": "module",
   "description": "Open-MLR — AI assistant for ML engineering",
   "scripts": {
-    "dev": "concurrently \"bun run dev:server\" \"bun run dev:frontend\"",
-    "dev:server": "bun run src/server.ts",
-    "dev:frontend": "cd frontend && bun run dev",
-    "build": "cd frontend && bun run build",
-    "start": "bun run src/server.ts",
-    "install:all": "bun install && cd frontend && bun install"
+    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:frontend\"",
+    "dev:server": "tsx src/server.ts",
+    "dev:frontend": "pnpm --filter open-mlr-frontend dev",
+    "build": "pnpm --filter open-mlr-frontend build",
+    "start": "tsx src/server.ts"
   },
   "dependencies": {
     "ai": "^6.0.168",
     "@ai-sdk/anthropic": "^3.0.71",
+    "@ai-sdk/openai": "^1.0.0",
     "dotenv": "^17.4.2",
     "openai": "^4.0.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/node": "^22.0.0",
     "concurrently": "^9.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
 }

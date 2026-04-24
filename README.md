@@ -18,14 +18,15 @@ An AI assistant for machine learning engineering. Open-MLR autonomously research
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (v1.1+)
+- [Node.js](https://nodejs.org) (v20+)
+- [pnpm](https://pnpm.io)
 
 ### Installation
 
 ```bash
 git clone git@github.com:xprilion/open-mlr.git
 cd open-mlr
-bun run install:all
+pnpm i
 ```
 
 ### Configuration
@@ -46,13 +47,13 @@ GITHUB_TOKEN=ghp_...
 
 **Production:**
 ```bash
-bun run build      # Build the frontend
-bun run start      # Start the server on port 3000
+pnpm build      # Build the frontend
+pnpm start      # Start the server on port 3000
 ```
 
 **Development:**
 ```bash
-bun run dev        # Starts both server and Vite dev server with hot reload
+pnpm dev        # Starts both server and Vite dev server with hot reload
 ```
 
 Then open `http://localhost:3000`.
@@ -106,7 +107,7 @@ Open-MLR creates `.open-mlr.config.json` in the current working directory to sto
 └──────────────────┬───────────────────┘
                    │ HTTP / SSE
 ┌──────────────────▼───────────────────┐
-│           Bun HTTP Server            │
+│           Node.js HTTP Server        │
 │  ┌────────────────────────────────┐  │
 │  │  Session + Agent Loop          │  │
 │  │  • ContextManager              │  │
@@ -118,7 +119,7 @@ Open-MLR creates `.open-mlr.config.json` in the current working directory to sto
 
 ## Tech Stack
 
-- **Backend**: Bun, TypeScript, OpenAI SDK, `ai` SDK (Anthropic)
+- **Backend**: Node.js, TypeScript, OpenAI SDK, `ai` SDK (Anthropic)
 - **Frontend**: React 19, Vite, react-markdown, remark-gfm
 - **LLM Providers**: OpenAI, Anthropic, OpenRouter
 

@@ -44,6 +44,7 @@ export default function App() {
             id: nextId(),
             role: 'assistant',
             content: chunk,
+            streaming: true,
           };
           streamRef.current = msg;
           return [...prev, msg];
@@ -51,9 +52,19 @@ export default function App() {
         break;
       }
 
-      case 'assistant_stream_end':
+      case 'assistant_stream_end': {
         streamRef.current = null;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant' && last.streaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, streaming: false };
+            return updated;
+          }
+          return prev;
+        });
         break;
+      }
 
       case 'assistant_message': {
         const content = event.data?.content;
@@ -82,15 +93,39 @@ export default function App() {
         break;
 
       case 'tool_output':
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: nextId(),
-            role: 'tool-output',
-            content: event.data?.output || '',
-            metadata: { success: event.data?.success },
-          },
-        ]);
+        setMessages((prev) => {
+          let idx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].role === 'tool') {
+              idx = i;
+              break;
+            }
+          }
+          if (idx === -1) {
+            return [
+              ...prev,
+              {
+                id: nextId(),
+                role: 'tool',
+                content: '',
+                metadata: {
+                  output: event.data?.output || '',
+                  outputSuccess: event.data?.success,
+                },
+              },
+            ];
+          }
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            metadata: {
+              ...updated[idx].metadata,
+              output: event.data?.output || '',
+              outputSuccess: event.data?.success,
+            },
+          };
+          return updated;
+        });
         break;
 
       case 'tool_log': {

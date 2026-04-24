@@ -5,11 +5,13 @@ export interface AgentEvent {
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'tool' | 'tool-output' | 'system' | 'error';
+  role: 'user' | 'assistant' | 'tool' | 'system' | 'error';
   content: string;
+  streaming?: boolean;
   metadata?: {
     tool?: string;
     args?: string;
-    success?: boolean;
+    output?: string;
+    outputSuccess?: boolean;
   };
 }

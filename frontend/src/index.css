@@ -302,25 +302,57 @@ html, body, #root {
 }
 
 .msg-tool {
-  background: var(--tool-bg);
-  border-left: 3px solid var(--tool-text);
-  padding: 10px 14px;
-  border-radius: 0 8px 8px 0;
-  color: var(--tool-text);
   font-family: monospace;
   font-size: 12px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
   max-width: 90%;
 }
 
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.tool-header:hover {
+  background: var(--surface-hover);
+}
+
+.tool-header.pending {
+  color: var(--tool-text);
+  border-left: 3px solid var(--tool-text);
+}
+
+.tool-header.success {
+  color: var(--success);
+  border-left: 3px solid var(--success);
+}
+
+.tool-header.error {
+  color: var(--error);
+  border-left: 3px solid var(--error);
+}
+
 .tool-icon {
   font-size: 10px;
+  flex-shrink: 0;
 }
 
 .tool-name {
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .tool-args {
@@ -330,7 +362,7 @@ html, body, #root {
   white-space: nowrap;
 }
 
-.msg-tool-output {
+.tool-output {
   background: var(--surface);
   border-left: 3px solid var(--success);
   padding: 12px 16px;
@@ -338,13 +370,13 @@ html, body, #root {
   color: var(--text);
   font-family: monospace;
   font-size: 12px;
-  max-width: 90%;
+  max-width: 100%;
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;
 }
 
-.msg-tool-output.error {
+.tool-output.error {
   border-left-color: var(--error);
   color: #fca5a5;
 }

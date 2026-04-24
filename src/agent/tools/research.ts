@@ -2,54 +2,52 @@ import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { ToolSpec } from "../types.js";
 
+async function braveSearch(query: string, limit: number): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  const apiKey = process.env.BRAVE_API_KEY;
+  if (!apiKey) return [];
+
+  const url = new URL("https://api.search.brave.com/res/v1/web/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("count", String(limit));
+  url.searchParams.set("offset", "0");
+  url.searchParams.set("safesearch", "off");
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "X-Subscription-Token": apiKey,
+    },
+  });
+
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const out: Array<{ title: string; url: string; snippet: string }> = [];
+  const webResults = data.web?.results || [];
+  for (const r of webResults) {
+    out.push({
+      title: r.title || "",
+      url: r.url || "",
+      snippet: r.description || "",
+    });
+  }
+  return out;
+}
+
 async function researchHandler(args: Record<string, any>): Promise<[string, boolean]> {
   const task = args.task || "";
   const context = args.context || "";
   if (!task) return ["No research task provided.", false];
 
   try {
-    // Step 1: Web search for the task
-    const searchQuery = `${task} site:github.com OR site:huggingface.co documentation example`;
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`;
-    const res = await fetch(searchUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Bot/0.1)" },
-    });
-    const html = await res.text();
-
-    const links: Array<{ title: string; url: string; snippet: string }> = [];
-    const linkRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/g;
-    const snippetRegex = /<a[^>]+class="result__snippet"[^>]*>(.*?)<\/a>/g;
-
-    let linkMatch;
-    const rawLinks: Array<{ title: string; url: string }> = [];
-    while ((linkMatch = linkRegex.exec(html)) !== null) {
-      let title = linkMatch[2].replace(/<[^>]+>/g, "").trim();
-      let url = linkMatch[1];
-      const uMatch = url.match(/uddg=([^&]+)/);
-      if (uMatch) {
-        try { url = decodeURIComponent(uMatch[1]); } catch { /* keep */ }
-      }
-      rawLinks.push({ title, url });
-    }
-
-    let snippetMatch;
-    const rawSnippets: string[] = [];
-    while ((snippetMatch = snippetRegex.exec(html)) !== null) {
-      rawSnippets.push(snippetMatch[1].replace(/<[^>]+>/g, "").trim());
-    }
-
-    for (let i = 0; i < Math.min(rawLinks.length, rawSnippets.length, 8); i++) {
-      links.push({ ...rawLinks[i], snippet: rawSnippets[i] });
-    }
+    const links = await braveSearch(task, 8);
 
     if (links.length === 0) {
       return ["No research results found for this task.", false];
     }
 
-    // Step 2: Summarize with a cheap LLM call
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      // Fallback: just return raw links
       const formatted = links.map((l, i) => `${i + 1}. ${l.title}\n   ${l.url}\n   ${l.snippet}`).join("\n\n");
       return [formatted, true];
     }
