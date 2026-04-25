@@ -1,43 +1,117 @@
-import { api } from '../api';
+import { useState, useMemo } from 'react';
+import { setToken } from '../api';
+import type { Conversation, User } from '../types';
+
+type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
 
 interface Props {
-  onAction: (type: string, data?: any) => void;
+  conversations: Conversation[];
+  currentUuid: string | null;
+  user: User | null;
+  convStatuses: Record<string, ConvStatus>;
+  onSwitch: (uuid: string) => void;
+  onNew: (mode?: string) => void;
+  onDelete: (uuid: string) => void;
+  onAction: (type: string) => void;
+  onOpenSettings: () => void;
 }
 
-export function Sidebar({ onAction }: Props) {
+function groupByDate(conversations: Conversation[]) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const weekAgo = new Date(today.getTime() - 7 * 86400000);
+  const groups: { label: string; items: Conversation[] }[] = [
+    { label: 'Today', items: [] }, { label: 'Yesterday', items: [] },
+    { label: 'This Week', items: [] }, { label: 'Older', items: [] },
+  ];
+  for (const c of conversations) {
+    const d = new Date(c.updated_at || c.created_at);
+    if (d >= today) groups[0].items.push(c);
+    else if (d >= yesterday) groups[1].items.push(c);
+    else if (d >= weekAgo) groups[2].items.push(c);
+    else groups[3].items.push(c);
+  }
+  return groups.filter((g) => g.items.length > 0);
+}
+
+function ConvIcon({ status }: { status: ConvStatus }) {
+  if (status === 'processing') return <span className="conv-status-icon conv-status-processing" title="Processing" />;
+  if (status === 'waiting_approval') return <span className="conv-status-icon conv-status-approval" title="Needs approval" />;
+  if (status === 'waiting_input') return <span className="conv-status-icon conv-status-input" title="Waiting for you" />;
+  return <span className="conv-status-icon conv-status-idle" />;
+}
+
+export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwitch, onNew, onDelete, onAction, onOpenSettings }: Props) {
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return conversations;
+    const q = search.toLowerCase();
+    return conversations.filter((c) => c.title.toLowerCase().includes(q));
+  }, [conversations, search]);
+
+  const groups = useMemo(() => groupByDate(filtered), [filtered]);
+
+  if (collapsed) {
+    return (
+      <aside className="sidebar sidebar-collapsed">
+        <button className="sidebar-toggle" onClick={() => setCollapsed(false)} title="Expand">&raquo;</button>
+        <button className="icon-btn" onClick={() => onNew()} title="New chat">+</button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="sidebar">
-      <h3 className="sidebar-title">Actions</h3>
-
-      <div className="action-group">
-        <button
-          className="action-btn"
-          onClick={async () => {
-            await api.undo();
-            onAction('undo');
-          }}
-          title="Undo last turn"
-        >
-          &#x21A9; Undo
-        </button>
-        <button
-          className="action-btn"
-          onClick={async () => {
-            await api.compact();
-            onAction('compact');
-          }}
-          title="Compact conversation context"
-        >
-          &#x1F4A9; Compact
-        </button>
+      <div className="sidebar-top">
+        <button className="sidebar-toggle" onClick={() => setCollapsed(true)} title="Collapse">&laquo;</button>
+        <button className="action-btn new-conv-btn" onClick={() => onNew()}>+ New Chat</button>
       </div>
 
-      <div className="sidebar-section">
-        <h4>Shortcuts</h4>
-        <div className="shortcut-list">
-          <div><kbd>Enter</kbd> Send</div>
-          <div><kbd>Shift</kbd>+<kbd>Enter</kbd> New line</div>
-        </div>
+      <input type="text" className="sidebar-search" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+
+      <div className="conversation-list">
+        {groups.map((group) => (
+          <div key={group.label} className="conv-group">
+            <div className="conv-group-label">{group.label}</div>
+            {group.items.map((conv) => (
+              <div
+                key={conv.uuid}
+                className={`conversation-item ${conv.uuid === currentUuid ? 'active' : ''}`}
+                onClick={() => onSwitch(conv.uuid)}
+              >
+                <ConvIcon status={convStatuses[conv.uuid] || 'idle'} />
+                <span className="conv-title" title={conv.title}>{conv.title}</span>
+                <button
+                  className="conv-delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirmDelete === conv.uuid) { onDelete(conv.uuid); setConfirmDelete(null); }
+                    else { setConfirmDelete(conv.uuid); setTimeout(() => setConfirmDelete((p) => p === conv.uuid ? null : p), 2000); }
+                  }}
+                  title={confirmDelete === conv.uuid ? 'Confirm' : 'Delete'}
+                >
+                  {confirmDelete === conv.uuid ? '?' : '\u2715'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+        {filtered.length === 0 && <div className="conv-empty">{search ? 'No matches' : 'No conversations yet'}</div>}
+      </div>
+
+      <div className="sidebar-actions">
+        <button className="action-btn" onClick={() => onAction('undo')} title="Undo">&#x21A9; Undo</button>
+        <button className="action-btn" onClick={() => onAction('compact')} title="Compact">&#x2702; Compact</button>
+      </div>
+
+      <div className="sidebar-footer">
+        <button className="settings-btn" onClick={onOpenSettings} title="Settings">&#x2699;</button>
+        {user && <span className="user-info" title={user.username}>{user.display_name || user.username}</span>}
+        <button className="logout-btn" onClick={() => { setToken(null); window.location.reload(); }} title="Sign out">&#x2192;</button>
       </div>
     </aside>
   );

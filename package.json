@@ -1,26 +1,10 @@
 {
-  "name": "open-mlr",
-  "version": "1.0.0",
-  "type": "module",
-  "description": "Open-MLR — AI assistant for ML engineering",
+  "name": "openmlr-workspace",
+  "private": true,
+  "version": "2.0.0",
+  "description": "OpenMLR — ML research intern (frontend workspace)",
   "scripts": {
-    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:frontend\"",
-    "dev:server": "tsx src/server.ts",
-    "dev:frontend": "pnpm --filter open-mlr-frontend dev",
-    "build": "pnpm --filter open-mlr-frontend build",
-    "start": "tsx src/server.ts"
-  },
-  "dependencies": {
-    "ai": "^6.0.168",
-    "@ai-sdk/anthropic": "^3.0.71",
-    "@ai-sdk/openai": "^1.0.0",
-    "dotenv": "^17.4.2",
-    "openai": "^4.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "concurrently": "^9.0.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "dev:frontend": "pnpm --filter openmlr-frontend dev",
+    "build:frontend": "pnpm --filter openmlr-frontend build"
   }
 }

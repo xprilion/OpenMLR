@@ -1,0 +1,18 @@
+# Default Agent Configuration
+# Leave model_name empty to auto-detect from configured API keys.
+model_name: ""
+max_iterations: 300
+stream: true
+yolo_mode: false
+compact_threshold_ratio: 0.90
+untouched_messages: 5
+default_max_tokens: 200000
+confirm_sandbox_creation: true
+confirm_destructive_ops: true
+
+# Leave empty to auto-detect
+research_model: ""
+title_model: ""
+
+# MCP servers (optional)
+mcpServers: {}

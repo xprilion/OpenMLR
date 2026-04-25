@@ -1,19 +1,29 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { AgentEvent } from '../types';
 
-export function useSSE(onEvent: (event: AgentEvent) => void) {
+/**
+ * SSE hook that connects to /api/events.
+ * Pass `enabled=false` to defer connection (e.g., until auth completes).
+ * Token is sent as a query param since EventSource cannot set headers.
+ */
+export function useSSE(
+  onEvent: (event: AgentEvent) => void,
+  enabled: boolean = true,
+  token: string | null = null,
+) {
   const [connected, setConnected] = useState(false);
-  const [reconnectCount, setReconnectCount] = useState(0);
+  const reconnectCountRef = useRef(0);
   const evtSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastEventIdRef = useRef<string>('');
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
 
   const connect = useCallback(() => {
     if (evtSourceRef.current?.readyState === EventSource.OPEN) return;
 
     const url = new URL('/api/events', window.location.origin);
-    if (lastEventIdRef.current) {
-      url.searchParams.set('lastEventId', lastEventIdRef.current);
+    if (token) {
+      url.searchParams.set('token', token);
     }
 
     const es = new EventSource(url.toString());
@@ -21,16 +31,17 @@ export function useSSE(onEvent: (event: AgentEvent) => void) {
 
     es.onopen = () => {
       setConnected(true);
-      setReconnectCount(0);
+      reconnectCountRef.current = 0;
     };
 
     es.onmessage = (e) => {
-      if (e.data.startsWith('ping')) return;
+      if (!e.data) return;
       try {
         const event: AgentEvent = JSON.parse(e.data);
-        onEvent(event);
+        console.log('[SSE]', event.event_type, event.data?.chunk ? '(chunk)' : JSON.stringify(event.data)?.slice(0, 80));
+        onEventRef.current(event);
       } catch {
-        // ignore malformed events
+        // ignore malformed
       }
     };
 
@@ -39,27 +50,26 @@ export function useSSE(onEvent: (event: AgentEvent) => void) {
       es.close();
       evtSourceRef.current = null;
 
-      // Exponential backoff with jitter, capped at 10s
-      const baseDelay = Math.min(1000 * Math.pow(2, reconnectCount), 10000);
-      const jitter = Math.random() * 1000;
-      const delay = baseDelay + jitter;
+      const count = reconnectCountRef.current;
+      const delay = Math.min(1000 * Math.pow(2, count), 10000) + Math.random() * 1000;
+      reconnectCountRef.current = count + 1;
 
-      setReconnectCount((c) => c + 1);
-
-      reconnectTimerRef.current = setTimeout(() => {
-        connect();
-      }, delay);
+      reconnectTimerRef.current = setTimeout(connect, delay);
     };
-  }, [onEvent, reconnectCount]);
+  }, [token]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     connect();
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      evtSourceRef.current?.close();
-      evtSourceRef.current = null;
+      if (evtSourceRef.current) {
+        evtSourceRef.current.close();
+        evtSourceRef.current = null;
+      }
     };
-  }, []);
+  }, [enabled, connect]);
 
-  return { connected, reconnectCount };
+  return { connected };
 }
