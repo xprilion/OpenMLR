@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 
 const IS_PROD = window.location.hostname === 'openmlr.dev';
-const DOCS_URL = 'https://docs.openmlr.dev';
+const DOCS_URL = 'https://openmlr.dev';
 
 export function LandingPage() {
   const navigate = useNavigate();

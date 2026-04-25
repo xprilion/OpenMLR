@@ -3,7 +3,7 @@
 A self-hosted ML research intern that plans tasks, reads papers, writes drafts,
 and runs experiments — end to end.
 
-**Docs**: [docs.openmlr.dev](https://docs.openmlr.dev)
+**Docs**: [openmlr.dev](https://openmlr.dev)
 
 ## Features
 
@@ -39,7 +39,7 @@ make dev
 
 Open `http://localhost:5173`. Create an account on first visit.
 
-See [Setup & Installation](https://docs.openmlr.dev/setup) for details.
+See [Setup & Installation](https://openmlr.dev/setup) for details.
 
 ## Makefile
 
@@ -58,7 +58,6 @@ Run `make help` for all targets:
 | `make docker-run` | Run container |
 | `make docs-dev` | Preview docs locally |
 | `make docs-build` | Build docs site |
-| `make docs-publish` | Deploy docs to GitHub Pages |
 | `make clean` | Remove build artifacts |
 
 ## Architecture
@@ -69,7 +68,7 @@ backend/    Python 3.12 + FastAPI + SQLAlchemy + asyncpg
 site/       VitePress documentation
 ```
 
-See [Architecture](https://docs.openmlr.dev/architecture) for the full breakdown.
+See [Architecture](https://openmlr.dev/architecture) for the full breakdown.
 
 ## License
 

@@ -21,6 +21,11 @@ make install
 
 This runs `uv sync` for the Python backend and `pnpm install` for the frontend.
 
+> **Do not** create a virtual environment at the project root (`uv venv` or `python -m venv`).
+> The backend is a standalone uv project — `uv sync` and `uv run` automatically manage
+> `backend/.venv`. Activating a root-level venv will conflict with the backend's environment
+> and cause import errors at runtime.
+
 ## Configure
 
 ```bash
@@ -86,5 +91,4 @@ Run `make help` to see all available commands:
 | `make test` | Run backend tests |
 | `make docs-dev` | Preview docs locally |
 | `make docs-build` | Build docs site |
-| `make docs-publish` | Deploy docs to GitHub Pages |
 | `make clean` | Remove build artifacts |
