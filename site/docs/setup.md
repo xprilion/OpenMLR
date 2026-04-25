@@ -14,8 +14,8 @@
 ## Install
 
 ```bash
-git clone https://github.com/xprilion/open-mlr.git
-cd open-mlr
+git clone https://github.com/xprilion/OpenMLR.git
+cd OpenMLR
 make install
 ```
 

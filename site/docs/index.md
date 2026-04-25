@@ -10,7 +10,7 @@ hero:
       link: /setup
     - theme: alt
       text: View on GitHub
-      link: https://github.com/xprilion/open-mlr
+      link: https://github.com/xprilion/OpenMLR
 features:
   - title: Plan
     details: Structured questions with options, task breakdown, scope clarification before any work begins.

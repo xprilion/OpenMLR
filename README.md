@@ -29,8 +29,8 @@ and runs experiments — end to end.
 ## Quick Start
 
 ```bash
-git clone https://github.com/xprilion/open-mlr.git
-cd open-mlr
+git clone https://github.com/xprilion/OpenMLR.git
+cd OpenMLR
 make install
 cp .env.example .env   # edit with DATABASE_URL + at least one LLM key
 make db-fresh

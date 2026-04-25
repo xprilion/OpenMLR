@@ -7,7 +7,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Setup', link: '/setup' },
-      { text: 'GitHub', link: 'https://github.com/xprilion/open-mlr' },
+      { text: 'GitHub', link: 'https://github.com/xprilion/OpenMLR' },
     ],
     sidebar: [
       {
@@ -34,7 +34,7 @@ export default defineConfig({
       },
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/xprilion/open-mlr' },
+      { icon: 'github', link: 'https://github.com/xprilion/OpenMLR' },
     ],
   },
 })

@@ -122,7 +122,7 @@ docs-publish: docs-build ## Deploy docs to gh-pages branch
 	git checkout -b gh-pages && \
 	git add -A && \
 	git commit -m "docs: publish $$(date +%Y-%m-%d)" && \
-	git remote add origin git@github.com:xprilion/open-mlr.git && \
+	git remote add origin git@github.com:xprilion/OpenMLR.git && \
 	git push -f origin gh-pages && \
 	rm -rf "$$TMPDIR" && \
 	echo "Docs published to gh-pages."
