@@ -1,0 +1,52 @@
+{
+  "name": "OpenMLR",
+  "description": "Self-hosted ML research agent - plans tasks, reads papers, writes drafts, runs experiments",
+  "repository": "https://github.com/xprilion/OpenMLR",
+  "logo": "https://openmlr.dev/logo.png",
+  "keywords": ["ml", "research", "ai", "agent", "papers"],
+  "stack": "container",
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    },
+    "worker": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0"
+    },
+    {
+      "plan": "heroku-redis:mini"
+    }
+  ],
+  "env": {
+    "JWT_SECRET_KEY": {
+      "generator": "secret"
+    },
+    "USE_BACKGROUND_JOBS": {
+      "value": "true"
+    },
+    "USE_REDIS_PUBSUB": {
+      "value": "true"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key (optional if using other providers)",
+      "required": false
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Anthropic API key (optional if using other providers)",
+      "required": false
+    },
+    "OPENROUTER_API_KEY": {
+      "description": "OpenRouter API key (optional if using other providers)",
+      "required": false
+    }
+  },
+  "scripts": {
+    "postdeploy": "echo 'Deployment complete! Add at least one LLM API key in Settings > Config Vars'"
+  }
+}

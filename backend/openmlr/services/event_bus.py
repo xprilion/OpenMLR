@@ -78,6 +78,7 @@ class EventBus:
     async def start_redis_bridge(self) -> None:
         """Start listening to Redis events and forwarding to local subscribers."""
         if not USE_REDIS:
+            logger.info("USE_REDIS_PUBSUB not enabled, skipping Redis bridge")
             return
         
         if self._redis_bridge_task is not None:
@@ -85,6 +86,7 @@ class EventBus:
         
         async def _listen():
             from .redis_pubsub import subscribe_events
+            logger.info("Redis subscription loop started")
             try:
                 async for event in subscribe_events():
                     data = {"event_type": event.event_type, "data": event.data}

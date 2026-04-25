@@ -255,12 +255,27 @@ async def save_config(
     db: AsyncSession = Depends(get_db),
 ):
     """Save API keys — both to user settings and to process env."""
+    # Whitelist of allowed environment variables to set
+    ALLOWED_ENV_KEYS = {
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY", 
+        "OPENROUTER_API_KEY",
+        "OPENCODE_GO_API_KEY",
+        "BRAVE_API_KEY",
+        "GITHUB_TOKEN",
+        "SEMANTIC_SCHOLAR_API_KEY",
+        "MODAL_TOKEN_ID",
+        "MODAL_TOKEN_SECRET",
+    }
+    
     body = await request.json()
 
     for key, value in body.items():
         if isinstance(value, str) and value:
-            os.environ[key] = value
-            # Also save as user setting
+            # Only allow setting whitelisted environment variables
+            if key in ALLOWED_ENV_KEYS:
+                os.environ[key] = value
+            # Save as user setting regardless (stored in DB, not env)
             setting_key = key.lower()
             await ops.set_user_setting(db, user.id, "providers", setting_key, value)
 

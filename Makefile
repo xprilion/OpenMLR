@@ -179,8 +179,12 @@ docs-install: ## Install docs site dependencies
 	cd site && npm install
 
 .PHONY: docs-dev
-docs-dev: ## Preview docs locally
-	cd site && npx vitepress dev docs
+docs-dev: ## Preview docs locally (port 4000)
+	cd site && npx vitepress dev docs --port 4000
+
+.PHONY: docs-docker
+docs-docker: ## Run docs in Docker (port 4000)
+	$(DOCKER_COMPOSE) --profile docs up -d docs
 
 .PHONY: docs-build
 docs-build: ## Build docs to site/docs/.vitepress/dist

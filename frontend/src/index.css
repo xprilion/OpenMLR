@@ -2231,11 +2231,18 @@ html, body, #root {
   margin-bottom: 12px;
 }
 
+.landing-hook {
+  font-size: 20px;
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
 .landing-tagline {
-  font-size: 17px;
+  font-size: 16px;
   color: var(--text-dim);
-  line-height: 1.6;
-  margin-bottom: 40px;
+  line-height: 1.7;
+  margin-bottom: 36px;
 }
 
 .landing-features {
@@ -2321,9 +2328,54 @@ html, body, #root {
   border-color: var(--accent);
 }
 
+.landing-btn-tertiary {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 12px 16px;
+}
+
+.landing-btn-tertiary:hover {
+  color: var(--text);
+}
+
+.landing-workflow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.workflow-step {
+  color: var(--accent);
+  font-weight: 700;
+  padding: 6px 14px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 6px;
+}
+
+.workflow-arrow {
+  color: var(--text-dim);
+  font-size: 16px;
+}
+
+.landing-pitch {
+  font-size: 15px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 32px;
+}
+
 .landing-footer {
   font-size: 12px;
   color: var(--text-dim);
+  line-height: 1.8;
+}
+
+.landing-deploy {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* ============ Confirm Dialog ============ */

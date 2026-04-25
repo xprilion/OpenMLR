@@ -4,6 +4,7 @@ import os
 import json
 import asyncio
 import logging
+from contextvars import ContextVar
 from typing import Optional, AsyncIterator
 import redis.asyncio as redis
 from ..agent.types import AgentEvent
@@ -13,16 +14,18 @@ logger = logging.getLogger("openmlr.services.redis_pubsub")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CHANNEL_NAME = "openmlr:events"
 
-# Global Redis connection pool
-_redis_pool: Optional[redis.ConnectionPool] = None
+# Context-local Redis client to handle different event loops (Celery workers)
+_redis_client: ContextVar[Optional[redis.Redis]] = ContextVar("redis_client", default=None)
 
 
 async def get_redis() -> redis.Redis:
-    """Get a Redis client from the pool."""
-    global _redis_pool
-    if _redis_pool is None:
-        _redis_pool = redis.ConnectionPool.from_url(REDIS_URL, decode_responses=True)
-    return redis.Redis(connection_pool=_redis_pool)
+    """Get a Redis client for the current context/event loop."""
+    client = _redis_client.get()
+    if client is None:
+        # Create a new client for this context
+        client = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client.set(client)
+    return client
 
 
 async def publish_event(event: AgentEvent) -> None:

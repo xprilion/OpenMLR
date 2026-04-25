@@ -22,24 +22,50 @@ features:
     details: Docker-isolated code execution locally, on SSH remotes, or Modal cloud sandboxes.
 ---
 
-## What is OpenMLR?
+## Quick start
 
-OpenMLR is a self-hosted AI research assistant that works like an ML research
-intern. It plans, researches, writes, and executes ML tasks end-to-end using
-structured workflows and real tool access.
+```bash
+git clone https://github.com/xprilion/OpenMLR.git
+cd OpenMLR
+cp .env.example .env   # Add your API keys
+docker compose up -d
+```
 
-### Key capabilities
+Open `http://localhost:3000`. Create an account. Start researching.
 
-- **Structured planning** — the agent asks clarifying questions with 2-4 options
-  (plus free-text) before starting work, then builds a task list
-- **Paper research** — searches OpenAlex (250M+ works), reads full papers from
-  ArXiv, crawls citation graphs, finds related code and datasets
-- **Academic writing** — drafts papers section-by-section with inline citations,
-  manages bibliography, exports to Markdown or LaTeX
-- **Code execution** — runs commands in Docker containers for isolation, with
-  SSH and Modal cloud sandbox support
-- **Task management** — right-side panel tracks tasks and resources; completion
-  reports auto-generated when tasks finish
-- **Context awareness** — tracks token usage, auto-compacts when approaching
-  model limits, manages search budgets
-- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus litellm for 100+ models
+### One-click deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR)
+
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)
+
+See [Setup & Installation](/setup) for Coolify, local development, and more options.
+
+## Why OpenMLR?
+
+Ever started researching a topic, opened 47 browser tabs, took notes in three different apps, lost track of that one paper you saw yesterday, and then had to context-switch to run some experiments?
+
+OpenMLR keeps everything in one place. Your research context stays with you from the first "what should I look into?" to the final PDF export.
+
+**No more:**
+- Lost tabs and forgotten citations
+- Copy-pasting between arxiv, notes, and code
+- "Where did I see that figure?"
+- Starting over because you closed your browser
+
+## How it works
+
+```
+Plan → Research → Write → Execute
+```
+
+Each mode restricts which tools are available, keeping the agent focused:
+
+| Mode | What it does | Tools available |
+|------|--------------|-----------------|
+| **Plan** | Asks clarifying questions, breaks down tasks | Questions, task tracking |
+| **Research** | Searches papers, crawls citations | OpenAlex, ArXiv, web search, GitHub |
+| **Write** | Drafts sections, manages bibliography | Writing tools, citation lookup |
+| **Execute** | Runs code when needed | Docker, SSH, Modal (available in all modes) |
+
+The agent can suggest switching modes, but you approve the switch. No more half-baked drafts with missing citations.

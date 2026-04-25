@@ -29,6 +29,7 @@ export default defineConfig({
         text: "Reference",
         items: [
           { text: "Architecture", link: "/architecture" },
+          { text: "Agent Harness", link: "/agent-harness" },
           { text: "REST API", link: "/api" },
         ],
       },

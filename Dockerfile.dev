@@ -1,4 +1,7 @@
-# Development Dockerfile - for live reload with docker-compose
+# Development Dockerfile - live reload with mounted source code
+# Usage: make dev-docker (uses docker-compose.yml + docker-compose.dev.yml)
+#
+# For production, use Dockerfile instead
 FROM python:3.12-slim
 
 # System deps

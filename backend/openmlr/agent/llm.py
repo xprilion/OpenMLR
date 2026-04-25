@@ -196,9 +196,7 @@ class LLMProvider:
         api_key = LLMProvider._get_api_key(config.model_name)
         base_url = LLMProvider._get_base_url(config.model_name)
         
-        logger.info(f"[LLM] Model: {config.model_name}")
-        logger.info(f"[LLM] Base URL: {base_url}")
-        logger.info(f"[LLM] API key prefix: {api_key[:10] if api_key else 'None'}...")
+        logger.debug(f"[LLM] Model: {config.model_name}, Base URL: {base_url}, API key set: {bool(api_key)}")
         
         kwargs = {"api_key": api_key}
         if base_url:

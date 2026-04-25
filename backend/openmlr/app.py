@@ -1,5 +1,6 @@
 """FastAPI application — OpenMLR backend entry point."""
 
+import os
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -20,8 +21,12 @@ FRONTEND_DIST = Path(__file__).parent.parent.parent / "frontend" / "dist"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: create tables & shared state.  Shutdown: teardown sessions."""
+    import logging
+    logger = logging.getLogger("openmlr.app")
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables created")
 
     config = load_config()
     event_bus = EventBus()
@@ -30,9 +35,15 @@ async def lifespan(app: FastAPI):
     app.state.config = config
     app.state.event_bus = event_bus
     app.state.session_manager = session_manager
+    
+    # Start Redis event bridge for cross-worker communication (background jobs)
+    await event_bus.start_redis_bridge()
+    logger.info("Redis event bridge started")
 
     yield
-
+    
+    # Cleanup
+    await event_bus.stop_redis_bridge()
     for conv_id in list(session_manager.sessions.keys()):
         await session_manager.remove_session(conv_id)
     await engine.dispose()
@@ -45,36 +56,40 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS configuration - restrict in production
+_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+_cors_origins = [origin.strip() for origin in _cors_origins if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ── API routers ──────────────────────────────────────────
 from .auth.router import router as auth_router
 from .routes.agent import router as agent_router
 from .routes.settings import router as settings_router
+from .routes.health import router as health_router
 
 app.include_router(auth_router)
 app.include_router(agent_router)
 app.include_router(settings_router)
-
-
-# ── Health check ─────────────────────────────────────────
-@app.get("/health")
-async def health():
-    return {"status": "ok", "version": "2.0.0"}
+app.include_router(health_router)
 
 
 # ── Global error handler ────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.exception(f"Unhandled exception: {exc}")
+    # Don't leak internal details to client
     return JSONResponse(
         status_code=500,
-        content={"error": str(exc), "detail": "Internal server error"},
+        content={"error": "Internal server error"},
     )
 
 

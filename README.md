@@ -1,167 +1,160 @@
 # OpenMLR
 
-A self-hosted ML research intern that plans tasks, reads papers, writes drafts,
-and runs experiments — end to end.
+Built for ML researchers who are tired of context-switching.
+
+Search papers, take notes, write drafts, run experiments — all in one conversation.
+Your context stays with you from the first question to the final export.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR)
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)
+
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Docs**: [openmlr.dev](https://openmlr.dev)
 
+---
+
+## What it does
+
+- **Plan** — Asks clarifying questions before diving in. Breaks down tasks, tracks progress.
+- **Research** — OpenAlex, ArXiv, Papers With Code, citation graphs. Reads full papers, not just abstracts.
+- **Write** — Section-by-section drafting with auto-citations. Export to Markdown or LaTeX.
+- **Execute** — Docker-isolated code execution. SSH remotes. Modal cloud. Runs experiments, not just snippets.
+
 ## Features
 
-- **Structured planning** — asks clarifying questions (2-4 options + free text)
-  before starting work, builds a task list, generates completion reports
-- **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code; reads full
-  papers section-by-section; crawls citation graphs; per-session search budgets
-- **Paper writing** — section-by-section drafting with research corpus,
-  bibliography management, Markdown/LaTeX export
-- **Code execution** — Docker-isolated by default, SSH remotes, Modal cloud
-  sandboxes; probes environment before running anything
-- **Context tracking** — token usage gauge, auto-compaction approaching model
-  limits, completion reports preserved across compactions
-- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models
-  (Ollama, LM Studio, vLLM, any OpenAI-compatible API)
-- **Background jobs** — tasks persist to database and continue running even if
-  you close the browser (requires Redis + Celery)
-- **Per-message modes** — Plan, Research, Write selector on every message;
-  code execution available in all modes
-- **Task management** — right-side panel with tasks, resources, search budget;
-  draggable separator; slide-out report viewer
+- **Structured planning** — asks 2-4 clarifying options before starting, builds task lists, generates completion reports
+- **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code; reads full papers section-by-section; crawls citation graphs
+- **Context tracking** — token usage gauge, auto-compaction approaching limits, preserves key decisions
+- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, OpenCode Go, plus local models (Ollama, LM Studio, vLLM)
+- **Background jobs** — tasks persist and continue even if you close the browser (requires Redis)
+- **Mode enforcement** — Plan, Research, Write modes restrict which tools are available
 - **MCP support** — connect any Model Context Protocol server as additional tools
-- **User accounts** — JWT auth, per-user settings and API keys
 
 ## Quick Start
+
+### Docker Compose (recommended)
 
 ```bash
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
-make install
-cp .env.example .env   # edit with DATABASE_URL + at least one LLM key
-make db-fresh
-make dev
+cp .env.example .env   # Add your API keys
+docker compose up -d
 ```
 
-Open `http://localhost:5173`. Create an account on first visit.
+Open `http://localhost:3000`. Create an account on first visit.
 
-See [Setup & Installation](https://openmlr.dev/setup) for details.
+### Render
 
-## Docker Compose
+Click the button to deploy to Render (includes Postgres + Redis):
 
-The easiest way to run everything (db, redis, web, background worker):
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR)
+
+After deploy, add your LLM API key(s) in the Environment settings.
+
+### Heroku
+
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)
+
+### Coolify
+
+In Coolify, create a new Docker Compose service pointing to this repo. It will use `docker-compose.yml` automatically. Add your LLM API keys as environment variables in the Coolify UI.
+
+### Local Development
 
 ```bash
-cp .env.example .env   # add your API keys
-make up                # start all services
-make logs              # tail logs
+make install           # Install deps (backend + frontend)
+cp .env.example .env   # Add DATABASE_URL + at least one LLM key
+make db-fresh          # Create tables
+make dev               # Start dev servers
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:5173`.
 
-### Development with Live Reload
+## Configuration
+
+At minimum, you need:
 
 ```bash
-make dev-docker-build  # first time
-make dev-docker        # subsequent runs (auto-reloads on code changes)
+# Database
+DATABASE_URL="postgresql://user:pass@localhost:5432/openmlr"
+
+# At least one LLM provider
+OPENAI_API_KEY=sk-...
+# or
+ANTHROPIC_API_KEY=sk-ant-...
+# or
+OPENROUTER_API_KEY=sk-or-...
+# or
+OPENCODE_GO_API_KEY=sk-...   # $5-10/mo for open models
 ```
 
-### Useful Commands
-
-```bash
-make restart           # quick rebuild + restart web/worker only
-make rebuild           # full rebuild from scratch
-make down              # stop all services
-make shell-db          # psql into database
-```
-
-## Local Development (without Docker)
-
-```bash
-# Start just the infrastructure
-make infra             # starts postgres + redis in Docker
-
-# Run the app locally
-make dev               # backend + frontend (no background jobs)
-make dev-full          # backend + frontend + celery worker
-```
+See `.env.example` for all options including:
+- Local models (Ollama, LM Studio, vLLM)
+- Background jobs (Redis + Celery)
+- Web search (Brave API)
+- GitHub integration
 
 ## Using Local Models
 
-OpenMLR supports any OpenAI-compatible API. Configure in `.env`:
-
-### Ollama
-
 ```bash
-# Start Ollama
-ollama serve
-
-# Pull a model
-ollama pull llama3.1
-
-# Configure OpenMLR
+# Ollama
 OLLAMA_MODEL=llama3.1
-# OLLAMA_API_BASE=http://localhost:11434/v1  # default
-```
+# Use as: ollama/llama3.1
 
-### LM Studio
-
-```bash
-# Start LM Studio server (in LM Studio UI)
-# Configure OpenMLR
+# LM Studio
 LMSTUDIO_API_BASE=http://localhost:1234/v1
-LMSTUDIO_MODEL=default
-```
+# Use as: lmstudio/default
 
-### vLLM / text-generation-inference / Any OpenAI-compatible API
-
-```bash
+# Any OpenAI-compatible API
 LOCAL_API_BASE=http://localhost:8000/v1
-LOCAL_MODEL=local/my-model
-LOCAL_API_KEY=not-needed  # if your server doesn't require auth
+LOCAL_MODEL=my-model
+# Use as: local/my-model
 ```
-
-Then use the model with prefix in the UI:
-- `ollama/llama3.1`
-- `lmstudio/default`
-- `local/my-model`
-
-## Makefile
-
-Run `make help` for all targets:
-
-| Target | Description |
-|--------|-------------|
-| **Setup** | |
-| `make install` | Install all deps (backend + frontend) |
-| **Development** | |
-| `make dev` | Run backend + frontend dev servers |
-| `make dev-full` | Run with background jobs (needs Redis) |
-| `make worker` | Start Celery worker only |
-| **Docker Compose** | |
-| `make up` | Start all services |
-| `make down` | Stop all services |
-| `make restart` | Quick rebuild + restart web/worker |
-| `make rebuild` | Full rebuild from scratch |
-| `make logs` | Tail all logs |
-| `make infra` | Start only db + redis |
-| **Docker Dev** | |
-| `make dev-docker` | Live reload with Docker |
-| `make dev-docker-build` | Build + start dev mode |
-| **Database** | |
-| `make db-fresh` | Drop + recreate tables |
-| `make db-upgrade` | Run migrations |
-| **Other** | |
-| `make check` | Type-check backend + frontend |
-| `make test` | Run pytest |
-| `make docker-build` | Build Docker image |
-| `make clean` | Remove build artifacts |
 
 ## Architecture
 
 ```
 frontend/   React 19 + Vite + react-router-dom
-backend/    Python 3.12 + FastAPI + SQLAlchemy + asyncpg + Celery
+backend/    Python 3.12 + FastAPI + SQLAlchemy + Celery
 site/       VitePress documentation
 ```
 
-See [Architecture](https://openmlr.dev/architecture) for the full breakdown.
+Key components:
+- **Agent Harness** — 300-iteration loop with doom detection, auto-compaction, mode enforcement
+- **Tool Router** — Mode-based tool filtering, MCP integration
+- **Session Manager** — Per-conversation state isolation
+- **LLM Provider** — Multi-provider routing with retry logic
+
+See [Architecture](https://openmlr.dev/architecture) and [Agent Harness](https://openmlr.dev/agent-harness) for details.
+
+## Makefile
+
+| Target | Description |
+|--------|-------------|
+| `make install` | Install all dependencies |
+| `make dev` | Run backend + frontend dev servers |
+| `make up` | Start Docker Compose (app on :3000) |
+| `make down` | Stop Docker Compose |
+| `make restart` | Rebuild + restart web/worker |
+| `make logs` | Tail all logs |
+| `make docs-docker` | Run docs site (:4000) |
+| `make docs-dev` | Run docs locally (:4000) |
+| `make db-fresh` | Drop + recreate tables |
+| `make check` | Type-check backend + frontend |
+| `make test` | Run pytest |
+
+Run `make help` for all targets.
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repo
+2. Create a feature branch
+3. Make your changes
+4. Run `make check` and `make test`
+5. Submit a PR
 
 ## License
 
