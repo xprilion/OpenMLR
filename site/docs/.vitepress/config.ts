@@ -36,5 +36,29 @@ export default defineConfig({
     socialLinks: [
       { icon: 'github', link: 'https://github.com/xprilion/OpenMLR' },
     ],
+    footer: {
+      message: 'Released under the MIT License.',
+      copyright: 'Copyright © 2024–present Anubhav Singh',
+    },
   },
+  overrides: [
+    {
+      // Light mode: warm blue-grey instead of pure white/black
+      global: true,
+      cssVariables: {
+        ':root': {
+          '--vp-c-bg': '#f8fafc',
+          '--vp-c-bg-alt': '#f1f5f9',
+          '--vp-c-bg-elv': '#ffffff',
+          '--vp-c-bg-soft': '#f1f5f9',
+          '--vp-c-text-1': '#1e293b',
+          '--vp-c-text-2': '#475569',
+          '--vp-c-text-3': '#64748b',
+          '--vp-c-border': '#cbd5e1',
+          '--vp-c-divider': '#e2e8f0',
+          '--vp-c-gutter': '#e2e8f0',
+        },
+      },
+    },
+  ],
 })
