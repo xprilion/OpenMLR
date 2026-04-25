@@ -33,6 +33,14 @@ DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "configs" / "agent_config.y
 
 def detect_default_model() -> str:
     """Pick the best available model based on which API keys are configured."""
+    # Check for local models first
+    if os.environ.get("LOCAL_API_BASE"):
+        return os.environ.get("LOCAL_MODEL", "local/default")
+    if os.environ.get("OLLAMA_API_BASE") or os.environ.get("OLLAMA_MODEL"):
+        return f"ollama/{os.environ.get('OLLAMA_MODEL', 'llama3.1')}"
+    if os.environ.get("LMSTUDIO_API_BASE"):
+        return os.environ.get("LMSTUDIO_MODEL", "lmstudio/default")
+    # Cloud providers
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic/claude-sonnet-4-20250514"
     if os.environ.get("OPENAI_API_KEY"):
@@ -45,6 +53,14 @@ def detect_default_model() -> str:
 
 def detect_cheap_model() -> str:
     """Pick a cheap/fast model for title generation and research sub-agent."""
+    # For local models, use the same model (no separate cheap model)
+    if os.environ.get("LOCAL_API_BASE"):
+        return os.environ.get("LOCAL_MODEL", "local/default")
+    if os.environ.get("OLLAMA_API_BASE") or os.environ.get("OLLAMA_MODEL"):
+        return f"ollama/{os.environ.get('OLLAMA_MODEL', 'llama3.1')}"
+    if os.environ.get("LMSTUDIO_API_BASE"):
+        return os.environ.get("LMSTUDIO_MODEL", "lmstudio/default")
+    # Cloud providers
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic/claude-haiku-4-20250514"
     if os.environ.get("OPENAI_API_KEY"):

@@ -1,0 +1,25 @@
+# Development Dockerfile - for live reload with docker-compose
+FROM python:3.12-slim
+
+# System deps
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential libpq-dev libxml2-dev libxslt1-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app/backend
+
+# Add venv to PATH so uvicorn, celery, watchmedo are found
+ENV PATH="/app/backend/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/backend"
+ENV UV_LINK_MODE=copy
+
+# Create entrypoint script that ensures deps are installed
+RUN echo '#!/bin/sh\nset -e\nif [ ! -x /app/backend/.venv/bin/uvicorn ]; then\n  echo "Installing dependencies..."\n  rm -rf /app/backend/.venv\n  cd /app/backend && uv sync && uv pip install "watchdog[watchmedo]"\nfi\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+EXPOSE 3000

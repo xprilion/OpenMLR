@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { setToken } from '../api';
 import type { Conversation, User } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
 
@@ -43,7 +44,7 @@ function ConvIcon({ status }: { status: ConvStatus }) {
 }
 
 export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwitch, onNew, onDelete, onAction, onOpenSettings }: Props) {
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
 
@@ -89,12 +90,11 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwit
                   className="conv-delete"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirmDelete === conv.uuid) { onDelete(conv.uuid); setConfirmDelete(null); }
-                    else { setConfirmDelete(conv.uuid); setTimeout(() => setConfirmDelete((p) => p === conv.uuid ? null : p), 2000); }
+                    setPendingDelete({ uuid: conv.uuid, title: conv.title });
                   }}
-                  title={confirmDelete === conv.uuid ? 'Confirm' : 'Delete'}
+                  title="Delete"
                 >
-                  {confirmDelete === conv.uuid ? '?' : '\u2715'}
+                  {'\u2715'}
                 </button>
               </div>
             ))}
@@ -113,6 +113,21 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwit
         {user && <span className="user-info" title={user.username}>{user.display_name || user.username}</span>}
         <button className="logout-btn" onClick={() => { setToken(null); window.location.reload(); }} title="Sign out">&#x2192;</button>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete Conversation"
+          message={`Are you sure you want to delete "${pendingDelete.title}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          danger
+          onConfirm={() => {
+            onDelete(pendingDelete.uuid);
+            setPendingDelete(null);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </aside>
   );
 }

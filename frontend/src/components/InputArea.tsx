@@ -1,22 +1,25 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 
-type Mode = 'plan' | 'research' | 'write';
+export type Mode = 'plan' | 'research' | 'write' | 'general';
 
 interface Props {
   disabled: boolean;
+  mode: Mode;
+  onModeChange: (mode: Mode) => void;
   onSend: (text: string, mode: Mode) => void;
   onStop: () => void;
+  text: string;
+  onTextChange: (text: string) => void;
 }
 
 const MODE_INFO: Record<Mode, { label: string; icon: string; placeholder: string }> = {
   plan: { label: 'Plan', icon: 'P', placeholder: 'Ask questions, plan tasks, clarify scope...' },
   research: { label: 'Research', icon: 'R', placeholder: 'Search papers, find code, explore literature...' },
   write: { label: 'Write', icon: 'W', placeholder: 'Write sections, manage citations, draft content...' },
+  general: { label: 'General', icon: 'G', placeholder: 'General conversation, any task...' },
 };
 
-export function InputArea({ disabled, onSend, onStop }: Props) {
-  const [text, setText] = useState('');
-  const [mode, setMode] = useState<Mode>('plan');
+export function InputArea({ disabled, mode, onModeChange, onSend, onStop, text, onTextChange }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -31,21 +34,21 @@ export function InputArea({ disabled, onSend, onStop }: Props) {
   const submit = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    setText('');
+    onTextChange('');
     onSend(trimmed, mode);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-  }, [text, disabled, onSend, mode]);
+  }, [text, disabled, onSend, mode, onTextChange]);
 
-  const info = MODE_INFO[mode];
+  const modes: Mode[] = ['plan', 'research', 'write', 'general'];
 
   return (
     <div className="input-area">
       <div className="input-mode-bar">
-        {(Object.keys(MODE_INFO) as Mode[]).map((m) => (
+        {modes.map((m) => (
           <button
             key={m}
             className={`input-mode-btn ${mode === m ? 'active' : ''}`}
-            onClick={() => setMode(m)}
+            onClick={() => onModeChange(m)}
             title={MODE_INFO[m].label}
           >
             <span className="input-mode-icon">{MODE_INFO[m].icon}</span>
@@ -57,11 +60,11 @@ export function InputArea({ disabled, onSend, onStop }: Props) {
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
           }}
-          placeholder={info.placeholder}
+          placeholder={MODE_INFO[mode].placeholder}
           rows={1}
           disabled={disabled}
         />

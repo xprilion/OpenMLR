@@ -110,6 +110,24 @@ async def list_providers(
             "configured": bool(os.environ.get("OPENROUTER_API_KEY") or provider_settings.get("openrouter_api_key")),
         },
         {
+            "id": "opencode-go",
+            "name": "OpenCode Go",
+            "key_env": "OPENCODE_GO_API_KEY",
+            "configured": bool(os.environ.get("OPENCODE_GO_API_KEY") or provider_settings.get("opencode_go_api_key")),
+        },
+        {
+            "id": "ollama",
+            "name": "Ollama (Local)",
+            "key_env": "OLLAMA_API_BASE",
+            "configured": bool(os.environ.get("OLLAMA_API_BASE") or provider_settings.get("ollama_api_base")),
+        },
+        {
+            "id": "lmstudio",
+            "name": "LM Studio (Local)",
+            "key_env": "LMSTUDIO_API_BASE",
+            "configured": bool(os.environ.get("LMSTUDIO_API_BASE") or provider_settings.get("lmstudio_api_base")),
+        },
+        {
             "id": "brave",
             "name": "Brave Search",
             "key_env": "BRAVE_API_KEY",
@@ -195,6 +213,36 @@ async def list_models():
             {"id": "openrouter/google/gemini-2.5-pro", "name": "OR Gemini 2.5 Pro", "provider": "openrouter"},
             {"id": "openrouter/google/gemini-2.5-flash", "name": "OR Gemini 2.5 Flash", "provider": "openrouter"},
         ]
+    
+    # Add OpenCode Go models
+    opencode_go_models = [
+        {"id": "opencode-go/glm-5.1", "name": "GLM-5.1", "provider": "opencode-go"},
+        {"id": "opencode-go/glm-5", "name": "GLM-5", "provider": "opencode-go"},
+        {"id": "opencode-go/kimi-k2.6", "name": "Kimi K2.6", "provider": "opencode-go"},
+        {"id": "opencode-go/kimi-k2.5", "name": "Kimi K2.5", "provider": "opencode-go"},
+        {"id": "opencode-go/deepseek-v4-pro", "name": "DeepSeek V4 Pro", "provider": "opencode-go"},
+        {"id": "opencode-go/deepseek-v4-flash", "name": "DeepSeek V4 Flash", "provider": "opencode-go"},
+        {"id": "opencode-go/mimo-v2.5-pro", "name": "MiMo-V2.5-Pro", "provider": "opencode-go"},
+        {"id": "opencode-go/mimo-v2.5", "name": "MiMo-V2.5", "provider": "opencode-go"},
+        {"id": "opencode-go/minimax-m2.7", "name": "MiniMax M2.7", "provider": "opencode-go"},
+        {"id": "opencode-go/minimax-m2.5", "name": "MiniMax M2.5", "provider": "opencode-go"},
+        {"id": "opencode-go/qwen3.6-plus", "name": "Qwen3.6 Plus", "provider": "opencode-go"},
+        {"id": "opencode-go/qwen3.5-plus", "name": "Qwen3.5 Plus", "provider": "opencode-go"},
+    ]
+    models.extend(opencode_go_models)
+    
+    # Add local model placeholders if configured
+    if os.environ.get("OLLAMA_API_BASE"):
+        ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.1")
+        models.append({"id": f"ollama/{ollama_model}", "name": f"Ollama: {ollama_model}", "provider": "ollama"})
+        # Common Ollama models
+        for m in ["llama3.1", "llama3.2", "qwen2.5-coder", "codellama", "deepseek-coder-v2", "mistral"]:
+            if m != ollama_model:
+                models.append({"id": f"ollama/{m}", "name": f"Ollama: {m}", "provider": "ollama"})
+    
+    if os.environ.get("LMSTUDIO_API_BASE"):
+        models.append({"id": "lmstudio/default", "name": "LM Studio (default)", "provider": "lmstudio"})
+    
     return {"models": models}
 
 

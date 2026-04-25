@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useSSE } from './hooks/useSSE';
+import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
 import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget } from './types';
 import { MessageList } from './components/MessageList';
-import { InputArea } from './components/InputArea';
+import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
 import { ModelModal } from './components/ModelModal';
 import { ApprovalModal } from './components/ApprovalModal';
@@ -52,6 +53,9 @@ function ChatUI({
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
   const [searchBudget, setSearchBudget] = useState<SearchBudget | null>(null);
   const [viewingReport, setViewingReport] = useState<Resource | null>(null);
+  const [inputMode, setInputMode] = useState<Mode>('plan');
+  const [inputText, setInputText] = useState('');
+  const [pendingModeSwitch, setPendingModeSwitch] = useState<string | null>(null);
 
   const loadConversations = useCallback(async () => {
     try { setConversations((await api.listConversations()).conversations || []); } catch { /* */ }
@@ -80,7 +84,22 @@ function ChatUI({
       const data = await api.getConversation(uuid);
       setCurrentConvUuid(uuid);
       setModel(data.conversation?.model || model);
-      setTasks([]); setResources([]); setContextUsage(null); setSearchBudget(null);
+      setContextUsage(null); setSearchBudget(null);
+      
+      // Load persisted tasks and resources from database
+      setTasks(data.tasks?.map((t: any) => ({ title: t.title, status: t.status })) || []);
+      setResources(data.resources?.map((r: any) => ({ 
+        title: r.title, 
+        url: r.url || '', 
+        type: r.type,
+        id: r.id,
+      })) || []);
+      
+      // Open right panel if there are tasks or resources
+      if ((data.tasks?.length > 0) || (data.resources?.length > 0)) {
+        setRightPanelOpen(true);
+      }
+      
       setMessages(data.messages?.map((m: any) => {
         if (m.role === 'tool') {
           const meta = m.metadata || {};
@@ -210,11 +229,39 @@ function ChatUI({
         break;
       case 'compacted': setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: 'Context compacted.' }]); break;
       case 'undo_complete': setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: 'Undone.' }]); break;
+      // Background job events (from Redis pub/sub)
+      case 'job_complete': {
+        const { status, error, conversation_uuid } = data || {};
+        if (conversation_uuid === currentConvUuid) {
+          setIsProcessing(false);
+          setCurrentConvStatus('idle');
+          if (status === 'failed' && error) {
+            setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Job failed: ${error}` }]);
+          }
+          // Refresh to get latest messages
+          loadConversations();
+        }
+        break;
+      }
     }
-  }, [setCurrentConvStatus, loadConversations, setModel, model]);
+  }, [setCurrentConvStatus, loadConversations, setModel, model, currentConvUuid]);
 
   const sseToken = localStorage.getItem('openmlr_token');
   const { connected } = useSSE(handleEvent, true, sseToken);
+  
+  // Track background job status (fallback when SSE is disconnected)
+  const { isProcessing: jobProcessing } = useJobStatus({
+    conversationUuid: currentConvUuid,
+    pollInterval: 5000,
+    enabled: !connected,  // Only poll when SSE is not connected
+  });
+  
+  // Update conversation status when job processing status changes
+  useEffect(() => {
+    if (currentConvUuid && jobProcessing && !connected) {
+      setConvStatuses((prev) => ({ ...prev, [currentConvUuid]: 'processing' }));
+    }
+  }, [currentConvUuid, jobProcessing, connected]);
 
   const sendMessage = useCallback(async (text: string, mode: string) => {
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text, metadata: { tool: mode } }]);
@@ -248,7 +295,7 @@ function ChatUI({
           onOpenSettings={() => setShowSettings(true)}
         />
         <div className="chat">
-          {messages.length === 0 && !isProcessing && (
+          {messages.length === 0 && !isProcessing && !jobProcessing && (
             <div className="empty-state">
               <h2>OpenMLR</h2><p>ML Research Intern</p>
               <div className="empty-capabilities">
@@ -261,8 +308,37 @@ function ChatUI({
           )}
           <MessageList messages={messages} />
           {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
-          {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, mode) => { setQuestionsPayload(null); setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]); if (mode) setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: `Agent suggests switching to ${mode} mode.` }]); }} onClose={() => setQuestionsPayload(null)} />}
-          <InputArea disabled={isProcessing} onSend={sendMessage} onStop={() => api.interrupt().catch(() => {})} />
+          {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, suggestedMode) => { 
+            setQuestionsPayload(null); 
+            setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]); 
+            if (suggestedMode) {
+              setPendingModeSwitch(suggestedMode);
+            }
+          }} onClose={() => setQuestionsPayload(null)} />}
+          {pendingModeSwitch && (
+            <div className="mode-switch-prompt">
+              <div className="mode-switch-content">
+                <span>Agent suggests switching to <strong>{pendingModeSwitch}</strong> mode</span>
+                <div className="mode-switch-actions">
+                  <button className="btn-confirm" onClick={() => { setInputMode(pendingModeSwitch as Mode); setPendingModeSwitch(null); setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: `Switched to ${pendingModeSwitch} mode.` }]); }}>
+                    Switch to {pendingModeSwitch}
+                  </button>
+                  <button className="btn-cancel" onClick={() => { setPendingModeSwitch(null); setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: `Mode switch declined. Staying in ${inputMode} mode.` }]); }}>
+                    Stay in {inputMode}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <InputArea 
+            disabled={isProcessing || jobProcessing} 
+            mode={inputMode}
+            onModeChange={setInputMode}
+            text={inputText}
+            onTextChange={setInputText}
+            onSend={sendMessage} 
+            onStop={() => api.interrupt().catch(() => {})} 
+          />
         </div>
         <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
       </div>

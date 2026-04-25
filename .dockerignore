@@ -1,0 +1,22 @@
+# Node
+frontend/node_modules
+frontend/dist
+
+# Python
+backend/.venv
+backend/__pycache__
+**/__pycache__
+*.pyc
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Misc
+*.log
+.env.local
+.DS_Store

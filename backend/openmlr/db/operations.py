@@ -3,7 +3,10 @@
 from datetime import datetime, timezone
 from sqlalchemy import select, delete, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from .models import Conversation, Message, ResearchCorpus, WritingProject, SandboxConfig
+from .models import (
+    Conversation, Message, ResearchCorpus, WritingProject, SandboxConfig,
+    ConversationTask, ConversationResource, AgentJob, UserSetting,
+)
 
 
 # ---- Conversations ----
@@ -185,3 +188,233 @@ async def delete_user_setting(db: AsyncSession, user_id: int, category: str, key
         )
     )
     await db.commit()
+
+
+# ---- Conversation Tasks ----
+
+async def get_conversation_tasks(db: AsyncSession, conv_id: int) -> list[ConversationTask]:
+    result = await db.execute(
+        select(ConversationTask)
+        .where(ConversationTask.conversation_id == conv_id)
+        .order_by(ConversationTask.order_index.asc(), ConversationTask.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def upsert_conversation_tasks(
+    db: AsyncSession,
+    conv_id: int,
+    tasks: list[dict],
+) -> list[ConversationTask]:
+    """Replace all tasks for a conversation with the new list."""
+    # Delete existing tasks
+    await db.execute(
+        delete(ConversationTask).where(ConversationTask.conversation_id == conv_id)
+    )
+    
+    # Insert new tasks
+    new_tasks = []
+    for idx, task_data in enumerate(tasks):
+        task = ConversationTask(
+            conversation_id=conv_id,
+            title=task_data.get("title", ""),
+            status=task_data.get("status", "pending"),
+            priority=task_data.get("priority"),
+            order_index=idx,
+        )
+        db.add(task)
+        new_tasks.append(task)
+    
+    await db.commit()
+    return new_tasks
+
+
+async def update_task_status(
+    db: AsyncSession,
+    conv_id: int,
+    task_index: int,
+    status: str,
+) -> bool:
+    """Update status of a specific task by index."""
+    tasks = await get_conversation_tasks(db, conv_id)
+    if 0 <= task_index < len(tasks):
+        tasks[task_index].status = status
+        await db.commit()
+        return True
+    return False
+
+
+# ---- Conversation Resources ----
+
+async def get_conversation_resources(db: AsyncSession, conv_id: int) -> list[ConversationResource]:
+    result = await db.execute(
+        select(ConversationResource)
+        .where(ConversationResource.conversation_id == conv_id)
+        .order_by(ConversationResource.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def add_conversation_resource(
+    db: AsyncSession,
+    conv_id: int,
+    title: str,
+    resource_type: str,
+    url: str | None = None,
+    content: str | None = None,
+    resource_id: str | None = None,
+) -> ConversationResource:
+    import uuid as uuid_mod
+    resource = ConversationResource(
+        conversation_id=conv_id,
+        resource_id=resource_id or str(uuid_mod.uuid4())[:8],
+        title=title,
+        type=resource_type,
+        url=url,
+        content=content,
+    )
+    db.add(resource)
+    await db.commit()
+    await db.refresh(resource)
+    return resource
+
+
+async def get_resource_by_id(db: AsyncSession, resource_id: str) -> ConversationResource | None:
+    result = await db.execute(
+        select(ConversationResource).where(ConversationResource.resource_id == resource_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def upsert_conversation_resources(
+    db: AsyncSession,
+    conv_id: int,
+    resources: list[dict],
+) -> list[ConversationResource]:
+    """Replace all resources for a conversation with the new list."""
+    import uuid as uuid_mod
+    
+    # Delete existing resources
+    await db.execute(
+        delete(ConversationResource).where(ConversationResource.conversation_id == conv_id)
+    )
+    
+    # Insert new resources
+    new_resources = []
+    for res_data in resources:
+        resource = ConversationResource(
+            conversation_id=conv_id,
+            resource_id=res_data.get("id") or str(uuid_mod.uuid4())[:8],
+            title=res_data.get("title", ""),
+            type=res_data.get("type", "doc"),
+            url=res_data.get("url"),
+            content=res_data.get("content"),
+        )
+        db.add(resource)
+        new_resources.append(resource)
+    
+    await db.commit()
+    return new_resources
+
+
+# ---- Agent Jobs ----
+
+async def create_agent_job(
+    db: AsyncSession,
+    conv_id: int,
+    user_id: int,
+    message: str,
+    mode: str | None = None,
+) -> AgentJob:
+    import uuid as uuid_mod
+    job = AgentJob(
+        job_id=str(uuid_mod.uuid4()),
+        conversation_id=conv_id,
+        user_id=user_id,
+        message=message,
+        mode=mode,
+        status="queued",
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
+async def get_agent_job(db: AsyncSession, job_id: str) -> AgentJob | None:
+    result = await db.execute(
+        select(AgentJob).where(AgentJob.job_id == job_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_active_jobs_for_conversation(db: AsyncSession, conv_id: int) -> list[AgentJob]:
+    result = await db.execute(
+        select(AgentJob)
+        .where(
+            AgentJob.conversation_id == conv_id,
+            AgentJob.status.in_(["queued", "running"]),
+        )
+        .order_by(AgentJob.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def update_job_status(
+    db: AsyncSession,
+    job_id: str,
+    status: str,
+    error: str | None = None,
+    worker_id: str | None = None,
+) -> bool:
+    job = await get_agent_job(db, job_id)
+    if not job:
+        return False
+    
+    job.status = status
+    if error:
+        job.error = error
+    if worker_id:
+        job.worker_id = worker_id
+    
+    if status == "running" and not job.started_at:
+        job.started_at = datetime.now(timezone.utc)
+    elif status in ("completed", "failed", "cancelled"):
+        job.completed_at = datetime.now(timezone.utc)
+    
+    await db.commit()
+    return True
+
+
+# ---- User Settings ----
+
+async def get_user_settings(db: AsyncSession, user_id: int, category: str = None) -> dict:
+    """Get user settings as a dict. Optionally filter by category."""
+    query = select(UserSetting).where(UserSetting.user_id == user_id)
+    if category:
+        query = query.where(UserSetting.category == category)
+    result = await db.execute(query)
+    settings = {}
+    for s in result.scalars().all():
+        if s.category not in settings:
+            settings[s.category] = {}
+        settings[s.category][s.key] = s.value
+    return settings
+
+
+async def get_user_agent_settings(db: AsyncSession, user_id: int) -> dict:
+    """Get user's agent settings (default_model, research_model, yolo_mode)."""
+    result = await db.execute(
+        select(UserSetting).where(
+            UserSetting.user_id == user_id,
+            UserSetting.category == "agent"
+        )
+    )
+    settings = {}
+    for s in result.scalars().all():
+        # Values are stored as JSON, so they may be strings like "opencode-go/qwen3.6-plus"
+        val = s.value
+        if isinstance(val, str):
+            val = val.strip('"')  # Remove JSON string quotes
+        settings[s.key] = val
+    return settings

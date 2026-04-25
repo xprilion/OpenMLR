@@ -38,6 +38,19 @@ dev-backend: ## Start backend with auto-reload (port=$(PORT))
 dev-frontend: ## Start Vite dev server (proxies /api to backend)
 	cd $(FRONTEND) && pnpm dev
 
+.PHONY: dev-full
+dev-full: ## Run backend + frontend + celery worker (requires Redis)
+	@trap 'kill 0' EXIT; \
+	USE_BACKGROUND_JOBS=true USE_REDIS_PUBSUB=true $(MAKE) dev-backend & \
+	$(MAKE) dev-frontend & \
+	$(MAKE) worker & \
+	wait
+
+.PHONY: worker
+worker: ## Start Celery worker for background jobs
+	cd $(BACKEND) && uv run celery -A openmlr.celery_app worker \
+		--loglevel=info --concurrency=2 -Q default,agent
+
 # ─── Build & Production ──────────────────────────────────
 
 .PHONY: build
@@ -97,6 +110,67 @@ docker-build: ## Build Docker image
 .PHONY: docker-run
 docker-run: ## Run Docker container (pass DATABASE_URL via env)
 	docker run --rm -p $(PORT):$(PORT) --env-file .env openmlr
+
+# ─── Docker Compose ──────────────────────────────────────
+# Uses `docker compose` (V2) by default, falls back to `docker-compose` (V1)
+# Override with: make up DOCKER_COMPOSE="docker-compose"
+DOCKER_COMPOSE ?= docker compose
+
+.PHONY: up
+up: ## Start all services (db, redis, web, worker)
+	$(DOCKER_COMPOSE) up -d
+
+.PHONY: down
+down: ## Stop all services
+	$(DOCKER_COMPOSE) down
+
+.PHONY: restart
+restart: ## Restart web + worker (quick rebuild)
+	$(DOCKER_COMPOSE) up -d --build web worker
+
+.PHONY: logs
+logs: ## Tail logs from all services
+	$(DOCKER_COMPOSE) logs -f
+
+.PHONY: logs-web
+logs-web: ## Tail logs from web service
+	$(DOCKER_COMPOSE) logs -f web
+
+.PHONY: logs-worker
+logs-worker: ## Tail logs from worker service
+	$(DOCKER_COMPOSE) logs -f worker
+
+.PHONY: rebuild
+rebuild: ## Full rebuild and restart all services
+	$(DOCKER_COMPOSE) down
+	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) up -d
+
+.PHONY: shell-web
+shell-web: ## Open shell in web container
+	$(DOCKER_COMPOSE) exec web /bin/bash
+
+.PHONY: shell-db
+shell-db: ## Open psql in database container
+	$(DOCKER_COMPOSE) exec db psql -U postgres -d openmlr
+
+# ─── Docker Compose (Development) ────────────────────────
+
+.PHONY: dev-docker
+dev-docker: ## Start with live reload (mounts source code)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up
+
+.PHONY: dev-docker-build
+dev-docker-build: ## Build dev images and start with live reload
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+.PHONY: dev-docker-down
+dev-docker-down: ## Stop dev services
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml down
+
+.PHONY: infra
+infra: ## Start only db + redis (for local dev without Docker app)
+	$(DOCKER_COMPOSE) up -d db redis
 
 # ─── Docs ─────────────────────────────────────────────────
 

@@ -117,14 +117,32 @@ async def create_conversation(
 @router.get("/conversations/{uuid}")
 async def get_conversation(
     uuid: str,
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     conv = await _get_conv_or_404(db, uuid, user.id)
     msgs = await ops.get_messages(db, conv.id)
+    
+    # Re-generate title if still "New conversation" and has messages
+    if conv.title == "New conversation" and msgs:
+        msg_dicts = [_msg_dict(m) for m in msgs]
+        asyncio.create_task(
+            _auto_title(_sm(request), _bus(request), db, conv.id, conv.uuid, msg_dicts)
+        )
+    
+    # Fetch persisted tasks and resources
+    tasks = await ops.get_conversation_tasks(db, conv.id)
+    resources = await ops.get_conversation_resources(db, conv.id)
+    
     return {
         "conversation": _conv_dict(conv),
         "messages": [_msg_dict(m) for m in msgs],
+        "tasks": [{"title": t.title, "status": t.status} for t in tasks],
+        "resources": [
+            {"title": r.title, "url": r.url or "", "type": r.type, "id": r.resource_id}
+            for r in resources
+        ],
     }
 
 
@@ -151,10 +169,14 @@ async def switch_conversation(
     conv = await _get_conv_or_404(db, uuid, user.id)
     sm = _sm(request)
     msg_dicts = await _load_messages(db, conv.id)
+    
+    # Get user's default model if conversation has none
+    user_agent_settings = await ops.get_user_agent_settings(db, user.id)
+    effective_model = conv.model or user_agent_settings.get("default_model")
 
     active = await sm.get_or_create_session(
         conv.id, conv.uuid,
-        model=conv.model, mode=conv.mode or "general",
+        model=effective_model, mode=conv.mode or "general",
         existing_messages=msg_dicts, username=user.display_name or user.username,
     )
     sm.current_conversation_id = conv.id
@@ -174,18 +196,54 @@ async def send_message(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from ..services.job_manager import get_job_manager, USE_BACKGROUND_JOBS
+    
     sm = _sm(request)
     event_bus = _bus(request)
+    job_manager = get_job_manager()
 
+    # Load user's agent settings (default_model, research_model, etc.)
+    user_agent_settings = await ops.get_user_agent_settings(db, user.id)
+    user_default_model = user_agent_settings.get("default_model")
+    
     if not sm.current_conversation_id:
-        conv = await ops.create_conversation(db, user.id)
+        # Create conversation with user's default model
+        conv = await ops.create_conversation(db, user.id, model=user_default_model)
         sm.current_conversation_id = conv.id
     else:
         conv = await ops.get_conversation_by_id(db, sm.current_conversation_id)
 
     if not conv:
         raise HTTPException(status_code=400, detail="No active conversation")
+    
+    # If conversation has no model, use user's default
+    effective_model = conv.model or user_default_model
 
+    # Title generation after 1st and 3rd messages
+    user_count = (conv.user_message_count or 0) + 1
+    
+    # If background jobs are enabled, use Celery
+    if USE_BACKGROUND_JOBS:
+        job = await job_manager.create_job(
+            db=db,
+            conversation_id=conv.id,
+            user_id=user.id,
+            message=body.message,
+            mode=body.mode,
+            model=effective_model,
+            uuid=conv.uuid,
+        )
+        
+        # Title generation (still async in web process for now)
+        if user_count in (1, 3):
+            msg_dicts = await _load_messages(db, conv.id)
+            asyncio.create_task(
+                _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
+            )
+        
+        return {"ok": True, "job_id": job.job_id if job else None, "background": True}
+
+    # Synchronous processing (original flow)
     # Persist user message to DB
     await ops.add_message(db, conv.id, "user", body.message)
     await ops.increment_user_message_count(db, conv.id)
@@ -202,7 +260,7 @@ async def send_message(
 
     active = await sm.get_or_create_session(
         conv.id, conv.uuid,
-        model=conv.model, mode=conv.mode or "general",
+        model=effective_model, mode=conv.mode or "general",
         existing_messages=history, username=user.display_name or user.username,
     )
 
@@ -213,18 +271,60 @@ async def send_message(
 
     asyncio.create_task(sm.process_message(conv.id, body.message, mode=body.mode))
 
-    # Title generation after 1st and 3rd messages
-    user_count = (conv.user_message_count or 0) + 1
     if user_count in (1, 3):
         msg_dicts = await _load_messages(db, conv.id)
         asyncio.create_task(
             _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
         )
 
-    return {"ok": True}
+    return {"ok": True, "background": False}
 
 
 # ── Agent controls ───────────────────────────────────────
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the status of a background job."""
+    from ..services.job_manager import get_job_manager
+    job_manager = get_job_manager()
+    status = await job_manager.get_job_status(db, job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
+
+
+@router.get("/conversations/{uuid}/jobs")
+async def get_conversation_jobs(
+    uuid: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all active jobs for a conversation."""
+    from ..services.job_manager import get_job_manager
+    conv = await _get_conv_or_404(db, uuid, user.id)
+    job_manager = get_job_manager()
+    jobs = await job_manager.get_active_jobs(db, conv.id)
+    return {"jobs": jobs}
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a queued job."""
+    from ..services.job_manager import get_job_manager
+    job_manager = get_job_manager()
+    success = await job_manager.cancel_job(db, job_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot cancel job (may be running or completed)")
+    return {"ok": True}
+
 
 @router.get("/reports/{report_id}")
 async def get_report(
@@ -233,7 +333,7 @@ async def get_report(
 ):
     """Get a completion report by ID."""
     from ..tools.plan import get_report_content
-    content = get_report_content(report_id)
+    content = await get_report_content(report_id)
     if not content:
         raise HTTPException(status_code=404, detail="Report not found")
     return {"report_id": report_id, "content": content}
@@ -369,12 +469,24 @@ def _wire_persistence(active, db, conv_id: int):
 
 
 async def _auto_title(sm, event_bus, db, conv_id, uuid, messages):
+    """Generate a title for the conversation using LLM."""
+    from ..agent.llm import LLMProvider
+    from ..config import AgentConfig, detect_cheap_model
+    
     try:
+        # Try session-based generation first
         title = await sm.generate_title(conv_id, messages)
+        
+        # Fallback: generate without session using cheap model
+        if not title and messages:
+            config = AgentConfig(title_model=detect_cheap_model())
+            title = await LLMProvider.generate_title(messages, config)
+        
         if title:
             await ops.update_conversation_title(db, conv_id, title)
             await event_bus.broadcast(
                 AgentEvent(event_type="conversation_updated", data={"uuid": uuid, "title": title})
             )
-    except Exception:
-        pass
+            logger.debug(f"Generated title for conv {conv_id}: {title}")
+    except Exception as e:
+        logger.warning(f"Failed to generate title for conv {conv_id}: {e}")

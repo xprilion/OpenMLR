@@ -72,6 +72,9 @@ class Conversation(Base):
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
     corpus = relationship("ResearchCorpus", back_populates="conversation")
     writing_project = relationship("WritingProject", back_populates="conversation")
+    tasks = relationship("ConversationTask", back_populates="conversation", cascade="all, delete-orphan")
+    resources = relationship("ConversationResource", back_populates="conversation", cascade="all, delete-orphan")
+    jobs = relationship("AgentJob", back_populates="conversation", cascade="all, delete-orphan")
 
 
 class Message(Base):
@@ -138,3 +141,56 @@ class WritingProject(Base):
 
     user = relationship("User", back_populates="writing_projects")
     conversation = relationship("Conversation", back_populates="writing_project")
+
+
+class ConversationTask(Base):
+    """Persisted tasks (todo items) for a conversation."""
+    __tablename__ = "conversation_tasks"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(500), nullable=False)
+    status = Column(String(20), default="pending", nullable=False)  # pending, in_progress, completed, cancelled
+    priority = Column(String(20), default="medium", nullable=True)  # high, medium, low
+    order_index = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+
+    conversation = relationship("Conversation", back_populates="tasks")
+
+
+class ConversationResource(Base):
+    """Persisted resources (papers, code, datasets, reports) for a conversation."""
+    __tablename__ = "conversation_resources"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    resource_id = Column(String(100), unique=True, nullable=False, default=lambda: str(uuid.uuid4())[:8])
+    title = Column(String(500), nullable=False)
+    url = Column(String(2000), nullable=True)
+    type = Column(String(20), default="doc", nullable=False)  # paper, code, dataset, doc, report
+    content = Column(Text, nullable=True)  # For reports, store markdown content
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    conversation = relationship("Conversation", back_populates="resources")
+
+
+class AgentJob(Base):
+    """Background job tracking for agent execution."""
+    __tablename__ = "agent_jobs"
+
+    id = Column(Integer, primary_key=True)
+    job_id = Column(String(100), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), default="queued", nullable=False)  # queued, running, completed, failed, cancelled
+    message = Column(Text, nullable=True)  # The user message that triggered this job
+    mode = Column(String(20), nullable=True)  # research, writing, coding, general
+    error = Column(Text, nullable=True)  # Error message if failed
+    worker_id = Column(String(100), nullable=True)  # Which worker is processing this
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    conversation = relationship("Conversation", back_populates="jobs")
+    user = relationship("User")

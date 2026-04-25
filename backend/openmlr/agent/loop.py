@@ -47,12 +47,34 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
     if session.pending_approval:
         session.pending_approval = None
 
+    # Set the mode on the tool router for strict enforcement
+    effective_mode = mode if mode in ("plan", "research", "write") else "general"
+    tool_router.set_mode(effective_mode)
+
     # Inject per-message mode context if provided
     if mode and mode in ("plan", "research", "write"):
         mode_hints = {
-            "plan": "[Mode: PLAN — Ask questions, plan tasks, do not execute. Read-only tools only.]",
-            "research": "[Mode: RESEARCH — Search papers, read literature, find code, synthesize.]",
-            "write": "[Mode: WRITE — Write paper sections, manage citations, draft content.]",
+            "plan": (
+                "[Mode: PLAN — STRICT ENFORCEMENT]\n"
+                "- Only ask_user and plan_tool are available\n"
+                "- Do NOT execute any research, writing, or code tools\n"
+                "- Ask clarifying questions and create a plan\n"
+                "- When ready, use ask_user with suggest_mode='research' or 'write' to propose switching"
+            ),
+            "research": (
+                "[Mode: RESEARCH — STRICT ENFORCEMENT]\n"
+                "- Search papers, web, and gather information only\n"
+                "- Do NOT write content or execute code\n"
+                "- Add all sources as resources via plan_tool\n"
+                "- When research is complete, use ask_user with suggest_mode='write' to propose switching"
+            ),
+            "write": (
+                "[Mode: WRITE — STRICT ENFORCEMENT]\n"
+                "- Write and edit content only\n"
+                "- Use writing tool for paper sections\n"
+                "- Reference resources gathered in research phase\n"
+                "- When writing is complete, generate a report via plan_tool"
+            ),
         }
         session.context_manager.add_message(Message(role="system", content=mode_hints[mode]))
 

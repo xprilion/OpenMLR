@@ -18,6 +18,9 @@ class Session:
     event_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     submission_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
 
+    # Conversation reference (for database operations in tools)
+    conversation_id: Optional[int] = None
+
     # Cancellation
     _cancelled: asyncio.Event = field(default_factory=asyncio.Event)
 

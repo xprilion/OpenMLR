@@ -77,7 +77,7 @@ class SessionManager:
             title_model=self.default_config.title_model,
         )
 
-        session = Session(config=config)
+        session = Session(config=config, conversation_id=conversation_id)
         sandbox_manager = SandboxManager()
         tool_router = create_tool_router(sandbox_manager)
 

@@ -88,3 +88,14 @@ export interface SearchBudget {
   used: number;
   max: number;
 }
+
+// ── Background Jobs ─────────────────────────────────────
+
+export interface AgentJob {
+  job_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error?: string;
+}

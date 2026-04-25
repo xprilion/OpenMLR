@@ -20,6 +20,11 @@ class LLMProvider:
             return os.environ.get("ANTHROPIC_API_KEY")
         if mn.startswith("openrouter/"):
             return os.environ.get("OPENROUTER_API_KEY")
+        if mn.startswith("opencode-go/"):
+            return os.environ.get("OPENCODE_GO_API_KEY")
+        if mn.startswith("local/") or mn.startswith("ollama/") or mn.startswith("lmstudio/"):
+            # Local models often don't need API key, or use a placeholder
+            return os.environ.get("LOCAL_API_KEY", "not-needed")
         return (
             os.environ.get("OPENAI_API_KEY")
             or os.environ.get("ANTHROPIC_API_KEY")
@@ -28,16 +33,55 @@ class LLMProvider:
 
     @staticmethod
     def _normalize_model(model_name: str) -> str:
-        for prefix in ("openai/", "openrouter/", "anthropic/", "litellm/"):
+        for prefix in ("openai/", "openrouter/", "anthropic/", "litellm/", "local/", "ollama/", "lmstudio/", "opencode-go/"):
             if model_name.startswith(prefix):
                 return model_name[len(prefix):]
         return model_name
+    
+    @staticmethod
+    def _get_base_url(model_name: str) -> Optional[str]:
+        """Get the base URL for local/custom OpenAI-compatible APIs."""
+        mn = model_name.lower()
+        if mn.startswith("local/"):
+            # Custom base URL from env
+            return os.environ.get("LOCAL_API_BASE", "http://localhost:8000/v1")
+        if mn.startswith("ollama/"):
+            return os.environ.get("OLLAMA_API_BASE", "http://localhost:11434/v1")
+        if mn.startswith("lmstudio/"):
+            return os.environ.get("LMSTUDIO_API_BASE", "http://localhost:1234/v1")
+        if mn.startswith("openrouter/"):
+            return "https://openrouter.ai/api/v1"
+        if mn.startswith("opencode-go/"):
+            # OpenCode Go uses OpenAI-compatible endpoint for most models
+            # Some models (DeepSeek V4, MiniMax M2.7/M2.5) use Anthropic format
+            model_id = mn.replace("opencode-go/", "")
+            if model_id in ("deepseek-v4-pro", "deepseek-v4-flash", "minimax-m2.7", "minimax-m2.5"):
+                return "https://opencode.ai/zen/go/v1"  # Anthropic format
+            return "https://opencode.ai/zen/go/v1"  # OpenAI-compatible format
+        return None
+    
+    @staticmethod
+    def _is_opencode_go_anthropic_format(model_name: str) -> bool:
+        """Check if OpenCode Go model uses Anthropic API format."""
+        mn = model_name.lower()
+        if not mn.startswith("opencode-go/"):
+            return False
+        model_id = mn.replace("opencode-go/", "")
+        # These models use Anthropic messages format
+        return model_id in ("deepseek-v4-pro", "deepseek-v4-flash", "minimax-m2.7", "minimax-m2.5")
 
     @staticmethod
     def _is_anthropic_model(model_name: str) -> bool:
         """True only for direct Anthropic API calls (anthropic/ prefix).
         OpenRouter-routed Claude models use the OpenAI-compatible path."""
         return model_name.lower().startswith("anthropic/")
+    
+    @staticmethod
+    def _uses_anthropic_format(model_name: str) -> bool:
+        """Check if model uses Anthropic message format (native Anthropic or OpenCode Go Anthropic models)."""
+        if LLMProvider._is_anthropic_model(model_name):
+            return True
+        return LLMProvider._is_opencode_go_anthropic_format(model_name)
 
     # ── Public API ────────────────────────────────────────
 
@@ -105,7 +149,7 @@ class LLMProvider:
         last_error = None
         for attempt in range(max_retries):
             try:
-                if LLMProvider._is_anthropic_model(config.model_name):
+                if LLMProvider._uses_anthropic_format(config.model_name):
                     return await LLMProvider._call_anthropic(messages, config, tools)
                 else:
                     return await LLMProvider._call_openai(messages, config, tools)
@@ -126,7 +170,7 @@ class LLMProvider:
         last_error = None
         for attempt in range(3):
             try:
-                if LLMProvider._is_anthropic_model(config.model_name):
+                if LLMProvider._uses_anthropic_format(config.model_name):
                     async for chunk in LLMProvider._stream_anthropic(messages, config, tools):
                         yield chunk
                 else:
@@ -146,10 +190,19 @@ class LLMProvider:
     @staticmethod
     def _openai_client(config: AgentConfig):
         from openai import AsyncOpenAI
+        import logging
+        logger = logging.getLogger(__name__)
+        
         api_key = LLMProvider._get_api_key(config.model_name)
+        base_url = LLMProvider._get_base_url(config.model_name)
+        
+        logger.info(f"[LLM] Model: {config.model_name}")
+        logger.info(f"[LLM] Base URL: {base_url}")
+        logger.info(f"[LLM] API key prefix: {api_key[:10] if api_key else 'None'}...")
+        
         kwargs = {"api_key": api_key}
-        if config.model_name.startswith("openrouter/"):
-            kwargs["base_url"] = "https://openrouter.ai/api/v1"
+        if base_url:
+            kwargs["base_url"] = base_url
         return AsyncOpenAI(**kwargs)
 
     @staticmethod
@@ -338,15 +391,28 @@ class LLMProvider:
         return "\n\n".join(system_parts), chat
 
     @staticmethod
+    def _anthropic_client(config: AgentConfig):
+        """Create Anthropic client with appropriate settings for native or OpenCode Go."""
+        from anthropic import AsyncAnthropic
+        
+        mn = config.model_name.lower()
+        if mn.startswith("opencode-go/"):
+            # OpenCode Go uses Anthropic format but different endpoint/key
+            return AsyncAnthropic(
+                api_key=os.environ.get("OPENCODE_GO_API_KEY"),
+                base_url="https://opencode.ai/zen/go/v1",
+            )
+        # Native Anthropic
+        return AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+    @staticmethod
     async def _call_anthropic(
         messages: list[dict],
         config: AgentConfig,
         tools: Optional[list[dict]],
     ) -> LLMResult:
-        from anthropic import AsyncAnthropic
-
         model = LLMProvider._normalize_model(config.model_name)
-        client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        client = LLMProvider._anthropic_client(config)
         system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
 
         params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
@@ -387,10 +453,8 @@ class LLMProvider:
         config: AgentConfig,
         tools: Optional[list[dict]],
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
-        from anthropic import AsyncAnthropic
-
         model = LLMProvider._normalize_model(config.model_name)
-        client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        client = LLMProvider._anthropic_client(config)
         system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
 
         params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}

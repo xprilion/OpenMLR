@@ -96,6 +96,11 @@ export const api = {
   // Reports
   getReport: (reportId: string) => get(`/api/reports/${reportId}`),
 
+  // Background Jobs
+  getJobStatus: (jobId: string) => get(`/api/jobs/${jobId}`),
+  getConversationJobs: (uuid: string) => get(`/api/conversations/${uuid}/jobs`),
+  cancelJob: (jobId: string) => post(`/api/jobs/${jobId}/cancel`, {}),
+
   // Providers & Models
   getProviders: () => get('/api/providers'),
   getModels: () => get('/api/models'),

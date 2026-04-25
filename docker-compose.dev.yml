@@ -1,0 +1,41 @@
+# Development override - enables live reload
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#    or: make dev-docker
+
+services:
+  # Web with live reload - mounts source code
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: >
+      uvicorn openmlr.app:app
+      --host 0.0.0.0 --port 3000
+      --reload --reload-dir /app/backend/openmlr
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend/dist:/app/frontend/dist
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+
+  # Worker with auto-restart on code changes
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: >
+      watchmedo auto-restart
+      --directory=/app/backend/openmlr
+      --pattern=*.py
+      --recursive
+      --
+      celery -A openmlr.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      -Q default,agent
+    volumes:
+      - ./backend:/app/backend
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"

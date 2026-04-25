@@ -5,6 +5,53 @@ from typing import Optional
 from ..agent.types import ToolSpec, ToolCall
 
 
+# Define which tools are allowed in each mode
+# Tools not listed are allowed in all modes
+MODE_TOOL_RESTRICTIONS = {
+    "plan": {
+        # In plan mode: only planning, asking, and reading tools
+        "allowed": {
+            "ask_user", "plan_tool",
+            # Read-only tools
+            "read_file", "list_dir", "glob_files", "grep_search",
+        },
+        "blocked_message": (
+            "Tool '{tool}' is not available in PLAN mode. "
+            "Plan mode is for planning and asking questions only. "
+            "Suggest switching to research or write mode using ask_user with suggest_mode."
+        ),
+    },
+    "research": {
+        # In research mode: search, papers, reading, planning
+        "allowed": {
+            "ask_user", "plan_tool",
+            "web_search", "papers", "research",
+            "read_file", "list_dir", "glob_files", "grep_search",
+            "github_search", "github_read_file", "github_read_repo",
+        },
+        "blocked_message": (
+            "Tool '{tool}' is not available in RESEARCH mode. "
+            "Research mode is for searching, reading papers, and gathering information. "
+            "Use ask_user with suggest_mode to switch to write mode for drafting content."
+        ),
+    },
+    "write": {
+        # In write mode: writing, planning, reading, limited search
+        "allowed": {
+            "ask_user", "plan_tool", "writing",
+            "read_file", "list_dir", "glob_files", "grep_search",
+            "web_search", "papers",  # For citations
+        },
+        "blocked_message": (
+            "Tool '{tool}' is not available in WRITE mode. "
+            "Write mode is for drafting and editing content. "
+            "Use ask_user with suggest_mode to switch modes if needed."
+        ),
+    },
+    # "general" mode has no restrictions
+}
+
+
 class ToolRouter:
     """Central tool registry and dispatcher."""
 
@@ -12,6 +59,7 @@ class ToolRouter:
         self.tools: dict[str, ToolSpec] = {}
         self._mcp_client = None
         self._blocklist: set[str] = set()
+        self._current_mode: str = "general"
 
     def register(self, spec: ToolSpec) -> None:
         """Register a tool."""
@@ -24,14 +72,48 @@ class ToolRouter:
         for spec in specs:
             self.register(spec)
 
+    def set_mode(self, mode: str) -> None:
+        """Set the current operating mode for tool filtering."""
+        self._current_mode = mode
+
+    def get_mode(self) -> str:
+        """Get the current operating mode."""
+        return self._current_mode
+
+    def is_tool_allowed(self, name: str) -> tuple[bool, str]:
+        """Check if a tool is allowed in the current mode.
+        
+        Returns (allowed, error_message).
+        """
+        if self._current_mode not in MODE_TOOL_RESTRICTIONS:
+            return True, ""
+        
+        restrictions = MODE_TOOL_RESTRICTIONS[self._current_mode]
+        allowed_tools = restrictions.get("allowed", set())
+        
+        if name in allowed_tools:
+            return True, ""
+        
+        error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
+        return False, error_msg.format(tool=name, mode=self._current_mode)
+
     def get_tool(self, name: str) -> Optional[ToolSpec]:
         """Look up a tool by name."""
         return self.tools.get(name)
 
-    def get_tool_specs_for_llm(self) -> list[dict]:
-        """Convert all registered tools to OpenAI function-calling format."""
+    def get_tool_specs_for_llm(self, filter_by_mode: bool = True) -> list[dict]:
+        """Convert registered tools to OpenAI function-calling format.
+        
+        If filter_by_mode is True, only returns tools allowed in the current mode.
+        """
         specs = []
         for tool in self.tools.values():
+            # Check if tool is allowed in current mode
+            if filter_by_mode:
+                allowed, _ = self.is_tool_allowed(tool.name)
+                if not allowed:
+                    continue
+            
             specs.append({
                 "type": "function",
                 "function": {
@@ -51,8 +133,23 @@ class ToolRouter:
         name: str,
         arguments: dict,
         session=None,
+        enforce_mode: bool = True,
     ) -> tuple[str, bool]:
-        """Execute a tool call, dispatching to handler or MCP."""
+        """Execute a tool call, dispatching to handler or MCP.
+        
+        If enforce_mode is True, checks if the tool is allowed in the current mode.
+        """
+        # Check mode restrictions first
+        if enforce_mode:
+            allowed, error_msg = self.is_tool_allowed(name)
+            if not allowed:
+                warning = (
+                    f"⚠️ MODE VIOLATION: {error_msg}\n\n"
+                    f"Current mode: {self._current_mode.upper()}\n"
+                    f"To use this tool, ask the user to switch modes using ask_user with suggest_mode parameter."
+                )
+                return warning, False
+        
         tool = self.tools.get(name)
         if not tool:
             return f"Unknown tool: {name}", False
