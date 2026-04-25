@@ -58,11 +58,43 @@ function ChatUI({
   const [pendingModeSwitch, setPendingModeSwitch] = useState<string | null>(null);
 
   const loadConversations = useCallback(async () => {
-    try { setConversations((await api.listConversations()).conversations || []); } catch { /* */ }
+    try { 
+      const data = await api.listConversations();
+      setConversations(data.conversations || []); 
+      return data.conversations || [];
+    } catch { 
+      return [];
+    }
   }, []);
 
-  // Initial load
-  useEffect(() => { loadConversations(); }, [loadConversations]);
+  // Initial load - auto-create and select first conversation if none exist
+  useEffect(() => { 
+    const init = async () => {
+      const convs = await loadConversations();
+      
+      // If we have a route UUID, we'll handle it in the routeUuid effect
+      if (routeUuid) return;
+      
+      // If no conversations exist, create one automatically
+      if (convs.length === 0) {
+        try {
+          const data = await api.createConversation();
+          const conv = data.conversation;
+          setConversations([conv]);
+          setCurrentConvUuid(conv.uuid);
+          setModel(conv.model || model);
+          navigate(`/app/${conv.uuid}`, { replace: true });
+        } catch { /* */ }
+      } else if (!currentConvUuid) {
+        // Auto-select the first (most recent) conversation
+        const first = convs[0];
+        setCurrentConvUuid(first.uuid);
+        navigate(`/app/${first.uuid}`, { replace: true });
+        switchConv(first.uuid);
+      }
+    };
+    init();
+  }, []);
 
   // Load conversation from URL param
   useEffect(() => {
@@ -141,6 +173,20 @@ function ChatUI({
   // ── SSE ───────────────────────────────────────────────
   const handleEvent = useCallback((event: AgentEvent) => {
     const { event_type, data } = event;
+    
+    // Filter events by conversation UUID when available
+    // Events from background jobs include conversation_uuid
+    const eventConvUuid = data?.conversation_uuid;
+    if (eventConvUuid && eventConvUuid !== currentConvUuid) {
+      // Event is for a different conversation - only handle job_complete for status updates
+      if (event_type === 'job_complete') {
+        // Update that conversation's status in the sidebar
+        const status = data?.status === 'completed' ? 'idle' : 'idle';
+        setConvStatuses((prev) => ({ ...prev, [eventConvUuid]: status }));
+      }
+      return;
+    }
+    
     switch (event_type) {
       case 'model_info': if (data?.model) setModel(data.model); break;
       case 'status': if (data?.status === 'ready') { setIsProcessing(false); setCurrentConvStatus('idle'); } break;
@@ -238,7 +284,20 @@ function ChatUI({
           if (status === 'failed' && error) {
             setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Job failed: ${error}` }]);
           }
-          // Refresh to get latest messages
+          // Refresh messages from server to get persisted assistant response
+          if (status === 'completed') {
+            api.getConversation(conversation_uuid).then((data) => {
+              if (data.messages) {
+                setMessages(data.messages.map((m: any) => {
+                  if (m.role === 'tool') {
+                    const meta = m.metadata || {};
+                    return { id: nextId(), role: 'tool' as const, content: '', metadata: { tool: meta.tool || 'tool', args: '', output: m.content, outputSuccess: meta.success !== false } };
+                  }
+                  return { id: nextId(), role: m.role, content: m.content };
+                }));
+              }
+            }).catch(() => {});
+          }
           loadConversations();
         }
         break;
