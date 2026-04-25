@@ -112,21 +112,6 @@ docs-dev: ## Preview docs locally
 docs-build: ## Build docs to site/docs/.vitepress/dist
 	cd site && npx vitepress build docs
 
-.PHONY: docs-publish
-docs-publish: docs-build ## Deploy docs to gh-pages branch
-	@echo "Publishing docs to gh-pages..."
-	@TMPDIR=$$(mktemp -d) && \
-	cp -r site/docs/.vitepress/dist/* "$$TMPDIR/" && \
-	cd "$$TMPDIR" && \
-	git init && \
-	git checkout -b gh-pages && \
-	git add -A && \
-	git commit -m "docs: publish $$(date +%Y-%m-%d)" && \
-	git remote add origin git@github.com:xprilion/OpenMLR.git && \
-	git push -f origin gh-pages && \
-	rm -rf "$$TMPDIR" && \
-	echo "Docs published to gh-pages."
-
 # ─── Cleanup ─────────────────────────────────────────────
 
 .PHONY: clean
