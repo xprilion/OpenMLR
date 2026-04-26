@@ -1,5 +1,9 @@
 # Render Blueprint - https://render.com/docs/blueprint-spec
 # Deploy: https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR
+#
+# After deployment, add your API keys via Render Dashboard:
+#   - OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY (LLM providers)
+#   - BRAVE_API_KEY (web search), GITHUB_TOKEN (GitHub integration)
 
 services:
   # Main web application
@@ -25,22 +29,8 @@ services:
         value: "true"
       - key: USE_REDIS_PUBSUB
         value: "true"
-      # LLM Providers (Add at least one)
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: GOOGLE_API_KEY
-        sync: false
-      # Optional Tools
-      - key: GITHUB_TOKEN
-        sync: false
-      - key: SEARCH_API_KEY
-        sync: false
 
-  # Background worker
+  # Background worker for long-running agent tasks
   - type: worker
     name: openmlr-worker
     runtime: docker
@@ -62,19 +52,6 @@ services:
           type: web
           name: openmlr-web
           envVarKey: JWT_SECRET_KEY
-      # LLM Providers
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: GOOGLE_API_KEY
-        sync: false
-      - key: GITHUB_TOKEN
-        sync: false
-      - key: SEARCH_API_KEY
-        sync: false
 
   # Redis for job queue and pub/sub
   - type: redis

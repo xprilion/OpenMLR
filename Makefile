@@ -2,12 +2,13 @@
 # Backend:  Python / FastAPI   (backend/)
 # Frontend: React  / Vite      (frontend/)
 
-SHELL       := /bin/bash
-BACKEND     := backend
-FRONTEND    := frontend
-PORT        ?= 3000
-DOCKER_USER ?= xprilion
-VERSION     ?= 0.2.0
+SHELL         := /bin/bash
+BACKEND       := backend
+FRONTEND      := frontend
+PORT          ?= 3000
+DOCKER_USER   ?= xprilion
+VERSION       ?= 0.2.0
+DOCKER_COMPOSE := docker compose
 
 # ─── Setup ────────────────────────────────────────────────
 
