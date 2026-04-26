@@ -71,6 +71,7 @@ export default defineConfig({
   async buildEnd(siteConfig) {
     const docs = [
       "index",
+      "quickstart",
       "setup",
       "configuration",
       "modes",
@@ -102,6 +103,7 @@ export default defineConfig({
         text: "Getting Started",
         items: [
           { text: "Overview", link: "/" },
+          { text: "Quick Start", link: "/quickstart" },
           { text: "Setup & Installation", link: "/setup" },
           { text: "Configuration", link: "/configuration" },
         ],

@@ -16,7 +16,9 @@ description: Install OpenMLR with Docker Compose or set up local development. Pr
 | PostgreSQL | 14+ | [postgresql.org](https://www.postgresql.org) |
 | Docker | 20+ | [docker.com](https://www.docker.com) (recommended) |
 
-## Quick Start with Docker Compose
+## Quick Start with Docker Compose (Recommended)
+
+OpenMLR is available as a pre-built image on [Docker Hub](https://hub.docker.com/r/xprilion/openmlr).
 
 ```bash
 git clone https://github.com/xprilion/OpenMLR.git
@@ -25,7 +27,7 @@ cp .env.example .env   # add your API keys
 docker compose up -d
 ```
 
-Open `http://localhost:3000`. Create an account on first visit.
+This will pull the `xprilion/openmlr:latest` image and start it along with PostgreSQL and Redis. Open `http://localhost:3000` to begin.
 
 ## Local Development
 
@@ -86,22 +88,21 @@ Builds the frontend and serves everything from `:3000`.
 
 ## Docker Compose
 
-### Production
-
+### Production Stack
 ```bash
-make up         # start all services
+make up         # start all services (pulls from Docker Hub)
 make logs       # tail logs
-make restart    # quick rebuild + restart
 make down       # stop all services
 ```
 
-### Development with Live Reload
-
+### Development Stack (Live Reload)
 ```bash
-make dev-docker     # docker compose with live reload (includes docs)
+make dev-up     # start with live reload (mounts source code)
+make dev-logs   # tail dev logs
+make dev-down   # stop dev services
 ```
+Code changes in `backend/` are automatically detected and the server restarts inside the container.
 
-Code changes are automatically detected and services restart.
 
 ## Background Jobs
 
@@ -141,14 +142,17 @@ Run `make help` for the full list:
 | **Development** | |
 | `make dev` | Run backend + frontend dev servers |
 | `make worker` | Start Celery worker only |
-| **Docker Compose** | |
-| `make up` | Start all services |
-| `make down` | Stop all services |
-| `make restart` | Quick rebuild web + worker |
-| `make rebuild` | Full rebuild from scratch |
-| `make logs` | Tail all logs |
-| `make infra` | Start only db + redis |
-| `make dev-docker` | Live reload with Docker (includes docs) |
+| **Docker Compose (Prod)** | |
+| `make up` | Start production stack |
+| `make down` | Stop production stack |
+| `make logs` | Tail production logs |
+| **Docker Compose (Dev)** | |
+| `make dev-up` | Start dev stack with live reload |
+| `make dev-down` | Stop dev stack |
+| `make dev-logs` | Tail dev logs |
+| `make dev-clean` | Stop dev stack and remove volumes |
+| **Docker Hub** | |
+| `make docker-publish` | Build and push to Docker Hub |
 | **Database** | |
 | `make db-fresh` | Drop + recreate tables |
 | `make db-upgrade` | Run migrations |
