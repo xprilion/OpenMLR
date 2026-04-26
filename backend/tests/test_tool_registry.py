@@ -1,10 +1,11 @@
 """Tests for ToolRouter — registration, dispatch, mode filtering."""
 
 import pytest
-from openmlr.tools.registry import ToolRouter, MODE_TOOL_RESTRICTIONS
+
+from openmlr.tools.registry import MODE_TOOL_RESTRICTIONS, ToolRouter
 
 pytestmark = pytest.mark.asyncio
-from openmlr.agent.types import ToolSpec, ToolCall
+from openmlr.agent.types import ToolSpec
 
 
 @pytest.fixture

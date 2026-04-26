@@ -2,8 +2,8 @@
 
 import asyncio
 import time
-from typing import Optional
-from .interface import SandboxInterface, EnvironmentInfo, ExecutionResult
+
+from .interface import EnvironmentInfo, ExecutionResult, SandboxInterface
 
 
 class ModalSandbox(SandboxInterface):
@@ -13,7 +13,7 @@ class ModalSandbox(SandboxInterface):
         self._sandbox = None
         self._app = None
         self.image_name: str = "python:3.12"
-        self.gpu: Optional[str] = None
+        self.gpu: str | None = None
         self.packages: list[str] = []
 
     async def create(self, config: dict) -> "ModalSandbox":
@@ -93,7 +93,7 @@ class ModalSandbox(SandboxInterface):
                 exit_code=exit_code,
                 duration_seconds=time.monotonic() - start,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ExecutionResult(
                 output=f"Command timed out after {timeout}s",
                 success=False,
@@ -117,7 +117,7 @@ class ModalSandbox(SandboxInterface):
     async def write_file(self, path: str, content: str) -> bool:
         self._ensure_active()
         # Use heredoc for safe content transfer
-        escaped = content.replace("'", "'\\''")
+        content.replace("'", "'\\''")
         result = await self.execute(
             f"mkdir -p $(dirname '{path}') && cat > '{path}' << 'OPEN_MLR_EOF'\n{content}\nOPEN_MLR_EOF",
             timeout=10,
@@ -141,7 +141,7 @@ class ModalSandbox(SandboxInterface):
         result = await self.execute(f"ls -1 '{path}'", timeout=5)
         if not result.success:
             return []
-        return [l for l in result.output.strip().split("\n") if l]
+        return [line for line in result.output.strip().split("\n") if line]
 
     async def probe_environment(self) -> EnvironmentInfo:
         info = EnvironmentInfo()

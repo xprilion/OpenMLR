@@ -97,6 +97,30 @@ check-backend: ## Verify backend loads without errors
 check-frontend: ## Type-check the frontend (tsc --noEmit)
 	cd $(FRONTEND) && npx tsc --noEmit
 
+# ─── Linting ─────────────────────────────────────────────
+
+.PHONY: lint
+lint: lint-backend lint-frontend ## Run all linters
+
+.PHONY: lint-backend
+lint-backend: ## Lint backend with ruff
+	cd $(BACKEND) && uv run ruff check openmlr/ tests/
+
+.PHONY: lint-frontend
+lint-frontend: ## Lint frontend with ESLint
+	cd $(FRONTEND) && pnpm lint
+
+.PHONY: lint-fix
+lint-fix: lint-fix-backend lint-fix-frontend ## Auto-fix linting issues
+
+.PHONY: lint-fix-backend
+lint-fix-backend: ## Auto-fix backend linting issues
+	cd $(BACKEND) && uv run ruff check openmlr/ tests/ --fix
+
+.PHONY: lint-fix-frontend
+lint-fix-frontend: ## Auto-fix frontend linting issues
+	cd $(FRONTEND) && pnpm lint:fix
+
 # ─── Testing ─────────────────────────────────────────────
 
 .PHONY: test

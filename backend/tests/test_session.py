@@ -3,13 +3,11 @@
 import asyncio
 
 import pytest
-import pytest_asyncio
 
-from openmlr.agent.session import Session
 from openmlr.agent.context import ContextManager
+from openmlr.agent.session import Session
 from openmlr.agent.types import AgentEvent
 from openmlr.config import AgentConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

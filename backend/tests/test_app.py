@@ -1,6 +1,7 @@
 """Tests for app entrypoint and main module."""
 
 import pytest
+
 from openmlr.app import app
 
 pytestmark = pytest.mark.asyncio
@@ -26,7 +27,6 @@ class TestAppCreation:
         assert CORSMiddleware in middlewares
 
     async def test_global_exception_handler_configured(self):
-        from starlette.responses import JSONResponse
         handlers = app.exception_handlers
         assert Exception in handlers
 
@@ -37,7 +37,8 @@ class TestMainModule:
         assert callable(main)
 
     async def test_main_contains_uvicorn_import(self):
-        from openmlr.main import main
         import inspect
+
+        from openmlr.main import main
         source = inspect.getsource(main)
         assert "uvicorn" in source

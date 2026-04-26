@@ -1,7 +1,8 @@
 """Create (or recreate) all database tables from SQLAlchemy models."""
 
-import sys
 import asyncio
+import sys
+
 from .engine import engine
 from .models import Base
 

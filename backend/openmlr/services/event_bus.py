@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+
 from ..agent.types import AgentEvent
 
 logger = logging.getLogger("openmlr.sse")
@@ -15,14 +16,14 @@ USE_REDIS = os.environ.get("USE_REDIS_PUBSUB", "false").lower() in ("true", "1",
 
 class EventBus:
     """Manages SSE event broadcasting to multiple clients.
-    
+
     When USE_REDIS_PUBSUB is enabled, also forwards events to Redis
     for cross-worker communication.
     """
 
     def __init__(self):
         self._subscribers: list[asyncio.Queue] = []
-        self._redis_bridge_task: Optional[asyncio.Task] = None
+        self._redis_bridge_task: asyncio.Task | None = None
 
     def subscribe(self) -> asyncio.Queue:
         queue = asyncio.Queue(maxsize=1000)
@@ -59,7 +60,7 @@ class EventBus:
 
         for q in dead:
             self.unsubscribe(q)
-        
+
         # Also publish to Redis if enabled
         if USE_REDIS:
             try:
@@ -80,10 +81,10 @@ class EventBus:
         if not USE_REDIS:
             logger.info("USE_REDIS_PUBSUB not enabled, skipping Redis bridge")
             return
-        
+
         if self._redis_bridge_task is not None:
             return
-        
+
         async def _listen():
             from .redis_pubsub import subscribe_events
             logger.info("Redis subscription loop started")
@@ -97,7 +98,7 @@ class EventBus:
                             pass
             except Exception as e:
                 logger.warning(f"Redis bridge error: {e}")
-        
+
         self._redis_bridge_task = asyncio.create_task(_listen())
         logger.info("Redis event bridge started")
 
@@ -124,7 +125,7 @@ async def sse_generator(queue: asyncio.Queue) -> AsyncGenerator[str, None]:
                 event = await asyncio.wait_for(queue.get(), timeout=30)
                 payload = f"data: {json.dumps(event)}\n\n"
                 yield payload
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 yield ":ping\n\n"
     except asyncio.CancelledError:
         pass

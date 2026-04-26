@@ -1,7 +1,9 @@
 """Web search tool — Brave Search API."""
 
 import os
+
 import httpx
+
 from ..agent.types import ToolSpec
 
 

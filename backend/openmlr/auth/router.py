@@ -1,14 +1,14 @@
 """Authentication router — login, register, user info."""
 
-from sqlalchemy import select, func
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..db.models import User
+from ..auth.security import create_access_token, hash_password, verify_password
 from ..db.engine import get_db
-from ..auth.security import hash_password, verify_password, create_access_token
-from ..models import UserRegister, UserLogin, TokenResponse
+from ..db.models import User
 from ..dependencies import get_current_user
+from ..models import TokenResponse, UserLogin, UserRegister
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

@@ -1,13 +1,24 @@
 """Tests for Pydantic API models — validation, defaults, serialization."""
 
+from datetime import UTC
+
 import pytest
 from pydantic import ValidationError
 
 from openmlr.models import (
-    UserRegister, UserLogin, TokenResponse, UserInfo,
-    ConversationCreate, ConversationResponse, MessageResponse, ConversationDetail,
-    MessageSend, ApprovalRequest,
-    SettingUpdate, ProviderConfig, ModelSwitch, AgentEvent,
+    AgentEvent,
+    ApprovalRequest,
+    ConversationCreate,
+    ConversationDetail,
+    ConversationResponse,
+    MessageResponse,
+    MessageSend,
+    ModelSwitch,
+    ProviderConfig,
+    SettingUpdate,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
 )
 
 
@@ -70,8 +81,8 @@ class TestConversationCreate:
 
 class TestConversationResponse:
     def test_creation(self):
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
+        from datetime import datetime
+        now = datetime.now(UTC)
         c = ConversationResponse(
             id=1, uuid="abc-def", title="Test Conv", model="gpt-4o",
             mode="general", user_message_count=5,
@@ -84,24 +95,24 @@ class TestConversationResponse:
 
 class TestMessageResponse:
     def test_creation(self):
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
+        from datetime import datetime
+        now = datetime.now(UTC)
         m = MessageResponse(id=1, role="user", content="Hello", metadata=None, created_at=now)
         assert m.id == 1
         assert m.role == "user"
         assert m.content == "Hello"
 
     def test_with_metadata(self):
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
+        from datetime import datetime
+        now = datetime.now(UTC)
         m = MessageResponse(id=2, role="assistant", content="Hi", metadata={"tool": "search"}, created_at=now)
         assert m.metadata == {"tool": "search"}
 
 
 class TestConversationDetail:
     def test_creation(self):
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
+        from datetime import datetime
+        now = datetime.now(UTC)
         conv = ConversationResponse(
             id=1, uuid="x", title="C", model=None, mode="general",
             user_message_count=0, created_at=now, updated_at=now,

@@ -1,11 +1,18 @@
 """Tests for writing tool — project management and paper operations."""
 
 import pytest
+
 from openmlr.tools.writing import (
-    create_writing_tool, _create_project, _set_outline,
-    _write_section, _get_draft, _get_draft_from_proj,
-    _list_sections, _add_citation, _refine_section,
+    _add_citation,
     _count_sections,
+    _create_project,
+    _get_draft,
+    _get_draft_from_proj,
+    _list_sections,
+    _refine_section,
+    _set_outline,
+    _write_section,
+    create_writing_tool,
 )
 
 pytestmark = pytest.mark.asyncio

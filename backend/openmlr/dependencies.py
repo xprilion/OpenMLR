@@ -1,14 +1,14 @@
 """FastAPI dependencies — auth, database sessions, config."""
 
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+from .auth.security import decode_access_token
+from .config import AgentConfig, load_config
 from .db.engine import get_db as _get_db
 from .db.models import User
-from .auth.security import decode_access_token
-from .config import load_config, AgentConfig
 
 security = HTTPBearer(auto_error=False)
 

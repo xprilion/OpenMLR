@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -11,7 +10,7 @@ class EnvironmentInfo:
     os: str = "unknown"
     python_version: str = "unknown"
     gpu_available: bool = False
-    gpu_info: Optional[str] = None
+    gpu_info: str | None = None
     installed_packages: list[str] = field(default_factory=list)
     available_disk_gb: float = 0.0
     available_ram_gb: float = 0.0

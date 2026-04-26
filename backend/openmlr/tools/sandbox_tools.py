@@ -150,7 +150,7 @@ async def _local_probe() -> str:
 
 async def _handle_create(sandbox_manager, provider: str, config: dict = None, session=None, **kwargs) -> tuple[str, bool]:
     try:
-        sandbox = await sandbox_manager.create(provider, config or {})
+        await sandbox_manager.create(provider, config or {})
         return f"Sandbox created: {provider} ({sandbox_manager.active_type})", True
     except Exception as e:
         return f"Failed to create sandbox: {str(e)}", False

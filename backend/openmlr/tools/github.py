@@ -1,9 +1,10 @@
 """GitHub tools — code search, repo listing, file reading."""
 
 import os
-import httpx
-from ..agent.types import ToolSpec
 
+import httpx
+
+from ..agent.types import ToolSpec
 
 GITHUB_API = "https://api.github.com"
 

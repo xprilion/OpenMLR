@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+
 from .types import Message
 
 

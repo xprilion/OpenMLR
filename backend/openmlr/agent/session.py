@@ -1,12 +1,13 @@
 """Session — per-conversation state container."""
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable, Optional
+from typing import Any
 
 from ..config import AgentConfig
 from .context import ContextManager
-from .types import AgentEvent, Submission, OpType
+from .types import AgentEvent
 
 
 @dataclass
@@ -19,19 +20,19 @@ class Session:
     submission_queue: asyncio.Queue = field(default_factory=asyncio.Queue)
 
     # Conversation reference (for database operations in tools)
-    conversation_id: Optional[int] = None
+    conversation_id: int | None = None
 
     # Cancellation
     _cancelled: asyncio.Event = field(default_factory=asyncio.Event)
 
     # Approval flow
-    pending_approval: Optional[dict] = None
+    pending_approval: dict | None = None
 
     # Question/answer flow (ask_user tool)
-    pending_answers: Optional[Any] = None
+    pending_answers: Any | None = None
 
     # Sandbox reference
-    sandbox: Optional[Any] = None
+    sandbox: Any | None = None
 
     # Turn counter (for title generation etc.)
     turn_count: int = 0

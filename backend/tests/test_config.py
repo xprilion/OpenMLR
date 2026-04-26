@@ -2,9 +2,8 @@
 
 import pytest
 
-from openmlr.config import AgentConfig, get_model_max_tokens, MODEL_MAX_TOKENS
 from openmlr.agent.context import estimate_tokens
-
+from openmlr.config import AgentConfig, get_model_max_tokens
 
 # ---------------------------------------------------------------------------
 # AgentConfig defaults

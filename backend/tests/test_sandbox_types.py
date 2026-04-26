@@ -1,12 +1,9 @@
 """Tests for sandbox interface types and LocalSandbox."""
 
-import tempfile
-from pathlib import Path
 import pytest
 
 from openmlr.sandbox.interface import EnvironmentInfo, ExecutionResult, SandboxInterface
 from openmlr.sandbox.local import LocalSandbox
-from openmlr.sandbox.manager import SandboxManager
 
 
 class TestEnvironmentInfo:

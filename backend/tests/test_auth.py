@@ -1,17 +1,17 @@
 """Tests for openmlr.auth.security — password hashing and JWT tokens."""
 
-import time
+from datetime import UTC
+
 import pytest
-from unittest.mock import patch
 from jose import jwt
 
 from openmlr.auth.security import (
-    hash_password,
-    verify_password,
+    ALGORITHM,
+    SECRET_KEY,
     create_access_token,
     decode_access_token,
-    SECRET_KEY,
-    ALGORITHM,
+    hash_password,
+    verify_password,
 )
 
 
@@ -97,12 +97,12 @@ class TestDecodeAccessToken:
         assert decode_access_token(bad_token) is None
 
     def test_returns_none_for_expired_token(self):
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         expired_payload = {
             "sub": "1",
             "username": "frank",
-            "exp": datetime.now(timezone.utc) - timedelta(hours=1),
+            "exp": datetime.now(UTC) - timedelta(hours=1),
         }
         expired_token = jwt.encode(expired_payload, SECRET_KEY, algorithm=ALGORITHM)
         assert decode_access_token(expired_token) is None

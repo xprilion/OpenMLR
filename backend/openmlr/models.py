@@ -1,16 +1,16 @@
 """Pydantic models for API requests and responses."""
 
-from pydantic import BaseModel, Field
-from typing import Optional, Any
 from datetime import datetime
+from typing import Any
 
+from pydantic import BaseModel, Field
 
 # ---- Auth ----
 
 class UserRegister(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=6, max_length=128)
-    display_name: Optional[str] = None
+    display_name: str | None = None
 
 class UserLogin(BaseModel):
     username: str
@@ -24,22 +24,22 @@ class TokenResponse(BaseModel):
 class UserInfo(BaseModel):
     id: int
     username: str
-    display_name: Optional[str]
+    display_name: str | None
     is_active: bool
     created_at: datetime
 
 # ---- Conversations ----
 
 class ConversationCreate(BaseModel):
-    title: Optional[str] = "New conversation"
-    model: Optional[str] = None
-    mode: Optional[str] = "general"  # "research", "writing", "coding", "general"
+    title: str | None = "New conversation"
+    model: str | None = None
+    mode: str | None = "general"  # "research", "writing", "coding", "general"
 
 class ConversationResponse(BaseModel):
     id: int
     uuid: str
     title: str
-    model: Optional[str]
+    model: str | None
     mode: str
     user_message_count: int
     created_at: datetime
@@ -49,7 +49,7 @@ class MessageResponse(BaseModel):
     id: int
     role: str
     content: str
-    metadata: Optional[dict] = None
+    metadata: dict | None = None
     created_at: datetime
 
 class ConversationDetail(BaseModel):
@@ -60,7 +60,7 @@ class ConversationDetail(BaseModel):
 
 class MessageSend(BaseModel):
     message: str
-    mode: Optional[str] = None  # plan, research, write — per-message mode override
+    mode: str | None = None  # plan, research, write — per-message mode override
 
 class ApprovalRequest(BaseModel):
     approvals: dict[str, bool]  # tool_call_id -> approved
@@ -71,14 +71,14 @@ class SettingUpdate(BaseModel):
     value: Any
 
 class ProviderConfig(BaseModel):
-    openai_api_key: Optional[str] = None
-    anthropic_api_key: Optional[str] = None
-    openrouter_api_key: Optional[str] = None
-    brave_api_key: Optional[str] = None
-    github_token: Optional[str] = None
-    semantic_scholar_api_key: Optional[str] = None
-    modal_token_id: Optional[str] = None
-    modal_token_secret: Optional[str] = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    brave_api_key: str | None = None
+    github_token: str | None = None
+    semantic_scholar_api_key: str | None = None
+    modal_token_id: str | None = None
+    modal_token_secret: str | None = None
 
 # ---- Model Management ----
 
@@ -89,4 +89,4 @@ class ModelSwitch(BaseModel):
 
 class AgentEvent(BaseModel):
     event_type: str
-    data: Optional[dict] = None
+    data: dict | None = None

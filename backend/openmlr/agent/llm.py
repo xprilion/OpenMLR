@@ -1,18 +1,19 @@
 """LLM Abstraction — multi-provider support (OpenAI, Anthropic, OpenRouter, litellm)."""
 
-import os
-import json
 import asyncio
-from typing import AsyncGenerator, Optional
-from .types import LLMResult, ToolCall, ToolSpec
+import json
+import os
+from collections.abc import AsyncGenerator
+
 from ..config import AgentConfig
+from .types import LLMResult, ToolCall
 
 
 class LLMProvider:
     """Handles LLM calls across multiple providers with streaming and retry."""
 
     @staticmethod
-    def _get_api_key(model_name: str) -> Optional[str]:
+    def _get_api_key(model_name: str) -> str | None:
         mn = model_name.lower()
         if mn.startswith("openai/"):
             return os.environ.get("OPENAI_API_KEY")
@@ -37,9 +38,9 @@ class LLMProvider:
             if model_name.startswith(prefix):
                 return model_name[len(prefix):]
         return model_name
-    
+
     @staticmethod
-    def _get_base_url(model_name: str) -> Optional[str]:
+    def _get_base_url(model_name: str) -> str | None:
         """Get the base URL for local/custom OpenAI-compatible APIs."""
         mn = model_name.lower()
         if mn.startswith("local/"):
@@ -59,7 +60,7 @@ class LLMProvider:
                 return "https://opencode.ai/zen/go/v1"  # Anthropic format
             return "https://opencode.ai/zen/go/v1"  # OpenAI-compatible format
         return None
-    
+
     @staticmethod
     def _is_opencode_go_anthropic_format(model_name: str) -> bool:
         """Check if OpenCode Go model uses Anthropic API format."""
@@ -75,7 +76,7 @@ class LLMProvider:
         """True only for direct Anthropic API calls (anthropic/ prefix).
         OpenRouter-routed Claude models use the OpenAI-compatible path."""
         return model_name.lower().startswith("anthropic/")
-    
+
     @staticmethod
     def _uses_anthropic_format(model_name: str) -> bool:
         """Check if model uses Anthropic message format (native Anthropic or OpenCode Go Anthropic models)."""
@@ -89,7 +90,7 @@ class LLMProvider:
     async def generate(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
     ) -> LLMResult:
         return await LLMProvider._call_with_retry(messages, config, tools)
 
@@ -97,7 +98,7 @@ class LLMProvider:
     async def generate_stream(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
         async for chunk in LLMProvider._stream_with_retry(messages, config, tools):
             yield chunk
@@ -106,7 +107,7 @@ class LLMProvider:
     async def generate_title(
         messages: list[dict],
         config: AgentConfig,
-    ) -> Optional[str]:
+    ) -> str | None:
         title_prompt = (
             "Based on the conversation, generate a short title "
             "(max 6 words). Return ONLY the title, nothing else."
@@ -143,7 +144,7 @@ class LLMProvider:
     async def _call_with_retry(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
         max_retries: int = 3,
     ) -> LLMResult:
         last_error = None
@@ -165,7 +166,7 @@ class LLMProvider:
     async def _stream_with_retry(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]] = None,
+        tools: list[dict] | None = None,
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
         last_error = None
         for attempt in range(3):
@@ -189,22 +190,23 @@ class LLMProvider:
 
     @staticmethod
     def _openai_client(config: AgentConfig):
-        from openai import AsyncOpenAI
         import logging
+
+        from openai import AsyncOpenAI
         logger = logging.getLogger(__name__)
-        
+
         api_key = LLMProvider._get_api_key(config.model_name)
         base_url = LLMProvider._get_base_url(config.model_name)
-        
+
         logger.debug(f"[LLM] Model: {config.model_name}, Base URL: {base_url}, API key set: {bool(api_key)}")
-        
+
         kwargs = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
         return AsyncOpenAI(**kwargs)
 
     @staticmethod
-    def _openai_tool_param(tools: Optional[list[dict]]) -> Optional[list[dict]]:
+    def _openai_tool_param(tools: list[dict] | None) -> list[dict] | None:
         """Convert tool specs to OpenAI tools param. Handles both raw and pre-wrapped."""
         if not tools:
             return None
@@ -222,7 +224,7 @@ class LLMProvider:
     async def _call_openai(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]],
+        tools: list[dict] | None,
     ) -> LLMResult:
         client = LLMProvider._openai_client(config)
         model = LLMProvider._normalize_model(config.model_name)
@@ -263,7 +265,7 @@ class LLMProvider:
     async def _stream_openai(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]],
+        tools: list[dict] | None,
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
         client = LLMProvider._openai_client(config)
         model = LLMProvider._normalize_model(config.model_name)
@@ -335,7 +337,7 @@ class LLMProvider:
     # ── Anthropic ─────────────────────────────────────────
 
     @staticmethod
-    def _anthropic_tool_param(tools: Optional[list[dict]]) -> Optional[list[dict]]:
+    def _anthropic_tool_param(tools: list[dict] | None) -> list[dict] | None:
         """Convert tool specs to Anthropic format."""
         if not tools:
             return None
@@ -392,7 +394,7 @@ class LLMProvider:
     def _anthropic_client(config: AgentConfig):
         """Create Anthropic client with appropriate settings for native or OpenCode Go."""
         from anthropic import AsyncAnthropic
-        
+
         mn = config.model_name.lower()
         if mn.startswith("opencode-go/"):
             # OpenCode Go uses Anthropic format but different endpoint/key
@@ -407,7 +409,7 @@ class LLMProvider:
     async def _call_anthropic(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]],
+        tools: list[dict] | None,
     ) -> LLMResult:
         model = LLMProvider._normalize_model(config.model_name)
         client = LLMProvider._anthropic_client(config)
@@ -449,7 +451,7 @@ class LLMProvider:
     async def _stream_anthropic(
         messages: list[dict],
         config: AgentConfig,
-        tools: Optional[list[dict]],
+        tools: list[dict] | None,
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
         model = LLMProvider._normalize_model(config.model_name)
         client = LLMProvider._anthropic_client(config)

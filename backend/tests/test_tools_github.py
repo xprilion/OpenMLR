@@ -1,7 +1,8 @@
 """Tests for GitHub tools — tool specs and helper functions."""
 
 import pytest
-from openmlr.tools.github import create_github_tools, _headers
+
+from openmlr.tools.github import _headers, create_github_tools
 
 pytestmark = pytest.mark.asyncio
 

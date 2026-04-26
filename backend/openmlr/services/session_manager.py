@@ -1,15 +1,13 @@
 """Session manager — manages per-conversation agent sessions."""
 
-import asyncio
-from typing import Optional
+from ..agent.llm import LLMProvider
+from ..agent.loop import run_agent_turn
+from ..agent.prompts import build_system_prompt
 from ..agent.session import Session
 from ..agent.types import AgentEvent
-from ..agent.loop import run_agent_turn
-from ..agent.llm import LLMProvider
-from ..agent.prompts import build_system_prompt
 from ..config import AgentConfig
-from ..tools.registry import create_tool_router, ToolRouter
 from ..sandbox.manager import SandboxManager
+from ..tools.registry import ToolRouter, create_tool_router
 from .event_bus import EventBus
 
 
@@ -39,14 +37,14 @@ class SessionManager:
         self.sessions: dict[int, ActiveSession] = {}
         self.event_bus = event_bus
         self.default_config = default_config
-        self.current_conversation_id: Optional[int] = None
+        self.current_conversation_id: int | None = None
         self._is_processing: bool = False
         self._message_queues: dict[int, list[str]] = {}
 
-    def get_session(self, conversation_id: int) -> Optional[ActiveSession]:
+    def get_session(self, conversation_id: int) -> ActiveSession | None:
         return self.sessions.get(conversation_id)
 
-    def get_current_session(self) -> Optional[ActiveSession]:
+    def get_current_session(self) -> ActiveSession | None:
         if self.current_conversation_id:
             return self.sessions.get(self.current_conversation_id)
         return None
@@ -55,7 +53,7 @@ class SessionManager:
         self,
         conversation_id: int,
         uuid: str,
-        model: Optional[str] = None,
+        model: str | None = None,
         mode: str = "general",
         existing_messages: list[dict] = None,
         username: str = "user",
@@ -168,7 +166,7 @@ class SessionManager:
         self,
         conversation_id: int,
         messages: list[dict],
-    ) -> Optional[str]:
+    ) -> str | None:
         active = self.sessions.get(conversation_id)
         if not active:
             return None

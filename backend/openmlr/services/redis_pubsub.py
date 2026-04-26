@@ -1,12 +1,14 @@
 """Redis pub/sub for cross-worker event broadcasting."""
 
-import os
-import json
 import asyncio
+import json
 import logging
+import os
+from collections.abc import AsyncIterator
 from contextvars import ContextVar
-from typing import Optional, AsyncIterator
+
 import redis.asyncio as redis
+
 from ..agent.types import AgentEvent
 
 logger = logging.getLogger("openmlr.services.redis_pubsub")
@@ -15,7 +17,7 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CHANNEL_NAME = "openmlr:events"
 
 # Context-local Redis client to handle different event loops (Celery workers)
-_redis_client: ContextVar[Optional[redis.Redis]] = ContextVar("redis_client", default=None)
+_redis_client: ContextVar[redis.Redis | None] = ContextVar("redis_client", default=None)
 
 
 async def get_redis() -> redis.Redis:
@@ -46,7 +48,7 @@ async def subscribe_events() -> AsyncIterator[AgentEvent]:
     client = await get_redis()
     pubsub = client.pubsub()
     await pubsub.subscribe(CHANNEL_NAME)
-    
+
     try:
         async for message in pubsub.listen():
             if message["type"] == "message":
@@ -66,17 +68,17 @@ async def subscribe_events() -> AsyncIterator[AgentEvent]:
 class RedisEventBridge:
     """
     Bridge between Redis pub/sub and local event bus.
-    
+
     This class subscribes to Redis events and forwards them to local
     SSE subscribers, allowing background Celery workers to communicate
     with connected browser clients.
     """
-    
+
     def __init__(self):
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._local_subscribers: list[asyncio.Queue] = []
         self._running = False
-    
+
     async def start(self) -> None:
         """Start listening to Redis events."""
         if self._running:
@@ -84,7 +86,7 @@ class RedisEventBridge:
         self._running = True
         self._task = asyncio.create_task(self._listen_loop())
         logger.info("Redis event bridge started")
-    
+
     async def stop(self) -> None:
         """Stop listening to Redis events."""
         self._running = False
@@ -95,18 +97,18 @@ class RedisEventBridge:
             except asyncio.CancelledError:
                 pass
         logger.info("Redis event bridge stopped")
-    
+
     def subscribe(self) -> asyncio.Queue:
         """Subscribe to receive events. Returns a queue that receives events."""
         queue: asyncio.Queue = asyncio.Queue()
         self._local_subscribers.append(queue)
         return queue
-    
+
     def unsubscribe(self, queue: asyncio.Queue) -> None:
         """Unsubscribe from events."""
         if queue in self._local_subscribers:
             self._local_subscribers.remove(queue)
-    
+
     async def _listen_loop(self) -> None:
         """Internal loop that listens to Redis and forwards events."""
         while self._running:
@@ -127,7 +129,7 @@ class RedisEventBridge:
 
 
 # Global instance
-_redis_bridge: Optional[RedisEventBridge] = None
+_redis_bridge: RedisEventBridge | None = None
 
 
 async def get_redis_bridge() -> RedisEventBridge:

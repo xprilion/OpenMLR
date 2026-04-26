@@ -4,10 +4,11 @@ bash commands run inside a Docker container for isolation.
 read/write/edit operate on the host filesystem (for project files).
 """
 
-import os
 import asyncio
 import logging
+import os
 from pathlib import Path
+
 from ..agent.types import ToolSpec
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ def _validate_path(path: Path) -> tuple[Path, str | None]:
     """Validate path is within allowed workspace. Returns (resolved_path, error_or_none)."""
     try:
         resolved = path.resolve()
-        
+
         # If WORKSPACE_ROOT is set, enforce it
         if WORKSPACE_ROOT:
             workspace = Path(WORKSPACE_ROOT).resolve()
@@ -47,7 +48,7 @@ def _validate_path(path: Path) -> tuple[Path, str | None]:
                 for prefix in dangerous_prefixes:
                     if str(resolved).startswith(prefix):
                         return resolved, f"Access denied: {resolved} is in a protected system directory"
-        
+
         return resolved, None
     except Exception as e:
         return path, f"Path validation error: {e}"
@@ -198,7 +199,7 @@ async def _docker_exec(command: str, timeout: int, host_cwd: str, workdir: str =
             output = f"Exit code: {proc.returncode}\n{output}"
         return output, success
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return f"Command timed out after {timeout}s", False
     except Exception as e:
         return f"Docker exec error: {str(e)}", False
@@ -229,7 +230,7 @@ async def _direct_exec(command: str, timeout: int, cwd: str) -> tuple[str, bool]
         if not success:
             output = f"Exit code: {proc.returncode}\n{output}"
         return output, success
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return f"Timed out after {timeout}s", False
     except Exception as e:
         return f"Error: {str(e)}", False
@@ -255,7 +256,7 @@ async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) 
         if not target.exists():
             return f"File not found: {target}", False
 
-        with open(target, "r", encoding="utf-8", errors="replace") as f:
+        with open(target, encoding="utf-8", errors="replace") as f:
             all_lines = f.readlines()
 
         start = max(0, offset - 1)
@@ -276,22 +277,22 @@ async def _handle_write(path: str = "", content: str = "", **kwargs) -> tuple[st
         path = kwargs.get("p", kwargs.get("file", kwargs.get("filepath", "")))
     if not content:
         content = kwargs.get("c", kwargs.get("text", kwargs.get("data", "")))
-    
+
     if not path:
         return "Error: 'path' argument is required.", False
     if not content:
         return "Error: 'content' argument is required.", False
-    
+
     try:
         target = Path(path).expanduser()
         if not target.is_absolute():
             target = Path.cwd() / target
-        
+
         # Security: Validate path is within allowed workspace
         target, error = _validate_path(target)
         if error:
             return error, False
-        
+
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return f"Wrote {len(content)} chars to {target}", True
@@ -304,12 +305,12 @@ async def _handle_edit(path: str, old_string: str, new_string: str, replace_all:
         target = Path(path).expanduser()
         if not target.is_absolute():
             target = Path.cwd() / target
-        
+
         # Security: Validate path is within allowed workspace
         target, error = _validate_path(target)
         if error:
             return error, False
-        
+
         if not target.exists():
             return f"File not found: {target}", False
 

@@ -1,11 +1,12 @@
 """Tests for SessionManager — multi-session lifecycle and message queuing."""
 
 import pytest
-from openmlr.services.session_manager import SessionManager, ActiveSession
+
+from openmlr.services.session_manager import SessionManager
 
 pytestmark = pytest.mark.asyncio
-from openmlr.services.event_bus import EventBus
 from openmlr.config import AgentConfig
+from openmlr.services.event_bus import EventBus
 
 
 @pytest.fixture

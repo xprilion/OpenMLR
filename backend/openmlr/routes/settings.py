@@ -1,13 +1,14 @@
 """Settings routes — user settings, provider config, model management."""
 
 import os
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..db import operations as ops
 from ..db.engine import get_db
 from ..db.models import User
-from ..db import operations as ops
 from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -76,7 +77,7 @@ async def delete_setting(
     db: AsyncSession = Depends(get_db),
 ):
     await ops.delete_user_setting(db, user.id, category, key)
-    
+
     # If a provider key was deleted, check if the current model still has a valid provider
     if category == "providers":
         provider_map = {
@@ -102,7 +103,7 @@ async def delete_setting(
                 env_key = env_key_map.get(key)
                 if env_key and env_key in os.environ:
                     del os.environ[env_key]
-    
+
     return {"ok": True}
 
 
@@ -198,7 +199,7 @@ async def get_status(
     # User's explicitly selected model, or fall back to auto-detected
     user_model = agent_settings.get("default_model") or None
     effective_model = user_model or config.model_name
-    
+
     # Only need onboarding if no providers are configured at all
     # (i.e., auto-detection also failed to find anything useful)
     has_any_provider = any([
@@ -214,7 +215,7 @@ async def get_status(
         user_providers = await ops.get_all_settings(db, user.id, category="providers")
         prov = user_providers.get("providers", {})
         has_any_provider = any(v for v in prov.values() if v)
-    
+
     return {
         "model": effective_model,
         "research_model": agent_settings.get("research_model") or config.research_model,
@@ -259,7 +260,7 @@ async def list_models():
             {"id": "openrouter/google/gemini-2.5-pro", "name": "OR Gemini 2.5 Pro", "provider": "openrouter"},
             {"id": "openrouter/google/gemini-2.5-flash", "name": "OR Gemini 2.5 Flash", "provider": "openrouter"},
         ]
-    
+
     # Add OpenCode Go models
     opencode_go_models = [
         {"id": "opencode-go/glm-5.1", "name": "GLM-5.1", "provider": "opencode-go"},
@@ -276,7 +277,7 @@ async def list_models():
         {"id": "opencode-go/qwen3.5-plus", "name": "Qwen3.5 Plus", "provider": "opencode-go"},
     ]
     models.extend(opencode_go_models)
-    
+
     # Add local model placeholders if configured
     if os.environ.get("OLLAMA_API_BASE"):
         ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.1")
@@ -285,10 +286,10 @@ async def list_models():
         for m in ["llama3.1", "llama3.2", "qwen2.5-coder", "codellama", "deepseek-coder-v2", "mistral"]:
             if m != ollama_model:
                 models.append({"id": f"ollama/{m}", "name": f"Ollama: {m}", "provider": "ollama"})
-    
+
     if os.environ.get("LMSTUDIO_API_BASE"):
         models.append({"id": "lmstudio/default", "name": "LM Studio (default)", "provider": "lmstudio"})
-    
+
     return {"models": models}
 
 
@@ -304,7 +305,7 @@ async def save_config(
     # Whitelist of allowed environment variables to set
     ALLOWED_ENV_KEYS = {
         "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY", 
+        "ANTHROPIC_API_KEY",
         "OPENROUTER_API_KEY",
         "OPENCODE_GO_API_KEY",
         "BRAVE_API_KEY",
@@ -313,7 +314,7 @@ async def save_config(
         "MODAL_TOKEN_ID",
         "MODAL_TOKEN_SECRET",
     }
-    
+
     body = await request.json()
 
     for key, value in body.items():

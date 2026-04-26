@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 pytestmark = pytest.mark.asyncio
 
 from openmlr.db import operations as ops
-from openmlr.db.models import UserSetting
 
 
 class TestConversationOperations:
@@ -86,8 +85,8 @@ class TestConversationOperations:
 
     async def test_conversations_isolated_by_user(self, db_session: AsyncSession, test_user):
         # Create another user
-        from openmlr.db.models import User
         from openmlr.auth.security import hash_password
+        from openmlr.db.models import User
         user2 = User(username="user2", password_hash=hash_password("pwd"), is_active=True)
         db_session.add(user2)
         await db_session.flush()

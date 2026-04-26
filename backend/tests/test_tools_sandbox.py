@@ -1,7 +1,8 @@
 """Tests for sandbox tools — probe, create, exec, read, write."""
 
 import pytest
-from openmlr.tools.sandbox_tools import create_sandbox_tools, _handle_probe
+
+from openmlr.tools.sandbox_tools import _handle_probe, create_sandbox_tools
 
 pytestmark = pytest.mark.asyncio
 from openmlr.sandbox.manager import SandboxManager

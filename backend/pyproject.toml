@@ -66,7 +66,45 @@ dev-dependencies = [
     "pytest-cov>=6.0.0",
     "aiosqlite>=0.20.0",
     "httpx>=0.28.0",
+    "ruff>=0.8.0",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "**/migrations/**",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E402",   # module level import not at top (needed for tests with pytestmark)
+    "E712",   # comparison to True/False (sometimes clearer in SQLAlchemy)
+    "B008",   # do not perform function calls in argument defaults
+    "B904",   # raise from err (too noisy for now)
+    "B007",   # loop control variable not used (intentional in some cases)
+    "B017",   # assert blind exception (ok in tests)
+    "UP042",  # StrEnum (requires Python 3.11+ consideration)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]  # unused variables ok in tests
+
+[tool.ruff.lint.isort]
+known-first-party = ["openmlr"]
 
 [tool.coverage.run]
 source = ["openmlr"]

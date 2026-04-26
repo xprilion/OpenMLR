@@ -18,8 +18,9 @@ class TestEngineConfig:
         assert async_session is not None
 
     def test_worker_engine_context_var(self):
-        from openmlr.db.engine import _worker_engine
         from contextvars import ContextVar
+
+        from openmlr.db.engine import _worker_engine
         assert isinstance(_worker_engine, ContextVar)
 
 

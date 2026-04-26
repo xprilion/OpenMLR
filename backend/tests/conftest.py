@@ -11,23 +11,23 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import httpx
 import pytest_asyncio
+
+# ---------------------------------------------------------------------------
+# SQLite compatibility: replace PostgreSQL-only ARRAY column with JSON
+# ---------------------------------------------------------------------------
+from sqlalchemy import JSON as _JSON
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
-from openmlr.db.models import Base, User, ResearchCorpus
-from openmlr.auth.security import hash_password, create_access_token
-
-# ---------------------------------------------------------------------------
-# SQLite compatibility: replace PostgreSQL-only ARRAY column with JSON
-# ---------------------------------------------------------------------------
-from sqlalchemy import JSON as _JSON
+from openmlr.auth.security import create_access_token, hash_password
+from openmlr.db.models import Base, ResearchCorpus, User
 
 ResearchCorpus.__table__.c.tags.type = _JSON()
 
@@ -103,9 +103,9 @@ async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
     # Import lazily so module-level side-effects (engine creation, dotenv)
     # don't interfere before we apply the override.
     from openmlr.app import app
+    from openmlr.config import AgentConfig
     from openmlr.db.engine import get_db as engine_get_db
     from openmlr.dependencies import get_db as dep_get_db
-    from openmlr.config import AgentConfig
 
     # Override both the canonical get_db *and* the re-export in dependencies
     app.dependency_overrides[engine_get_db] = _override_get_db

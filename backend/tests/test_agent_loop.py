@@ -1,15 +1,29 @@
 """Tests for agent loop — tool execution, approval, undo, compact, submissions."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from openmlr.agent.types import AgentEvent, Message, ToolCall, ToolSpec, Submission, OpType, LLMResult
-from openmlr.agent.session import Session
+import pytest
+
 from openmlr.agent.context import ContextManager
 from openmlr.agent.loop import (
-    _execute_tool, _handle_approval, _undo, _compact,
-    _run_agent, run_agent_turn, submission_loop,
-    _stream_llm_call, _non_stream_llm_call, _compact_llm_call,
+    _compact,
+    _compact_llm_call,
+    _execute_tool,
+    _handle_approval,
+    _non_stream_llm_call,
+    _run_agent,
+    _stream_llm_call,
+    _undo,
+    run_agent_turn,
+    submission_loop,
+)
+from openmlr.agent.session import Session
+from openmlr.agent.types import (
+    AgentEvent,
+    LLMResult,
+    OpType,
+    Submission,
+    ToolCall,
 )
 from openmlr.config import AgentConfig
 from openmlr.tools.registry import ToolRouter
