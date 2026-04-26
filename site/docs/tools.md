@@ -1,3 +1,8 @@
+---
+title: Agent Tools Reference - OpenMLR
+description: Complete reference for OpenMLR agent tools. Planning, research, filesystem, paper writing, and code execution tools with mode availability.
+---
+
 # Agent Tools
 
 The agent has access to built-in tools organized by category. Tool availability depends on the current [mode](/modes).

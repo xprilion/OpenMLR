@@ -1,3 +1,8 @@
+---
+title: REST API Reference - OpenMLR
+description: OpenMLR REST API documentation. Authentication, conversations, messaging, paper management, settings, and SSE streaming endpoints.
+---
+
 # REST API
 
 All endpoints are prefixed with `/api`. Authentication uses JWT Bearer tokens.

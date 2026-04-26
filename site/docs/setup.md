@@ -1,3 +1,8 @@
+---
+title: Setup & Installation - OpenMLR
+description: Install OpenMLR with Docker Compose or set up local development. Prerequisites, quick start guide, and deployment options for the ML research agent.
+---
+
 # Setup & Installation
 
 ## Prerequisites

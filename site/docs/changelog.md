@@ -1,3 +1,8 @@
+---
+title: Changelog - OpenMLR
+description: OpenMLR version history and release notes. Track new features, improvements, and changes across all versions.
+---
+
 # Changelog
 
 ## v0.2.0

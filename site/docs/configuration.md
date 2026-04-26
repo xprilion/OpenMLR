@@ -1,3 +1,8 @@
+---
+title: Configuration - OpenMLR
+description: Configure OpenMLR environment variables, LLM providers (OpenAI, Anthropic, OpenRouter, Ollama), API keys, and runtime settings.
+---
+
 # Configuration
 
 ## Environment Variables (`.env`)
