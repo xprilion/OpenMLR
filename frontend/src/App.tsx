@@ -553,15 +553,15 @@ function ChatUI({
   return (
     <div className="flex flex-col h-screen bg-bg">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 h-14 bg-surface border-b border-border shrink-0 gap-4">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-lg text-primary tracking-tight">OpenMLR</span>
+      <header className="flex items-center justify-between px-3 sm:px-6 h-14 bg-surface border-b border-border shrink-0 gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <span className="font-bold text-base sm:text-lg text-primary tracking-tight">OpenMLR</span>
           <span 
             className={`w-2 h-2 rounded-full transition-colors duration-300 ${connected ? 'bg-success' : 'bg-error'}`} 
             title={connected ? 'Connected' : 'Disconnected'}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <ComputeSelector
             currentNode={activeCompute}
             nodes={computeNodes}
@@ -606,7 +606,7 @@ function ChatUI({
             </div>
           )}
           
-          <MessageList messages={messages} />
+          <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
           {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
           {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary) => { 
             setQuestionsPayload(null); 

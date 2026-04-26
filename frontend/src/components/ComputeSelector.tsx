@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Cpu, ChevronDown, Star } from 'lucide-react';
+import { Cpu, ChevronDown, Monitor } from 'lucide-react';
 
 interface ComputeNode {
   id: number;
@@ -48,26 +48,30 @@ export function ComputeSelector({ currentNode, nodes, onChange }: ComputeSelecto
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-lg text-sm text-text hover:bg-surface-hover transition-colors"
+        className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 bg-surface border border-border rounded-lg text-sm text-text hover:bg-surface-hover transition-colors"
+        title={currentNode ? currentNode.name : 'Local (Workspace)'}
       >
-        <Cpu size={14} className="text-primary" />
-        <span className="max-w-[120px] truncate">
-          {currentNode ? currentNode.name : 'Default'}
+        <Cpu size={14} className="text-primary shrink-0" />
+        <span className="hidden sm:inline max-w-[100px] truncate">
+          {currentNode ? currentNode.name : 'Local'}
         </span>
-        <ChevronDown size={14} className="text-text-dim" />
+        <ChevronDown size={14} className="text-text-dim shrink-0" />
       </button>
 
       {open && (
         <div className="absolute top-full right-0 mt-1 w-64 bg-surface border border-border rounded-lg shadow-xl z-50 py-1">
-          {/* Default option */}
+          {/* Local workspace option */}
           <button
             onClick={() => { onChange(null); setOpen(false); }}
             className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
               !currentNode ? 'bg-primary/10 text-primary' : 'text-text hover:bg-surface-hover'
             }`}
           >
-            <Star size={14} className={!currentNode ? 'text-primary' : 'text-text-dim'} />
-            <span>Default</span>
+            <Monitor size={14} className={!currentNode ? 'text-primary' : 'text-text-dim'} />
+            <div className="flex-1 min-w-0">
+              <div>Local</div>
+              <div className="text-xs text-text-dim">Workspace folder</div>
+            </div>
           </button>
 
           {nodes.length > 0 && <div className="border-t border-border my-1" />}

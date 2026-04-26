@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SubAgentChild } from '../types';
 
 interface Props {
   messages: Message[];
+  hasDrawerOpen?: boolean; // When QuestionDrawer is visible
 }
 
 /** Format seconds into human-readable duration */
@@ -123,13 +124,31 @@ function SubAgentBlock({ msg, expanded, onToggle }: { msg: Message; expanded: bo
   );
 }
 
-export function MessageList({ messages }: Props) {
+export function MessageList({ messages, hasDrawerOpen }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Debounced scroll to bottom - prevents jittering during rapid message updates
+  const scrollToBottom = useCallback(() => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    scrollTimeoutRef.current = setTimeout(() => {
+      // Use 'auto' for instant scroll during rapid updates, prevents animation conflicts
+      bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    }, 50); // 50ms debounce
+  }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [messages, scrollToBottom]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -141,7 +160,11 @@ export function MessageList({ messages }: Props) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-2">
+    <div 
+      ref={containerRef}
+      className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-2 min-h-0"
+      style={{ paddingBottom: hasDrawerOpen ? '280px' : undefined }}
+    >
       {messages.map((msg) => (
         <div key={msg.id} className="flex animate-fade-in">
           {/* User messages */}

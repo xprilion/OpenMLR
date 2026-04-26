@@ -98,8 +98,9 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
   return (
     <>
       <button 
-        className="flex items-center gap-2 bg-surface-hover border border-border text-text-dim px-3 py-1.5 rounded-lg text-sm font-mono cursor-pointer transition-all max-w-[200px] truncate hover:border-primary hover:text-text"
+        className="flex items-center gap-1 sm:gap-2 bg-surface-hover border border-border text-text-dim px-2 sm:px-3 py-1.5 rounded-lg text-sm font-mono cursor-pointer transition-all max-w-[120px] sm:max-w-[200px] hover:border-primary hover:text-text"
         onClick={() => setOpen(true)}
+        title={currentModel}
       >
         <span className="truncate">{currentModel}</span>
         <ChevronDown size={14} className="shrink-0" />

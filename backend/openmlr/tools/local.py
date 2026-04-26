@@ -1,6 +1,9 @@
 """Local tools — bash (via Docker), read, write, edit.
 
-bash commands run inside a Docker container for isolation.
+bash commands run inside a Docker container for isolation when running locally.
+When running inside a container (Docker Compose), commands run directly since
+the container itself provides isolation.
+
 read/write/edit operate on the host filesystem (for project files).
 """
 
@@ -22,6 +25,32 @@ ALLOW_DIRECT_EXEC = os.environ.get("OPENMLR_ALLOW_DIRECT_EXEC", "false").lower()
 # Security: Base directory for file operations (default: current working directory)
 # Files outside this directory cannot be read/written/edited
 WORKSPACE_ROOT = os.environ.get("OPENMLR_WORKSPACE_ROOT", "")
+
+
+def _running_in_container() -> bool:
+    """Detect if we're running inside a Docker container.
+    
+    This is useful for determining whether to use Docker-in-Docker or direct execution.
+    When running in a container, the container already provides isolation.
+    """
+    # Check for common container indicators
+    if os.path.exists("/.dockerenv"):
+        return True
+    
+    # Check cgroup for docker/container runtime
+    try:
+        with open("/proc/1/cgroup", "r") as f:
+            content = f.read()
+            if "docker" in content or "containerd" in content or "kubepods" in content:
+                return True
+    except (FileNotFoundError, PermissionError):
+        pass
+    
+    # Check for container-related environment variables
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        return True
+    
+    return False
 
 
 def _validate_path(path: Path) -> tuple[Path, str | None]:
@@ -59,10 +88,9 @@ def create_local_tools() -> list[ToolSpec]:
         ToolSpec(
             name="bash",
             description=(
-                "Execute a shell command inside a Docker container for safe isolation. "
-                "The container has access to a /workspace volume mapped to the project directory. "
-                "Use for running scripts, installing packages, training models, etc. "
-                "If Docker is unavailable, falls back to direct execution with a warning."
+                "Execute a shell command. When running locally, uses Docker for isolation. "
+                "When running in a containerized deployment, commands run directly in the isolated environment. "
+                "Use for running scripts, installing packages, training models, etc."
             ),
             parameters={
                 "type": "object",
@@ -138,8 +166,15 @@ async def _docker_available() -> bool:
 
 async def _handle_bash(command: str, timeout: int = 120, workdir: str = None, **kwargs) -> tuple[str, bool]:
     timeout = min(int(timeout), 3600)
-    cwd = os.getcwd()
+    cwd = workdir or os.getcwd()
 
+    # If we're already running inside a container, execute directly
+    # The container itself provides isolation, so no need for Docker-in-Docker
+    if _running_in_container():
+        logger.debug(f"Running in container, executing directly: {command[:100]}")
+        return await _direct_exec(command, timeout, cwd)
+
+    # When running on host, try Docker for isolation
     if await _docker_available():
         return await _docker_exec(command, timeout, cwd, workdir)
     else:
