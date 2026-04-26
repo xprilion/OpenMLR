@@ -53,14 +53,15 @@ describe('ModelModal', () => {
     });
   });
 
-  it('highlights current model', async () => {
+  it('highlights current model with border-primary class', async () => {
     render(<ModelModal currentModel="openai/gpt-4o-mini" onModelChange={vi.fn()} />);
     fireEvent.click(screen.getByText('openai/gpt-4o-mini'));
 
     await waitFor(() => {
-      const options = document.querySelectorAll('.model-picker-option');
-      const mini = Array.from(options).find(o => o.textContent?.includes('GPT-4o Mini'));
-      expect(mini?.classList.contains('active')).toBe(true);
+      // Find the button containing "GPT-4o Mini"
+      const miniButton = screen.getByText('GPT-4o Mini').closest('button');
+      // Check that it has the active styling (border-primary)
+      expect(miniButton?.className).toContain('border-primary');
     });
   });
 
@@ -166,7 +167,8 @@ describe('ModelModal', () => {
       expect(screen.getByText('GPT-4o')).toBeInTheDocument();
     });
 
-    const overlay = document.querySelector('.modal-overlay');
+    // Find the overlay (the fixed div with bg-black/60)
+    const overlay = document.querySelector('.fixed.inset-0');
     fireEvent.click(overlay!);
 
     await waitFor(() => {

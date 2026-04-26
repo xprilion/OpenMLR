@@ -51,27 +51,35 @@ export function LoginPage({ onAuth }: Props) {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <h1 className="login-logo">OpenMLR</h1>
-        <p className="login-subtitle">ML Research Intern</p>
+    <div className="min-h-screen bg-bg flex items-center justify-center p-6">
+      <div className="w-full max-w-sm bg-surface rounded-2xl border border-border p-8 shadow-xl">
+        <h1 className="text-2xl font-bold text-primary text-center mb-1">OpenMLR</h1>
+        <p className="text-text-dim text-center mb-8">ML Research Intern</p>
 
         {isFirstUser && (
-          <div className="login-notice">
+          <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 mb-6 text-sm text-text text-center">
             Welcome. Create your account to get started.
           </div>
         )}
 
         {!isFirstUser && (
-          <div className="login-tabs">
+          <div className="flex rounded-lg bg-bg p-1 mb-6">
             <button
-              className={`login-tab ${mode === 'login' ? 'active' : ''}`}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                mode === 'login' 
+                  ? 'bg-primary text-white' 
+                  : 'text-text-dim hover:text-text'
+              }`}
               onClick={() => { setMode('login'); setError(''); }}
             >
               Sign In
             </button>
             <button
-              className={`login-tab ${mode === 'register' ? 'active' : ''}`}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                mode === 'register' 
+                  ? 'bg-primary text-white' 
+                  : 'text-text-dim hover:text-text'
+              }`}
               onClick={() => { setMode('register'); setError(''); }}
             >
               Register
@@ -79,9 +87,10 @@ export function LoginPage({ onAuth }: Props) {
           </div>
         )}
 
-        <form className="login-form" onSubmit={submit}>
+        <form className="flex flex-col gap-4" onSubmit={submit}>
           <input
             type="text"
+            className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -89,16 +98,20 @@ export function LoginPage({ onAuth }: Props) {
             required
             minLength={3}
           />
+          
           {mode === 'register' && (
             <input
               type="text"
+              className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
               placeholder="Display name (optional)"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
           )}
+          
           <input
             type="password"
+            className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -106,9 +119,17 @@ export function LoginPage({ onAuth }: Props) {
             minLength={6}
           />
 
-          {error && <div className="login-error">{error}</div>}
+          {error && (
+            <div className="text-error text-sm bg-error-bg rounded-lg p-3 text-center">
+              {error}
+            </div>
+          )}
 
-          <button type="submit" className="login-submit" disabled={loading}>
+          <button 
+            type="submit" 
+            className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
+          >
             {loading
               ? 'Please wait...'
               : mode === 'register'

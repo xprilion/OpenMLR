@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
+import { ArrowUp, Square } from 'lucide-react';
 
 export type Mode = 'plan' | 'execute';
 
@@ -53,15 +54,22 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
   const isPlan = mode === 'plan';
 
   return (
-    <div className="input-area">
-      <div className="input-row">
+    <div className="px-6 py-4 bg-bg border-t border-border">
+      <div className="flex items-center gap-3 max-w-4xl mx-auto">
+        {/* Mode toggle button - fixed height to match input */}
         <button
-          className={`mode-toggle ${isPlan ? 'mode-plan' : 'mode-execute'}`}
+          className={`h-11 w-11 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 transition-all ${
+            isPlan 
+              ? 'bg-warning text-black hover:opacity-90' 
+              : 'bg-primary text-white hover:bg-primary-hover'
+          }`}
           onClick={toggleMode}
           title={`${isPlan ? 'Plan' : 'Execute'} mode — Cmd+M to toggle`}
         >
           {isPlan ? 'P' : 'E'}
         </button>
+        
+        {/* Textarea - minimum height matches buttons */}
         <textarea
           ref={textareaRef}
           value={text}
@@ -72,15 +80,29 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
           placeholder={isPlan ? 'Plan: ask questions, gather context, create plan...' : 'Execute: tell the agent what to do...'}
           rows={1}
           disabled={disabled}
+          className="flex-1 min-h-[44px] bg-surface border border-border rounded-lg px-4 py-2.5 text-base text-text placeholder-text-dim resize-none focus:border-primary focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed leading-normal"
         />
+        
+        {/* Stop button - same height as mode toggle */}
         {showStop && (
-          <button className="stop-btn" onClick={onStop} title="Stop">
-            <span className="stop-icon" />
+          <button 
+            className="h-11 w-11 rounded-lg flex items-center justify-center bg-error text-white hover:opacity-90 transition-all shrink-0"
+            onClick={onStop} 
+            title="Stop"
+          >
+            <Square size={16} fill="currentColor" />
           </button>
         )}
+        
+        {/* Send button - same height as mode toggle */}
         {!disabled && (
-          <button className="send-btn" onClick={submit} disabled={!text.trim()}>
-            <span>&#x2191;</span>
+          <button 
+            className="h-11 w-11 rounded-lg flex items-center justify-center bg-primary text-white hover:bg-primary-hover transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={submit} 
+            disabled={!text.trim()}
+            title="Send message"
+          >
+            <ArrowUp size={20} strokeWidth={2.5} />
           </button>
         )}
       </div>

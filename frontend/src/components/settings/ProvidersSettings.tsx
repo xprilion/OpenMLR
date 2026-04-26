@@ -64,16 +64,16 @@ export function ProvidersSettings() {
   };
 
   const renderProviderCard = (p: Provider) => (
-    <div key={p.id} className="provider-row">
-      <div className="provider-info">
-        <div className="provider-name-row">
-          <span className="provider-name">{p.name}</span>
+    <div key={p.id} className="flex items-center gap-3 p-4 bg-bg rounded-lg border border-border">
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-text">{p.name}</span>
           {p.docs_url && (
             <a
               href={p.docs_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="provider-docs-link"
+              className="text-text-dim hover:text-primary transition-colors"
               title="View documentation"
             >
               <svg
@@ -93,13 +93,13 @@ export function ProvidersSettings() {
             </a>
           )}
         </div>
-        <span className={`provider-status ${p.configured ? 'ok' : 'missing'}`}>
+        <span className={`text-xs ${p.configured ? 'text-success' : 'text-text-dim'}`}>
           {p.configured ? 'Configured' : 'Not set'}
         </span>
       </div>
       <input
         type="password"
-        className="provider-key-input"
+        className="w-48 bg-surface border border-border rounded-md px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
         placeholder={p.key_env}
         value={keyInputs[p.id] || ''}
         onChange={(e) =>
@@ -110,18 +110,27 @@ export function ProvidersSettings() {
   );
 
   return (
-    <div className="settings-section">
-      {saveMsg && <span className="save-flash">{saveMsg}</span>}
-      <p className="settings-hint">
+    <div>
+      {saveMsg && (
+        <div className="mb-4 px-4 py-2 bg-success/10 text-success rounded-lg text-sm">
+          {saveMsg}
+        </div>
+      )}
+      
+      <p className="text-text-dim mb-6">
         API keys are stored in the database per-user. They override .env values.
       </p>
       
       {/* Tab navigation */}
-      <div className="provider-tabs">
+      <div className="flex flex-wrap gap-2 mb-6">
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            className={`provider-tab ${activeTab === tab.id ? 'active' : ''}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab.id 
+                ? 'bg-primary text-white' 
+                : 'bg-surface-hover text-text-dim hover:text-text'
+            }`}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -130,21 +139,23 @@ export function ProvidersSettings() {
       </div>
 
       {/* Tab content */}
-      <div className="provider-tab-content">
+      <div className="mb-6">
         {activeTabInfo && (
-          <p className="provider-tab-desc">{activeTabInfo.description}</p>
+          <p className="text-sm text-text-dim mb-4">{activeTabInfo.description}</p>
         )}
         {activeProviders.length > 0 ? (
-          <div className="provider-grid">
+          <div className="flex flex-col gap-3">
             {activeProviders.map((p) => renderProviderCard(p))}
           </div>
         ) : (
-          <p className="provider-section-empty">No providers configured for this category yet.</p>
+          <p className="text-text-dim text-center py-8 bg-surface rounded-lg border border-border">
+            No providers configured for this category yet.
+          </p>
         )}
       </div>
 
       <button
-        className="settings-save-btn"
+        className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={saveProviderKeys}
         disabled={saving || Object.values(keyInputs).every((v) => !v?.trim())}
       >

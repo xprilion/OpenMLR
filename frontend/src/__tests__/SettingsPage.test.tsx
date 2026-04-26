@@ -30,15 +30,17 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Writing')).toBeInTheDocument();
   });
 
-  it('highlights active nav link', () => {
+  it('highlights active nav link with primary styling', () => {
     renderSettings('/settings/agent');
     const agentLink = screen.getByText('Agent');
-    expect(agentLink.className).toContain('active');
+    // Active links have bg-primary class in Tailwind
+    expect(agentLink.className).toContain('bg-primary');
   });
 
   it('does not highlight inactive links', () => {
     renderSettings('/settings/agent');
     const providers = screen.getByText('Providers');
-    expect(providers.className).not.toContain('active');
+    // Inactive links should not have bg-primary
+    expect(providers.className).not.toContain('bg-primary');
   });
 });

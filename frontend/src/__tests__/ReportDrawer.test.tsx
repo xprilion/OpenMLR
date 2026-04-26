@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ReportDrawer } from '../components/ReportDrawer';
 
 vi.mock('../api', () => ({
@@ -10,7 +10,7 @@ vi.mock('../api', () => ({
 
 describe('ReportDrawer', () => {
   it('renders title and close button', () => {
-    render(
+    const { container } = render(
       <ReportDrawer
         reportId="rpt-1"
         title="My Test Report"
@@ -19,7 +19,9 @@ describe('ReportDrawer', () => {
       />
     );
     expect(screen.getByText('My Test Report')).toBeInTheDocument();
-    expect(screen.getByText('×')).toBeInTheDocument();
+    // Close button now uses Lucide X icon
+    const closeBtn = container.querySelector('.lucide-x')?.closest('button');
+    expect(closeBtn).toBeTruthy();
   });
 
   it('renders cached content without loading', () => {
@@ -50,7 +52,7 @@ describe('ReportDrawer', () => {
 
   it('calls onClose when close button clicked', () => {
     const onClose = vi.fn();
-    render(
+    const { container } = render(
       <ReportDrawer
         reportId="rpt-1"
         title="Test"
@@ -58,7 +60,10 @@ describe('ReportDrawer', () => {
         onClose={onClose}
       />
     );
-    screen.getByText('×').click();
+    // Close button now uses Lucide X icon
+    const closeBtn = container.querySelector('.lucide-x')?.closest('button');
+    expect(closeBtn).toBeTruthy();
+    fireEvent.click(closeBtn!);
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -72,9 +77,10 @@ describe('ReportDrawer', () => {
         onClose={onClose}
       />
     );
-    const overlay = document.querySelector('.report-overlay');
+    // The overlay is the fixed div with bg-black/60
+    const overlay = document.querySelector('.fixed.inset-0');
     if (overlay) {
-      (overlay as HTMLElement).click();
+      fireEvent.click(overlay);
       expect(onClose).toHaveBeenCalled();
     }
   });

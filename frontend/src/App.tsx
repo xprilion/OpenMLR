@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Copy, Check } from 'lucide-react';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
@@ -37,6 +38,41 @@ type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
 // ── Login wrapper (reads user from parent) ──────────────
 function LoginRoute({ onAuth }: { onAuth: (u: User) => void }) {
   return <LoginPage onAuth={onAuth} />;
+}
+
+// ── Copy button with feedback ───────────────────────────
+function CopyModelButton({ model }: { model: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    // Extract just the model ID (remove context info if present)
+    const modelId = model.split(' ')[0];
+    try {
+      await navigator.clipboard.writeText(modelId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = modelId;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+      title="Copy model ID"
+    >
+      {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
+    </button>
+  );
 }
 
 // ── Main chat UI (rendered inside AuthGuard) ────────────
@@ -216,6 +252,18 @@ function ChatUI({
     } catch { /* ignore */ }
   }, []);
 
+  // ── Auto-compact when context usage > 90% ─────────────
+  const lastCompactRef = useRef<number>(0);
+  useEffect(() => {
+    if (!contextUsage) return;
+    const now = Date.now();
+    // Auto-compact when context usage exceeds 90%, but not more than once per 30 seconds
+    if (contextUsage.ratio >= 0.9 && now - lastCompactRef.current > 30000) {
+      lastCompactRef.current = now;
+      api.compact().catch(() => {});
+    }
+  }, [contextUsage]);
+
   // ── SSE ───────────────────────────────────────────────
   const handleEvent = useCallback((event: AgentEvent) => {
     const { event_type, data } = event;
@@ -353,7 +401,15 @@ function ChatUI({
         });
         break;
       case 'questions': setCurrentConvStatus('waiting_input'); setQuestionsPayload(data as QuestionsPayload); break;
-      case 'plan_update': setTasks(data?.tasks || []); setRightPanelOpen(true); break;
+      case 'plan_update': 
+        setTasks(data?.tasks || []); 
+        setRightPanelOpen(true); 
+        // Auto-compact after all tasks are completed
+        const allCompleted = (data?.tasks || []).every((t: any) => t.status === 'completed' || t.status === 'cancelled');
+        if (allCompleted && (data?.tasks || []).length > 0) {
+          setTimeout(() => api.compact().catch(() => {}), 1000);
+        }
+        break;
       case 'resources_update': setResources(data?.resources || []); setRightPanelOpen(true); break;
       case 'context_usage': if (data) setContextUsage(data as ContextUsage); break;
       case 'search_budget': if (data) setSearchBudget(data as SearchBudget); break;
@@ -454,36 +510,56 @@ function ChatUI({
     : (model || 'select model');
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-left">
-          <span className="logo">OpenMLR</span>
-          <span className={`connection-dot ${connected ? 'connected' : 'disconnected'}`} />
+    <div className="flex flex-col h-screen bg-bg">
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 h-14 bg-surface border-b border-border shrink-0 gap-4">
+        <div className="flex items-center gap-3">
+          <span className="font-bold text-lg text-primary tracking-tight">OpenMLR</span>
+          <span 
+            className={`w-2 h-2 rounded-full transition-colors duration-300 ${connected ? 'bg-success' : 'bg-error'}`} 
+            title={connected ? 'Connected' : 'Disconnected'}
+          />
         </div>
-        <div className="header-right">
+        <div className="flex items-center gap-2">
           <ModelModal currentModel={modelLabel} onModelChange={setModel} />
+          <CopyModelButton model={model} />
         </div>
       </header>
-      <div className="main">
+
+      {/* Main content */}
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar
           conversations={conversations} currentUuid={currentConvUuid} user={user}
           convStatuses={convStatuses}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
-          onAction={(type) => { if (type === 'undo') api.undo(); if (type === 'compact') api.compact(); }}
         />
-        <div className="chat">
+        
+        <div className="flex flex-col flex-1 overflow-hidden relative">
+          {/* Empty state */}
           {messages.length === 0 && !effectiveProcessing && (
-            <div className="empty-state">
-              <h2>OpenMLR</h2><p>ML Research Intern</p>
-              <div className="empty-capabilities">
-                <div className="capability"><strong>Plan</strong><span>Ask questions, clarify scope, break down tasks</span></div>
-                <div className="capability"><strong>Research</strong><span>Papers, citations, code examples, literature</span></div>
-                <div className="capability"><strong>Write</strong><span>Draft sections, manage citations, export</span></div>
-                <div className="capability"><strong>Execute</strong><span>Runs code in Docker when needed in any mode</span></div>
+            <div className="flex flex-col items-center justify-center flex-1 text-center px-6 py-12 relative overflow-hidden">
+              {/* Large embossed background text */}
+              <div 
+                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                aria-hidden="true"
+              >
+                <span 
+                  className="text-[12rem] sm:text-[16rem] lg:text-[20rem] font-black tracking-tighter"
+                  style={{
+                    color: 'transparent',
+                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.08)',
+                    textShadow: '0 0 80px rgba(59, 130, 246, 0.05)',
+                  }}
+                >
+                  OpenMLR
+                </span>
               </div>
+              {/* Foreground prompt */}
+              <p className="text-xl text-text-dim z-10">What would you like to research?</p>
             </div>
           )}
+          
           <MessageList messages={messages} />
           {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
           {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary) => { 
@@ -502,8 +578,10 @@ function ChatUI({
             onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }} 
           />
         </div>
+        
         <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
       </div>
+      
       {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
     </div>
   );
