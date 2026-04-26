@@ -9,29 +9,6 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: openmlr-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: openmlr-redis
-          property: connectionString
-      - key: JWT_SECRET_KEY
-        generateValue: true
-      - key: USE_BACKGROUND_JOBS
-        value: "true"
-      - key: USE_REDIS_PUBSUB
-        value: "true"
-      # User needs to add these after deploy
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
 
   # Background worker
   - type: worker
