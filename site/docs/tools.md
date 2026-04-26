@@ -1,29 +1,25 @@
 # Agent Tools
 
-The agent has access to 18 built-in tools. Tools are invoked automatically
-based on the task at hand.
+The agent has access to built-in tools organized by category. Tool availability depends on the current [mode](/modes).
 
-## Filesystem
+## Planning Tools
 
-| Tool | Description |
-|------|-------------|
-| `bash` | Execute shell commands in a Docker container (falls back to host if Docker unavailable) |
-| `read` | Read files with line numbers |
-| `write` | Create/overwrite files |
-| `edit` | Find-and-replace in files |
+| Tool | Description | Plan | Execute |
+|------|-------------|:----:|:-------:|
+| `ask_user` | Ask structured questions (2-4 options + free text per question) | yes | no |
+| `plan_tool` | Create/update task plans, track resources, generate completion reports | yes | yes |
 
-## Research
+## Research Tools
 
-| Tool | Description |
-|------|-------------|
-| `papers` | Search OpenAlex, read ArXiv papers, get citations, find code/datasets |
-| `web_search` | Brave web search |
-| `research` | Spawn an independent research sub-agent with its own context |
-| `github_read_file` | Read files from GitHub repos |
-| `github_list_repos` | List repos for a user/org |
-| `github_find_examples` | Search GitHub for code examples |
+| Tool | Description | Plan | Execute |
+|------|-------------|:----:|:-------:|
+| `papers` | Search OpenAlex, read ArXiv papers, get citations, find code/datasets | yes | yes |
+| `web_search` | Brave web search | yes | yes |
+| `research` | Spawn an independent research sub-agent with its own context | no | yes |
+| `github_search` | Search GitHub for repos and code | yes | yes |
+| `github_read` | Read files from GitHub repos | yes | yes |
 
-### Papers operations
+### Papers Operations
 
 | Operation | Source | Description |
 |-----------|--------|-------------|
@@ -36,19 +32,56 @@ based on the task at hand.
 | `find_code` | Papers With Code | GitHub repos linked to papers |
 | `find_datasets` | Papers With Code | Datasets linked to papers |
 
-## Planning & interaction
+### Research Sub-Agent
 
-| Tool | Description |
+The `research` tool spawns an independent sub-agent with its own context window. The parent agent sees nested tool calls streamed in real-time. Useful for deep dives that would consume too much of the main conversation's context.
+
+## Writing Tool
+
+| Tool | Description | Plan | Execute |
+|------|-------------|:----:|:-------:|
+| `writing` | Paper authoring — manage outline, write sections, update bibliography | no | yes |
+
+The writing tool manages a **writing project** stored in the database:
+- **Outline**: Define paper structure (sections, subsections)
+- **Sections**: Write/update individual sections with auto-save
+- **Bibliography**: Manage citations and references
+- **Auto-save**: All changes persist to the database immediately, surviving across workers and restarts
+
+Paper preview and client-side export (Markdown/LaTeX) are available in the **Paper tab** in the UI.
+
+## Filesystem Tools
+
+| Tool | Description | Plan | Execute |
+|------|-------------|:----:|:-------:|
+| `read` | Read files with line numbers | yes | yes |
+| `write` | Create/overwrite files | no | yes |
+| `edit` | Find-and-replace in files | no | yes |
+| `list_dir` | List directory contents | yes | yes |
+| `glob_files` | Find files by glob pattern | yes | yes |
+| `grep_search` | Search file contents | yes | yes |
+
+In Plan mode, only read-only filesystem tools are available.
+
+## Execution Tools
+
+| Tool | Description | Plan | Execute |
+|------|-------------|:----:|:-------:|
+| `bash` | Execute shell commands (Docker-isolated when available) | no | yes |
+| `sandbox` | Run code in Docker containers, SSH remotes, or Modal cloud | no | yes |
+
+### Sandbox Types
+
+| Type | Description |
 |------|-------------|
-| `plan_tool` | Create/update task plans, track resources, generate completion reports |
-| `ask_user` | Ask structured questions (2-4 options + free text per question) |
-| `writing` | Manage paper writing projects (outline, sections, bibliography, export) |
+| **Local (Docker)** | Docker container on the host machine |
+| **SSH** | Remote machine via SSH |
+| **Modal** | Cloud sandbox via Modal |
 
-## Execution environments
+## Mode Restrictions
 
-| Tool | Description |
-|------|-------------|
-| `sandbox_probe` | Check environment (Python version, GPU, disk, packages) |
-| `sandbox_create` | Create a new sandbox (local/SSH/Modal) |
-| `sandbox_exec` | Run commands in active sandbox |
-| `sandbox_read` / `sandbox_write` | File I/O in sandbox |
+Tools are filtered based on the current mode before being sent to the LLM. See [Modes](/modes) for details on the enforcement layers.
+
+In summary:
+- **Plan mode**: `ask_user`, `plan_tool`, read-only filesystem, web search, papers, GitHub
+- **Execute mode**: Everything except `ask_user`

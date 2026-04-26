@@ -12,121 +12,72 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENROUTER_API_KEY=sk-or-...
 
 # ── Local models (OpenAI-compatible APIs) ──
-# Ollama
 OLLAMA_API_BASE=http://localhost:11434/v1
 OLLAMA_MODEL=llama3.1
 
-# LM Studio
 LMSTUDIO_API_BASE=http://localhost:1234/v1
 LMSTUDIO_MODEL=default
 
-# Any OpenAI-compatible API (vLLM, TGI, etc.)
 LOCAL_API_BASE=http://localhost:8000/v1
 LOCAL_MODEL=local/my-model
 LOCAL_API_KEY=not-needed
 
-# ── Background jobs (optional) ──
+# ── Background jobs (optional, recommended) ──
 REDIS_URL=redis://localhost:6379/0
 USE_BACKGROUND_JOBS=true
 USE_REDIS_PUBSUB=true
 
 # ── Search & research (optional) ──
-BRAVE_API_KEY=...                    # web search
-OPENALEX_EMAIL=you@example.com       # polite pool (no key needed)
+BRAVE_API_KEY=...
+OPENALEX_EMAIL=you@example.com
 
 # ── GitHub (optional) ──
-GITHUB_TOKEN=ghp_...                 # improves code search rate limits
+GITHUB_TOKEN=ghp_...
 
 # ── Auth ──
 JWT_SECRET_KEY=change-me-in-production
 
 # ── Docker execution ──
-OPEN_MLR_DOCKER_IMAGE=python:3.12-slim  # default container image
+OPEN_MLR_DOCKER_IMAGE=python:3.12-slim
 
 # ── Modal sandbox (optional) ──
 MODAL_TOKEN_ID=...
 MODAL_TOKEN_SECRET=...
 ```
 
-## Per-User Settings
+## Settings Pages
 
-After login, click the gear icon in the sidebar to open Settings:
+Settings are routed pages (not a modal), accessible from the sidebar:
 
-| Tab | What you can configure |
-|-----|----------------------|
-| **Providers** | API keys for all services (stored encrypted in DB, override .env) |
-| **Agent** | Default model, research model, YOLO mode |
-| **Sandbox** | Default execution environment (local/SSH/Modal), Modal credentials |
-| **Writing** | Citation style (APA/IEEE/ACM/Chicago), export format |
+| Route | What you configure |
+|-------|-------------------|
+| `/settings/providers` | API keys for LLM providers and services. Stored encrypted in DB, override `.env` values. |
+| `/settings/agent` | Default model, research model, YOLO mode, max iterations. |
+| `/settings/sandbox` | Default execution environment (Docker/SSH/Modal), Modal credentials. |
+| `/settings/writing` | Citation style (APA/IEEE/ACM/Chicago), export format preferences. |
+
+## Sticky Model Selection
+
+The selected model is persisted per-user in the database. When you switch models via the header dropdown, the choice sticks across sessions, devices, and browser refreshes. No need to re-select every time.
 
 ## Model Selection
 
 Models are auto-detected based on which API keys/URLs are configured:
 
-### Cloud Providers
-
-| Key set | Default model |
+| Key set | Example model |
 |---------|--------------|
 | `ANTHROPIC_API_KEY` | `anthropic/claude-sonnet-4` |
 | `OPENAI_API_KEY` | `openai/gpt-4o` |
 | `OPENROUTER_API_KEY` | `openrouter/anthropic/claude-sonnet-4` |
-
-### Local Models
-
-| Config | Model prefix |
-|--------|-------------|
 | `OLLAMA_MODEL` | `ollama/llama3.1` |
 | `LMSTUDIO_API_BASE` | `lmstudio/default` |
 | `LOCAL_API_BASE` | `local/my-model` |
 
-Override via Settings > Agent > Default Model, or by clicking the model
-button in the header.
-
-## Local Model Setup
-
-### Ollama
-
-```bash
-# Install and start Ollama
-ollama serve
-
-# Pull a model
-ollama pull llama3.1
-
-# Configure
-OLLAMA_MODEL=llama3.1
-# OLLAMA_API_BASE defaults to http://localhost:11434/v1
-```
-
-Use as `ollama/llama3.1` in the model selector.
-
-### LM Studio
-
-1. Download and install [LM Studio](https://lmstudio.ai)
-2. Load a model and start the server
-3. Configure:
-```bash
-LMSTUDIO_API_BASE=http://localhost:1234/v1
-LMSTUDIO_MODEL=default
-```
-
-Use as `lmstudio/default` in the model selector.
-
-### vLLM / text-generation-inference / Other
-
-Any server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint:
-
-```bash
-LOCAL_API_BASE=http://localhost:8000/v1
-LOCAL_MODEL=local/my-model-name
-LOCAL_API_KEY=not-needed   # or your auth token
-```
-
-Use as `local/my-model-name` in the model selector.
+Override via `/settings/agent` or the model dropdown in the header.
 
 ## Background Jobs
 
-Enable persistent task tracking that survives browser refreshes:
+Enable with Redis for persistent processing:
 
 ```bash
 REDIS_URL=redis://localhost:6379/0
@@ -135,14 +86,15 @@ USE_REDIS_PUBSUB=true
 ```
 
 When enabled:
-- Tasks and resources persist to the database
 - Agent processing continues even if you close the browser
-- Reconnecting shows full progress history
-- Multiple browser tabs receive live updates via Redis pub/sub
+- Multiple conversations process in parallel via Celery workers
+- Redis pub/sub relays events from workers to SSE clients
+- Redis-based interrupt relay actually kills running worker tasks
+- Reconnecting via SSE catches up on missed events
 
 Requires a running Redis server. Use `make infra` to start one with Docker.
 
-## Agent Config File
+## Agent Config
 
 `backend/configs/agent_config.yaml` controls defaults:
 
@@ -150,6 +102,8 @@ Requires a running Redis server. Use `make infra` to start one with Docker.
 model_name: ""              # empty = auto-detect
 max_iterations: 300
 stream: true
-paper_search_budget: 25     # API calls per session
+paper_search_budget: 25
 require_plan_approval: true
 ```
+
+These can be overridden per-user via `/settings/agent`.

@@ -21,7 +21,7 @@ export default defineConfig({
       {
         text: "Usage",
         items: [
-          { text: "Modes (Plan / Research / Write)", link: "/modes" },
+          { text: "Modes (Plan / Execute)", link: "/modes" },
           { text: "Agent Tools", link: "/tools" },
         ],
       },
@@ -31,6 +31,7 @@ export default defineConfig({
           { text: "Architecture", link: "/architecture" },
           { text: "Agent Harness", link: "/agent-harness" },
           { text: "REST API", link: "/api" },
+          { text: "Changelog", link: "/changelog" },
         ],
       },
     ],

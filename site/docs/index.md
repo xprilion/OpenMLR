@@ -2,8 +2,8 @@
 layout: home
 hero:
   name: OpenMLR
-  text: ML Research Intern
-  tagline: Plans tasks, reads papers, writes drafts, and runs experiments — end to end.
+  text: ML Research Agent
+  tagline: Plans tasks, researches papers, writes drafts, and executes code — end to end, in one conversation.
   actions:
     - theme: brand
       text: Get Started
@@ -13,13 +13,9 @@ hero:
       link: https://github.com/xprilion/OpenMLR
 features:
   - title: Plan
-    details: Structured questions with options, task breakdown, scope clarification before any work begins.
-  - title: Research
-    details: Search OpenAlex, ArXiv, CrossRef. Read papers section-by-section. Crawl citation graphs. Find code on GitHub.
-  - title: Write
-    details: Section-by-section paper drafting with bibliography management and Markdown/LaTeX export.
+    details: Ask clarifying questions, gather context, break tasks into structured plans. No execution until you're ready.
   - title: Execute
-    details: Docker-isolated code execution locally, on SSH remotes, or Modal cloud sandboxes.
+    details: Research papers, write drafts, run code. All tools available. Follows the plan you built in Plan mode.
 ---
 
 ## Quick start
@@ -39,33 +35,22 @@ Open `http://localhost:3000`. Create an account. Start researching.
 
 [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)
 
-See [Setup & Installation](/setup) for Coolify, local development, and more options.
-
-## Why OpenMLR?
-
-Ever started researching a topic, opened 47 browser tabs, took notes in three different apps, lost track of that one paper you saw yesterday, and then had to context-switch to run some experiments?
-
-OpenMLR keeps everything in one place. Your research context stays with you from the first "what should I look into?" to the final PDF export.
-
-**No more:**
-- Lost tabs and forgotten citations
-- Copy-pasting between arxiv, notes, and code
-- "Where did I see that figure?"
-- Starting over because you closed your browser
+See [Setup & Installation](/setup) for local development and more options.
 
 ## How it works
 
-```
-Plan → Research → Write → Execute
-```
+OpenMLR uses two modes to keep the agent focused:
 
-Each mode restricts which tools are available, keeping the agent focused:
+- **Plan mode (P)** — The agent asks questions, gathers context, and creates structured plans. No code execution, no file writes. Toggle with `Cmd+B`. Messages have an amber border.
+- **Execute mode (E)** — The agent does the work: researches papers, writes drafts, runs experiments. All tools available. Toggle with `Cmd+E`. Messages have a blue border.
 
-| Mode | What it does | Tools available |
-|------|--------------|-----------------|
-| **Plan** | Asks clarifying questions, breaks down tasks | Questions, task tracking |
-| **Research** | Searches papers, crawls citations | OpenAlex, ArXiv, web search, GitHub |
-| **Write** | Drafts sections, manages bibliography | Writing tools, citation lookup |
-| **Execute** | Runs code when needed | Docker, SSH, Modal (available in all modes) |
+Switch modes with the P/E button in the input area or keyboard shortcuts. The agent follows the plan built during Plan mode.
 
-The agent can suggest switching modes, but you approve the switch. No more half-baked drafts with missing citations.
+## Key features
+
+- **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code. Full paper reading, citation graphs.
+- **Paper writing** — Section-by-section drafting with auto-save. Preview + export (Markdown/LaTeX) in the Paper tab.
+- **Sub-agent streaming** — Research tool spawns independent agents with nested tool call visibility.
+- **Background jobs** — Celery + Redis. Close the browser, come back later.
+- **Per-conversation parallelism** — Multiple conversations process simultaneously.
+- **Onboarding flow** — Guided setup when no LLM provider is configured.
