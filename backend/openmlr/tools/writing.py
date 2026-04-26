@@ -52,7 +52,7 @@ async def _load_project(conv_id: int) -> dict | None:
 async def _get_author_info(db, conv_id: int) -> dict | None:
     """Fetch author settings for the conversation's user."""
     # Get conversation to find user_id
-    conv = await ops.get_conversation(db, conv_id)
+    conv = await ops.get_conversation_by_id(db, conv_id)
     if not conv or not conv.user_id:
         return None
 

@@ -105,7 +105,7 @@ class TestGetDraft:
     async def test_no_project(self):
         from openmlr.tools.writing import _projects
         _projects.clear()
-        result, ok = _get_draft(conv_id=999)
+        result, ok = await _get_draft(conv_id=999)
         assert ok is False
 
     async def test_generates_draft(self):
@@ -114,7 +114,7 @@ class TestGetDraft:
         _create_project(conv_id=1, title="The Paper")
         _set_outline(conv_id=1, outline=[{"id": "intro", "title": "Introduction"}])
         _write_section(conv_id=1, section_id="intro", content="This is the intro.")
-        result, ok = _get_draft(conv_id=1)
+        result, ok = await _get_draft(conv_id=1)
         assert ok is True
         assert "# The Paper" in result
         assert "Introduction" in result
