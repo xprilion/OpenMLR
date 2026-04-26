@@ -1,12 +1,28 @@
 """Authentication security — password hashing (bcrypt) and JWT tokens."""
 
 import os
+import secrets
+import logging
 from datetime import datetime, timezone, timedelta
 
 import bcrypt
 from jose import jwt, JWTError
 
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-production")
+logger = logging.getLogger(__name__)
+
+# JWT Secret - require explicit setting in production, generate random for dev
+_jwt_secret = os.environ.get("JWT_SECRET_KEY")
+if not _jwt_secret:
+    if os.environ.get("ENVIRONMENT", "development") == "production":
+        raise RuntimeError(
+            "JWT_SECRET_KEY environment variable is required in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
+    # Generate a random secret for development (changes on restart - fine for dev)
+    _jwt_secret = secrets.token_urlsafe(32)
+    logger.warning("JWT_SECRET_KEY not set - using random secret (sessions won't persist across restarts)")
+
+SECRET_KEY = _jwt_secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 

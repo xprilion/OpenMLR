@@ -4,6 +4,7 @@ import os
 import json
 import asyncio
 import logging
+from contextvars import ContextVar
 from typing import Optional, AsyncIterator
 import redis.asyncio as redis
 from ..agent.types import AgentEvent
@@ -13,16 +14,18 @@ logger = logging.getLogger("openmlr.services.redis_pubsub")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CHANNEL_NAME = "openmlr:events"
 
-# Global Redis connection pool
-_redis_pool: Optional[redis.ConnectionPool] = None
+# Context-local Redis client to handle different event loops (Celery workers)
+_redis_client: ContextVar[Optional[redis.Redis]] = ContextVar("redis_client", default=None)
 
 
 async def get_redis() -> redis.Redis:
-    """Get a Redis client from the pool."""
-    global _redis_pool
-    if _redis_pool is None:
-        _redis_pool = redis.ConnectionPool.from_url(REDIS_URL, decode_responses=True)
-    return redis.Redis(connection_pool=_redis_pool)
+    """Get a Redis client for the current context/event loop."""
+    client = _redis_client.get()
+    if client is None:
+        # Create a new client for this context
+        client = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client.set(client)
+    return client
 
 
 async def publish_event(event: AgentEvent) -> None:
@@ -134,3 +137,42 @@ async def get_redis_bridge() -> RedisEventBridge:
         _redis_bridge = RedisEventBridge()
         await _redis_bridge.start()
     return _redis_bridge
+
+
+# ── Answer relay for background jobs ─────────────────────
+
+ANSWERS_KEY_PREFIX = "openmlr:answers:"
+
+
+async def publish_answers(conversation_id: int, answers: dict) -> None:
+    """Publish user answers to Redis so the background worker can pick them up."""
+    try:
+        client = await get_redis()
+        key = f"{ANSWERS_KEY_PREFIX}{conversation_id}"
+        await client.set(key, json.dumps(answers), ex=600)  # expire in 10 min
+        # Also publish a notification so the worker wakes up immediately
+        await client.publish(f"{ANSWERS_KEY_PREFIX}notify", str(conversation_id))
+    except Exception as e:
+        logger.warning(f"Failed to publish answers to Redis: {e}")
+
+
+async def wait_for_answers(conversation_id: int, timeout: float = 300) -> dict | None:
+    """Wait for user answers from Redis. Used by background worker's ask_user handler."""
+    try:
+        client = await get_redis()
+        key = f"{ANSWERS_KEY_PREFIX}{conversation_id}"
+
+        # Poll every 1 second (simple, reliable)
+        elapsed = 0.0
+        while elapsed < timeout:
+            data = await client.get(key)
+            if data:
+                await client.delete(key)  # consume the answers
+                return json.loads(data)
+            await asyncio.sleep(1.0)
+            elapsed += 1.0
+
+        return None  # timeout
+    except Exception as e:
+        logger.warning(f"Failed to wait for answers from Redis: {e}")
+        return None

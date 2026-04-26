@@ -3,17 +3,35 @@ export interface AgentEvent {
   data?: Record<string, any>;
 }
 
+export interface SubAgentChild {
+  tool: string;
+  args?: string;
+  id?: string;
+  output?: string;
+  success?: boolean;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'tool' | 'system' | 'error';
   content: string;
   streaming?: boolean;
+  timestamp?: number;
+  duration?: number;
+  model?: string;
+  mode?: string;
   metadata?: {
     tool?: string;
     args?: string;
     output?: string;
     outputSuccess?: boolean;
     tool_call_id?: string;
+    // Sub-agent fields
+    isSubAgent?: boolean;
+    agentType?: string;
+    children?: SubAgentChild[];
+    toolCount?: number;
+    duration?: number;
   };
 }
 

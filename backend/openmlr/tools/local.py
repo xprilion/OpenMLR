@@ -6,11 +6,51 @@ read/write/edit operate on the host filesystem (for project files).
 
 import os
 import asyncio
+import logging
 from pathlib import Path
 from ..agent.types import ToolSpec
 
+logger = logging.getLogger(__name__)
+
 DOCKER_IMAGE = os.environ.get("OPEN_MLR_DOCKER_IMAGE", "python:3.12-slim")
 CONTAINER_PREFIX = "openmlr-sandbox"
+
+# Security: Disable direct host execution fallback (set to "true" to allow)
+ALLOW_DIRECT_EXEC = os.environ.get("OPENMLR_ALLOW_DIRECT_EXEC", "false").lower() == "true"
+
+# Security: Base directory for file operations (default: current working directory)
+# Files outside this directory cannot be read/written/edited
+WORKSPACE_ROOT = os.environ.get("OPENMLR_WORKSPACE_ROOT", "")
+
+
+def _validate_path(path: Path) -> tuple[Path, str | None]:
+    """Validate path is within allowed workspace. Returns (resolved_path, error_or_none)."""
+    try:
+        resolved = path.resolve()
+        
+        # If WORKSPACE_ROOT is set, enforce it
+        if WORKSPACE_ROOT:
+            workspace = Path(WORKSPACE_ROOT).resolve()
+            try:
+                resolved.relative_to(workspace)
+            except ValueError:
+                return resolved, f"Path {resolved} is outside workspace {workspace}"
+        else:
+            # Default: allow paths under current working directory
+            cwd = Path.cwd().resolve()
+            try:
+                resolved.relative_to(cwd)
+            except ValueError:
+                # Also allow paths that are explicitly absolute and exist (for reading configs etc)
+                # But block obvious dangerous paths
+                dangerous_prefixes = ["/etc", "/root", "/var", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc"]
+                for prefix in dangerous_prefixes:
+                    if str(resolved).startswith(prefix):
+                        return resolved, f"Access denied: {resolved} is in a protected system directory"
+        
+        return resolved, None
+    except Exception as e:
+        return path, f"Path validation error: {e}"
 
 
 def create_local_tools() -> list[ToolSpec]:
@@ -102,22 +142,35 @@ async def _handle_bash(command: str, timeout: int = 120, workdir: str = None, **
     if await _docker_available():
         return await _docker_exec(command, timeout, cwd, workdir)
     else:
-        # Fallback to direct execution with warning
-        output, success = await _direct_exec(command, timeout, cwd)
-        warning = "[WARNING: Docker not available — running directly on host]\n\n"
-        return warning + output, success
+        # Fallback to direct execution only if explicitly allowed
+        if ALLOW_DIRECT_EXEC:
+            logger.warning(f"Docker unavailable, falling back to direct host execution for: {command[:100]}")
+            output, success = await _direct_exec(command, timeout, cwd)
+            warning = "[WARNING: Docker not available — running directly on host]\n\n"
+            return warning + output, success
+        else:
+            return (
+                "Docker is not available and direct host execution is disabled for security.\n"
+                "Please ensure Docker is running, or set OPENMLR_ALLOW_DIRECT_EXEC=true to enable fallback.",
+                False
+            )
 
 
 async def _docker_exec(command: str, timeout: int, host_cwd: str, workdir: str = None) -> tuple[str, bool]:
     """Run command in a Docker container with workspace mount."""
     container_workdir = workdir or "/workspace"
 
+    # Security: Use bridge network (default) instead of host network
+    # This isolates container networking from the host
     docker_cmd = [
         "docker", "run", "--rm",
         "-v", f"{host_cwd}:/workspace",
         "-w", container_workdir,
-        "--network", "host",
         "--memory", "8g",
+        "--pids-limit", "256",  # Prevent fork bombs
+        "--read-only",  # Read-only root filesystem
+        "--tmpfs", "/tmp:rw,noexec,nosuid,size=1g",  # Writable /tmp
+        "--security-opt", "no-new-privileges:true",
         DOCKER_IMAGE,
         "bash", "-c", command,
     ]
@@ -190,6 +243,11 @@ async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) 
         if not target.is_absolute():
             target = Path.cwd() / target
 
+        # Security: Validate path is within allowed workspace
+        target, error = _validate_path(target)
+        if error:
+            return error, False
+
         if target.is_dir():
             entries = sorted(target.iterdir())
             return "\n".join(f"{e.name}{'/' if e.is_dir() else ''}" for e in entries) or "(empty directory)", True
@@ -217,6 +275,12 @@ async def _handle_write(path: str, content: str, **kwargs) -> tuple[str, bool]:
         target = Path(path).expanduser()
         if not target.is_absolute():
             target = Path.cwd() / target
+        
+        # Security: Validate path is within allowed workspace
+        target, error = _validate_path(target)
+        if error:
+            return error, False
+        
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return f"Wrote {len(content)} chars to {target}", True
@@ -229,6 +293,12 @@ async def _handle_edit(path: str, old_string: str, new_string: str, replace_all:
         target = Path(path).expanduser()
         if not target.is_absolute():
             target = Path.cwd() / target
+        
+        # Security: Validate path is within allowed workspace
+        target, error = _validate_path(target)
+        if error:
+            return error, False
+        
         if not target.exists():
             return f"File not found: {target}", False
 

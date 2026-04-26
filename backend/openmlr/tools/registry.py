@@ -22,9 +22,9 @@ MODE_TOOL_RESTRICTIONS = {
         ),
     },
     "research": {
-        # In research mode: search, papers, reading, planning
+        # In research mode: search, papers, reading, planning — NO ask_user
         "allowed": {
-            "ask_user", "plan_tool",
+            "plan_tool",
             "web_search", "papers", "research",
             "read_file", "list_dir", "glob_files", "grep_search",
             "github_search", "github_read_file", "github_read_repo",
@@ -32,20 +32,21 @@ MODE_TOOL_RESTRICTIONS = {
         "blocked_message": (
             "Tool '{tool}' is not available in RESEARCH mode. "
             "Research mode is for searching, reading papers, and gathering information. "
-            "Use ask_user with suggest_mode to switch to write mode for drafting content."
+            "Do NOT ask the user questions in this mode — just do the research. "
+            "If you need clarification, present your findings first."
         ),
     },
     "write": {
-        # In write mode: writing, planning, reading, limited search
+        # In write mode: writing, planning, reading, limited search — NO ask_user
         "allowed": {
-            "ask_user", "plan_tool", "writing",
+            "plan_tool", "writing",
             "read_file", "list_dir", "glob_files", "grep_search",
             "web_search", "papers",  # For citations
         },
         "blocked_message": (
             "Tool '{tool}' is not available in WRITE mode. "
             "Write mode is for drafting and editing content. "
-            "Use ask_user with suggest_mode to switch modes if needed."
+            "Do NOT ask the user questions in this mode — just write."
         ),
     },
     # "general" mode has no restrictions

@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 
 from ..celery_app import celery_app
-from ..db.engine import async_session
+from ..db.engine import get_worker_session
 from ..db import operations as ops
 from ..services.redis_pubsub import publish_event
 from ..agent.types import AgentEvent
@@ -80,8 +80,11 @@ async def _async_process_message(
     from ..tools.registry import create_tool_router
     from ..sandbox.manager import SandboxManager
     
+    # Get worker-specific session factory to avoid event loop conflicts
+    worker_session = get_worker_session()
+    
     # Update job status to running
-    async with async_session() as db:
+    async with worker_session() as db:
         await ops.update_job_status(db, job_id, "running", worker_id=worker_id)
         
         # Load existing messages for context
@@ -134,10 +137,10 @@ async def _async_process_message(
         
         # Persist assistant messages and tool outputs
         if event.event_type == "assistant_message" and event.data.get("content"):
-            async with async_session() as db:
+            async with worker_session() as db:
                 await ops.add_message(db, conversation_id, "assistant", event.data["content"])
         elif event.event_type == "tool_output" and event.data:
-            async with async_session() as db:
+            async with worker_session() as db:
                 await ops.add_message(db, conversation_id, "tool", event.data.get("output", ""), {
                     "tool": event.data.get("tool"),
                     "tool_call_id": event.data.get("tool_call_id"),
@@ -151,7 +154,7 @@ async def _async_process_message(
         await run_agent_turn(session, tool_router, message, mode=mode)
         
         # Mark job as completed
-        async with async_session() as db:
+        async with worker_session() as db:
             await ops.update_job_status(db, job_id, "completed")
         
         # Broadcast completion
@@ -162,7 +165,7 @@ async def _async_process_message(
         
     except Exception as e:
         logger.exception(f"Agent processing failed for job {job_id}: {e}")
-        async with async_session() as db:
+        async with worker_session() as db:
             await ops.update_job_status(db, job_id, "failed", error=str(e))
         
         await publish_event(AgentEvent(
@@ -187,5 +190,6 @@ async def _async_process_message(
 
 async def _mark_job_failed(job_id: str, error: str):
     """Mark a job as failed in the database."""
-    async with async_session() as db:
+    worker_session = get_worker_session()
+    async with worker_session() as db:
         await ops.update_job_status(db, job_id, "failed", error=error)

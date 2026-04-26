@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from ..agent.types import ToolSpec, Message, AgentEvent, ToolCall
 from ..agent.llm import LLMProvider
 from ..agent.doom_loop import detect_doom_loop
@@ -82,11 +83,21 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
         {"role": "user", "content": f"Research the following topic thoroughly:\n\n{query}\n\nFocus: {focus}"},
     ]
 
-    # Emit progress
+    # Generate a parent ID for grouping sub-agent events
+    parent_tc_id = kwargs.get("tool_call_id", f"research-{int(time.time())}")
+    start_time = time.time()
+    tool_count = 0
+
+    # Emit sub-agent start
     if session:
         await session.emit(AgentEvent(
-            event_type="tool_log",
-            data={"message": f"Research sub-agent started: {query[:100]}"},
+            event_type="sub_agent_start",
+            data={
+                "agent_type": "research",
+                "description": f"Research: {query[:100]}",
+                "parent_tool_call_id": parent_tc_id,
+                "focus": focus,
+            },
         ))
 
     accumulated_content = ""
@@ -122,8 +133,22 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
                 ],
             })
 
-            # Execute tools
+            # Execute tools and emit granular events
             for tc in result.tool_calls:
+                tool_count += 1
+                
+                # Emit sub-agent tool call
+                if session:
+                    await session.emit(AgentEvent(
+                        event_type="sub_agent_tool_call",
+                        data={
+                            "parent_tool_call_id": parent_tc_id,
+                            "tool": tc.name,
+                            "tool_call_id": tc.id,
+                            "args": json.dumps(tc.arguments)[:200] if isinstance(tc.arguments, dict) else str(tc.arguments)[:200],
+                        },
+                    ))
+
                 output, success = await _execute_research_tool(tc)
                 messages.append({
                     "role": "tool",
@@ -131,18 +156,51 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
                     "tool_call_id": tc.id,
                 })
 
-            # Progress update
-            if session and iteration % 5 == 0 and iteration > 0:
-                await session.emit(AgentEvent(
-                    event_type="tool_log",
-                    data={"message": f"Research progress: iteration {iteration}/{MAX_RESEARCH_ITERATIONS}"},
-                ))
+                # Emit sub-agent tool output
+                if session:
+                    await session.emit(AgentEvent(
+                        event_type="sub_agent_tool_output",
+                        data={
+                            "parent_tool_call_id": parent_tc_id,
+                            "tool_call_id": tc.id,
+                            "tool": tc.name,
+                            "output": output[:500],
+                            "success": success,
+                        },
+                    ))
 
     except Exception as e:
+        duration = time.time() - start_time
+        if session:
+            await session.emit(AgentEvent(
+                event_type="sub_agent_end",
+                data={
+                    "parent_tool_call_id": parent_tc_id,
+                    "tool_count": tool_count,
+                    "duration_seconds": round(duration, 1),
+                    "summary": f"Error: {str(e)}",
+                    "success": False,
+                },
+            ))
         return f"Research sub-agent error: {str(e)}", False
 
     if not accumulated_content:
         accumulated_content = "Research completed but no summary was generated."
+
+    duration = time.time() - start_time
+
+    # Emit sub-agent end with stats
+    if session:
+        await session.emit(AgentEvent(
+            event_type="sub_agent_end",
+            data={
+                "parent_tool_call_id": parent_tc_id,
+                "tool_count": tool_count,
+                "duration_seconds": round(duration, 1),
+                "summary": accumulated_content[:500],
+                "success": True,
+            },
+        ))
 
     return accumulated_content, True
 

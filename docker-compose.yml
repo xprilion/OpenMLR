@@ -1,26 +1,41 @@
+# OpenMLR - Self-hosted ML research agent
+# Docs: https://openmlr.dev/setup
+#
+# Usage:
+#   Production:   docker compose up -d
+#   Development:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#                 (or just: make dev-docker)
+#   With docs:    docker compose --profile docs up -d
+
 services:
   # PostgreSQL database
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: openmlr
+      POSTGRES_USER: ${POSTGRES_USER:-openmlr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openmlr}
+      POSTGRES_DB: ${POSTGRES_DB:-openmlr}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Ports only exposed for debugging - comment out in production
+    # Services communicate over internal Docker network
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"  # Use 5433 to avoid conflict with local Postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openmlr}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
 
   # Redis for Celery broker and pub/sub
   redis:
     image: redis:7-alpine
+    # Ports only exposed for debugging - comment out in production
+    # Services communicate over internal Docker network
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6380:6379"  # Use 6380 to avoid conflict with local Redis
     volumes:
       - redisdata:/data
     healthcheck:
@@ -28,6 +43,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
 
   # Main web application
   web:
@@ -38,10 +55,11 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/openmlr
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openmlr}:${POSTGRES_PASSWORD:-openmlr}@db:5432/${POSTGRES_DB:-openmlr}
       REDIS_URL: redis://redis:6379/0
-      USE_BACKGROUND_JOBS: "false"
-      USE_REDIS_PUBSUB: "false"
+      USE_BACKGROUND_JOBS: "true"
+      USE_REDIS_PUBSUB: "true"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
     depends_on:
       db:
         condition: service_healthy
@@ -49,12 +67,20 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/configs:/app/backend/configs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
 
   # Celery worker for background jobs
   worker:
     build: .
     command: >
-      backend/.venv/bin/celery -A openmlr.celery_app worker
+      .venv/bin/celery -A openmlr.celery_app worker
       --loglevel=info
       --concurrency=2
       -Q default,agent
@@ -63,7 +89,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/openmlr
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openmlr}:${POSTGRES_PASSWORD:-openmlr}@db:5432/${POSTGRES_DB:-openmlr}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
@@ -72,6 +98,22 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/configs:/app/backend/configs
+    security_opt:
+      - no-new-privileges:true
+
+  # Documentation site (VitePress)
+  docs:
+    image: node:20-slim
+    working_dir: /app/site
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 4000"
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./site:/app/site
+    profiles:
+      - docs
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   pgdata:

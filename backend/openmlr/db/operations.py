@@ -162,6 +162,13 @@ async def set_user_setting(
     await db.commit()
 
 
+def _clean_json_value(val: object) -> object:
+    """Strip surrounding JSON quotes from string values stored in JSON columns."""
+    if isinstance(val, str):
+        val = val.strip('"')
+    return val
+
+
 async def get_all_settings(db: AsyncSession, user_id: int, category: str | None = None) -> dict:
     from .models import UserSetting
     query = select(UserSetting).where(UserSetting.user_id == user_id)
@@ -174,7 +181,7 @@ async def get_all_settings(db: AsyncSession, user_id: int, category: str | None 
     for s in settings:
         if s.category not in grouped:
             grouped[s.category] = {}
-        grouped[s.category][s.key] = s.value
+        grouped[s.category][s.key] = _clean_json_value(s.value)
     return grouped
 
 
@@ -412,9 +419,5 @@ async def get_user_agent_settings(db: AsyncSession, user_id: int) -> dict:
     )
     settings = {}
     for s in result.scalars().all():
-        # Values are stored as JSON, so they may be strings like "opencode-go/qwen3.6-plus"
-        val = s.value
-        if isinstance(val, str):
-            val = val.strip('"')  # Remove JSON string quotes
-        settings[s.key] = val
+        settings[s.key] = _clean_json_value(s.value)
     return settings

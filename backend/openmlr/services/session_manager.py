@@ -111,6 +111,15 @@ class SessionManager:
     async def remove_session(self, conversation_id: int) -> None:
         active = self.sessions.pop(conversation_id, None)
         if active:
+            # Cancel any running agent turn
+            active.session.cancel()
+            # Resolve any pending question/approval futures to unblock the loop
+            if hasattr(active.session, 'pending_answers') and active.session.pending_answers:
+                try:
+                    if not active.session.pending_answers.done():
+                        active.session.pending_answers.cancel()
+                except Exception:
+                    pass
             try:
                 await active.sandbox_manager.destroy()
             except Exception:

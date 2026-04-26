@@ -1,6 +1,7 @@
 """Database engine and async session factory."""
 
 import os
+from contextvars import ContextVar
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
@@ -17,9 +18,33 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+# Main engine for FastAPI (shared across requests)
 engine = create_async_engine(DATABASE_URL, echo=False, pool_size=10, max_overflow=20)
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+# Context variable for worker-specific engines
+_worker_engine: ContextVar = ContextVar("worker_engine", default=None)
+
+
+def get_worker_session() -> async_sessionmaker:
+    """Get or create an engine/session factory for the current worker context.
+    
+    This ensures Celery workers get their own engine instance to avoid
+    conflicts with asyncpg connection pool across event loops.
+    """
+    eng = _worker_engine.get()
+    if eng is None:
+        # Create a new engine for this worker context
+        eng = create_async_engine(
+            DATABASE_URL, 
+            echo=False, 
+            pool_size=5, 
+            max_overflow=10,
+            pool_pre_ping=True,  # Verify connections before use
+        )
+        _worker_engine.set(eng)
+    return async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
 
 
 async def get_db() -> AsyncSession:
