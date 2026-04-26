@@ -112,9 +112,7 @@ export default defineConfig({
     socialLinks: [
       { icon: "github", link: "https://github.com/xprilion/OpenMLR" },
     ],
-    footer: {
-      message: "Released under the MIT License.",
-      copyright: "Copyright © 2026 Anubhav Singh",
-    },
+    // Footer is handled by custom component (CustomFooter.vue)
+    // to support left/right layout with sitemap link
   },
 });
