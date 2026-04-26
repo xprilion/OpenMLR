@@ -1,6 +1,7 @@
 """Tests for web search tool — tool spec validation."""
 
 import pytest
+
 from openmlr.tools.search import create_search_tools
 
 pytestmark = pytest.mark.asyncio

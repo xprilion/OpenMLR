@@ -1,12 +1,13 @@
 """Local sandbox — direct filesystem and shell execution."""
 
-import os
 import asyncio
+import os
 import platform
 import shutil
 import time
 from pathlib import Path
-from .interface import SandboxInterface, EnvironmentInfo, ExecutionResult
+
+from .interface import EnvironmentInfo, ExecutionResult, SandboxInterface
 
 
 class LocalSandbox(SandboxInterface):
@@ -49,7 +50,7 @@ class LocalSandbox(SandboxInterface):
                 exit_code=proc.returncode,
                 duration_seconds=duration,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ExecutionResult(
                 output=f"Command timed out after {timeout}s",
                 success=False,

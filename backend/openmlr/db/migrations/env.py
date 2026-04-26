@@ -1,13 +1,12 @@
 """Alembic migration environment."""
 
-import os
 import asyncio
+import os
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from alembic import context
 
 # Import all models so Alembic can detect them
 from openmlr.db.models import Base

@@ -1,11 +1,15 @@
 """Tests for research tool — tool specs and the research sub-agent dispatching."""
 
 import pytest
-from openmlr.tools.research import (
-    create_research_tool, _get_research_tool_specs, _execute_research_tool,
-    RESEARCH_SYSTEM_PROMPT, MAX_RESEARCH_ITERATIONS,
-)
+
 from openmlr.agent.types import ToolCall
+from openmlr.tools.research import (
+    MAX_RESEARCH_ITERATIONS,
+    RESEARCH_SYSTEM_PROMPT,
+    _execute_research_tool,
+    _get_research_tool_specs,
+    create_research_tool,
+)
 
 
 class TestCreateResearchTool:

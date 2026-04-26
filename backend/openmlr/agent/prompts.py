@@ -1,16 +1,14 @@
 """System prompt builder — loads Jinja2 YAML template and renders."""
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from jinja2 import Template
 
-from .types import ToolSpec
 from ..config import AgentConfig
-
+from .types import ToolSpec
 
 PROMPT_DIR = Path(__file__).parent.parent.parent / "configs" / "prompts"
 COMPACT_PROMPT = (
@@ -27,7 +25,7 @@ def build_system_prompt(
     mode: str = "general",
     username: str = "user",
     sandbox_info: str = "none",
-    config: Optional[AgentConfig] = None,
+    config: AgentConfig | None = None,
 ) -> str:
     """Build the full system prompt from YAML template."""
     template_path = PROMPT_DIR / "system_prompt.yaml"
@@ -41,7 +39,7 @@ def build_system_prompt(
         template_str = _fallback_prompt()
 
     cwd = os.getcwd()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     template = Template(template_str)
     prompt = template.render(

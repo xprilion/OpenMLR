@@ -1,6 +1,5 @@
 """Tests for Celery app configuration."""
 
-import pytest
 from celery import Celery
 
 
@@ -38,5 +37,5 @@ class TestCeleryApp:
         assert routes is not None
 
     def test_get_celery_app(self):
-        from openmlr.celery_app import get_celery_app, celery_app
+        from openmlr.celery_app import celery_app, get_celery_app
         assert get_celery_app() is celery_app

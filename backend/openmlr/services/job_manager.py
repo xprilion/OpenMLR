@@ -1,8 +1,8 @@
 """Job manager — handles background job creation and status tracking."""
 
-import os
 import logging
-from typing import Optional
+import os
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import operations as ops
@@ -16,10 +16,10 @@ USE_BACKGROUND_JOBS = os.environ.get("USE_BACKGROUND_JOBS", "false").lower() in 
 
 class JobManager:
     """Manages background agent job creation and tracking."""
-    
+
     def __init__(self):
         self._celery_app = None
-    
+
     @property
     def celery_app(self):
         """Lazy load Celery app to avoid import issues."""
@@ -27,7 +27,7 @@ class JobManager:
             from ..celery_app import celery_app
             self._celery_app = celery_app
         return self._celery_app
-    
+
     async def create_job(
         self,
         db: AsyncSession,
@@ -37,15 +37,15 @@ class JobManager:
         mode: str = None,
         model: str = None,
         uuid: str = None,
-    ) -> Optional[AgentJob]:
+    ) -> AgentJob | None:
         """
         Create a new background job for processing an agent message.
-        
+
         Returns the job record, or None if background jobs are disabled.
         """
         if not USE_BACKGROUND_JOBS:
             return None
-        
+
         # Create job record in database
         job = await ops.create_agent_job(
             db=db,
@@ -54,7 +54,7 @@ class JobManager:
             message=message,
             mode=mode,
         )
-        
+
         # Enqueue Celery task
         from ..tasks.agent_tasks import process_agent_message
         process_agent_message.delay(
@@ -66,20 +66,20 @@ class JobManager:
             model=model,
             uuid=uuid,
         )
-        
+
         logger.info(f"Created background job {job.job_id} for conversation {conversation_id}")
         return job
-    
+
     async def get_job_status(
         self,
         db: AsyncSession,
         job_id: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Get the current status of a job."""
         job = await ops.get_agent_job(db, job_id)
         if not job:
             return None
-        
+
         return {
             "job_id": job.job_id,
             "status": job.status,
@@ -88,7 +88,7 @@ class JobManager:
             "started_at": job.started_at.isoformat() if job.started_at else None,
             "completed_at": job.completed_at.isoformat() if job.completed_at else None,
         }
-    
+
     async def get_active_jobs(
         self,
         db: AsyncSession,
@@ -105,7 +105,7 @@ class JobManager:
             }
             for job in jobs
         ]
-    
+
     async def cancel_job(
         self,
         db: AsyncSession,
@@ -115,23 +115,23 @@ class JobManager:
         job = await ops.get_agent_job(db, job_id)
         if not job:
             return False
-        
+
         if job.status == "queued":
             # Can cancel queued jobs
             await ops.update_job_status(db, job_id, "cancelled")
-            
+
             # Revoke the Celery task
             if self.celery_app:
                 self.celery_app.control.revoke(job_id, terminate=False)
-            
+
             return True
-        
+
         # Can't cancel running/completed jobs easily
         return False
 
 
 # Global instance
-_job_manager: Optional[JobManager] = None
+_job_manager: JobManager | None = None
 
 
 def get_job_manager() -> JobManager:

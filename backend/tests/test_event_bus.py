@@ -3,11 +3,9 @@
 import asyncio
 
 import pytest
-import pytest_asyncio
 
-from openmlr.services.event_bus import EventBus
 from openmlr.agent.types import AgentEvent
-
+from openmlr.services.event_bus import EventBus
 
 # ---------------------------------------------------------------------------
 # Fixtures

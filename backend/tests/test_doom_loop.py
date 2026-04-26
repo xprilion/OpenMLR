@@ -1,8 +1,9 @@
 """Tests for openmlr.agent.doom_loop — repetitive tool-call detection."""
 
 import pytest
-from openmlr.agent.types import Message, ToolCall
+
 from openmlr.agent.doom_loop import detect_doom_loop
+from openmlr.agent.types import Message, ToolCall
 
 
 # Override the autouse DB fixture from conftest — these tests are pure unit tests.

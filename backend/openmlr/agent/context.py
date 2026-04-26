@@ -1,8 +1,9 @@
 """ContextManager — message history, compaction, undo, token tracking."""
 
 from dataclasses import dataclass, field
-from .types import Message, ToolCall
+
 from ..config import AgentConfig, get_model_max_tokens
+from .types import Message, ToolCall
 
 
 def estimate_tokens(text: str) -> int:

@@ -1,16 +1,14 @@
 """Agentic loop — the core turn-processing engine with tool execution."""
 
-import json
 import asyncio
+import json
 import traceback
-from typing import Optional
 
-from .types import AgentEvent, Message, ToolCall, ToolSpec, Submission, OpType, LLMResult
-from .session import Session
-from .context import ContextManager
-from .llm import LLMProvider
-from .doom_loop import detect_doom_loop
 from ..config import AgentConfig
+from .doom_loop import detect_doom_loop
+from .llm import LLMProvider
+from .session import Session
+from .types import AgentEvent, LLMResult, Message, OpType, Submission, ToolCall
 
 
 async def submission_loop(session: Session, tool_router) -> None:
@@ -167,7 +165,7 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
                     return_exceptions=True,
                 )
 
-                for tc, res in zip(auto_approve, results):
+                for tc, res in zip(auto_approve, results, strict=False):
                     if isinstance(res, Exception):
                         output = f"Error: {str(res)}"
                         success = False
@@ -233,7 +231,7 @@ async def _stream_llm_call(
     session: Session,
     messages: list[dict],
     tools: list[dict],
-) -> Optional[LLMResult]:
+) -> LLMResult | None:
     """Execute a streaming LLM call, emitting chunks to SSE."""
     content_buffer = ""
     tool_calls: list[ToolCall] = []
@@ -278,7 +276,7 @@ async def _non_stream_llm_call(
     session: Session,
     messages: list[dict],
     tools: list[dict],
-) -> Optional[LLMResult]:
+) -> LLMResult | None:
     """Execute a non-streaming LLM call."""
     result = await LLMProvider.generate(messages, session.config, tools)
 

@@ -2,8 +2,9 @@
 
 import os
 from contextvars import ContextVar
+
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 load_dotenv()
 
@@ -29,7 +30,7 @@ _worker_engine: ContextVar = ContextVar("worker_engine", default=None)
 
 def get_worker_session() -> async_sessionmaker:
     """Get or create an engine/session factory for the current worker context.
-    
+
     This ensures Celery workers get their own engine instance to avoid
     conflicts with asyncpg connection pool across event loops.
     """
@@ -37,9 +38,9 @@ def get_worker_session() -> async_sessionmaker:
     if eng is None:
         # Create a new engine for this worker context
         eng = create_async_engine(
-            DATABASE_URL, 
-            echo=False, 
-            pool_size=5, 
+            DATABASE_URL,
+            echo=False,
+            pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,  # Verify connections before use
         )

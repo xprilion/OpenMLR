@@ -1,20 +1,20 @@
 """SandboxManager — lifecycle management and provider selection."""
 
-from typing import Optional
+
 from .interface import SandboxInterface
 from .local import LocalSandbox
-from .ssh import SSHSandbox
 from .modal_sandbox import ModalSandbox
+from .ssh import SSHSandbox
 
 
 class SandboxManager:
     """Manages sandbox lifecycle: create, switch, destroy."""
 
     def __init__(self):
-        self._active: Optional[SandboxInterface] = None
+        self._active: SandboxInterface | None = None
         self.active_type: str = "none"
 
-    def get_active(self) -> Optional[SandboxInterface]:
+    def get_active(self) -> SandboxInterface | None:
         return self._active
 
     async def create(self, provider: str, config: dict = None) -> SandboxInterface:

@@ -269,7 +269,7 @@ function ChatUI({
       case 'assistant_message':
         if (data?.content) {
           setMessages((prev) => {
-            let msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+            const msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
             if (msgs[msgs.length - 1]?.role === 'assistant') return msgs;
             return [...msgs, { id: nextId(), role: 'assistant', content: data.content }];
           });
@@ -277,7 +277,7 @@ function ChatUI({
         break;
       case 'tool_call':
         setMessages((prev) => {
-          let msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+          const msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
           return [...msgs, { id: nextId(), role: 'tool', content: '', metadata: { tool: data?.tool ?? '', tool_call_id: data?.id, args: typeof data?.arguments === 'string' ? data.arguments.slice(0, 120) : JSON.stringify(data?.arguments ?? {}).slice(0, 120) } }];
         });
         break;
@@ -295,7 +295,7 @@ function ChatUI({
       // Sub-agent events
       case 'sub_agent_start':
         setMessages((prev) => {
-          let msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+          const msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
           return [...msgs, { id: nextId(), role: 'tool', content: '', metadata: { 
             tool: `sub_agent:${data?.agent_type || 'task'}`, 
             tool_call_id: data?.parent_tool_call_id,

@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.asyncio
 
-from openmlr.services.job_manager import JobManager, get_job_manager
 from openmlr.db import operations as ops
+from openmlr.services.job_manager import JobManager, get_job_manager
 
 
 @pytest_asyncio.fixture

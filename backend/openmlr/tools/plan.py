@@ -4,8 +4,9 @@ Tasks and resources are persisted to the database per conversation.
 """
 
 import logging
-from datetime import datetime, timezone
-from ..agent.types import ToolSpec, AgentEvent
+from datetime import UTC, datetime
+
+from ..agent.types import AgentEvent, ToolSpec
 from ..db import operations as ops
 
 logger = logging.getLogger("openmlr.tools.plan")
@@ -98,33 +99,33 @@ async def _handle_plan(
         if operation == "create":
             if not tasks:
                 return "Provide 'tasks' array.", False
-            
+
             task_list = [{"title": t.get("title", ""), "status": t.get("status", "pending")} for t in tasks]
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
-            
+
             # Auto-save plan as PLAN.md resource (pinned)
             plan_md = _generate_plan_md(task_list)
             await ops.upsert_plan_resource(db, conv_id, plan_md)
             await _emit_resources(session, conv_id, db)
-            
+
             return await _format_plan(db, conv_id), True
 
         elif operation == "add":
             if not title:
                 return "Provide 'title'.", False
-            
+
             # Get existing tasks and append
             existing = await ops.get_conversation_tasks(db, conv_id)
             task_list = [{"title": t.title, "status": t.status, "priority": t.priority} for t in existing]
             task_list.append({"title": title, "status": "pending"})
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
-            
+
             # Update PLAN.md
             await ops.upsert_plan_resource(db, conv_id, _generate_plan_md(task_list))
             await _emit_resources(session, conv_id, db)
-            
+
             return await _format_plan(db, conv_id), True
 
         elif operation == "update":
@@ -138,7 +139,7 @@ async def _handle_plan(
 
             task = existing[task_index]
             old_status = task.status
-            
+
             # ENFORCEMENT: When starting a new task (in_progress), check if previous in_progress task has a report
             if status == "in_progress" and old_status != "in_progress":
                 in_progress_tasks = [i for i, t in enumerate(existing) if t.status == "in_progress"]
@@ -160,7 +161,7 @@ async def _handle_plan(
                             f"2. Cancel task {prev_idx} if it's no longer needed\n\n"
                             f"This ensures a completion report is generated before moving on."
                         ), False
-            
+
             # Update status
             task_list = [{"title": t.title, "status": t.status, "priority": t.priority} for t in existing]
             task_list[task_index]["status"] = status
@@ -178,10 +179,10 @@ async def _handle_plan(
                         f"summary='Found 5 relevant papers on X technique...', "
                         f"next_hints='Review paper Y for implementation details')"
                     ), False
-                
+
                 report = _generate_completion_report(task.title, summary, next_hints)
                 report_id = f"report-{task_index}-{len(existing)}"
-                
+
                 await ops.add_conversation_resource(
                     db, conv_id,
                     title=f"Report: {task.title}",
@@ -216,14 +217,14 @@ async def _handle_plan(
         elif operation == "add_resource":
             if not title:
                 return "Provide 'title'.", False
-            
+
             resource_id = None
             resource_content = None
             if resource_type == "report" and content:
                 import uuid
                 resource_id = f"report-manual-{str(uuid.uuid4())[:8]}"
                 resource_content = content
-            
+
             await ops.add_conversation_resource(
                 db, conv_id,
                 title=title,
@@ -248,7 +249,7 @@ async def get_report_content(report_id: str) -> str | None:
 
 def _generate_plan_md(tasks: list[dict]) -> str:
     """Generate a PLAN.md markdown document from the task list."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     icons = {"pending": "- [ ]", "in_progress": "- [~]", "completed": "- [x]", "cancelled": "- [-]"}
     lines = [
         "# Plan",
@@ -266,23 +267,23 @@ def _generate_plan_md(tasks: list[dict]) -> str:
 
 def _generate_completion_report(task_title: str, summary: str = None, next_hints: str = None) -> str:
     """Generate a structured markdown completion report."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
         f"# Task Completion Report: {task_title}",
-        f"",
+        "",
         f"**Completed**: {now}",
-        f"",
-        f"## Summary",
-        f"",
+        "",
+        "## Summary",
+        "",
         summary or "No summary provided.",
-        f"",
+        "",
     ]
     if next_hints:
         lines.extend([
-            f"## Next Steps",
-            f"",
+            "## Next Steps",
+            "",
             next_hints,
-            f"",
+            "",
         ])
     return "\n".join(lines)
 

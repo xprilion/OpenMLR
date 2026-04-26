@@ -1,6 +1,7 @@
 """Tests for openmlr.agent.context — ContextManager and helpers."""
 
 import pytest
+
 from openmlr.agent.context import ContextManager, estimate_tokens
 from openmlr.agent.types import Message, ToolCall
 from openmlr.config import AgentConfig

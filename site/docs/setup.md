@@ -152,6 +152,11 @@ Run `make help` for the full list:
 | `make test-backend` | Backend tests only (591 tests) |
 | `make test-frontend` | Frontend tests only (182 tests) |
 | `make test-docs` | Docs build check |
+| **Linting** | |
+| `make lint` | Run all linters (ruff + ESLint) |
+| `make lint-backend` | Lint backend with ruff |
+| `make lint-frontend` | Lint frontend with ESLint |
+| `make lint-fix` | Auto-fix linting issues |
 | **Other** | |
 | `make check` | Type-check backend + frontend |
 | `make docs-dev` | Preview docs locally |

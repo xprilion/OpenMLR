@@ -1,9 +1,8 @@
 """ToolRouter — registers, dispatches, and manages all agent tools."""
 
 import inspect
-from typing import Optional
-from ..agent.types import ToolSpec, ToolCall
 
+from ..agent.types import ToolSpec
 
 # Define which tools are allowed in each mode
 # Tools not listed are allowed in all modes
@@ -64,15 +63,15 @@ class ToolRouter:
 
     def is_tool_allowed(self, name: str) -> tuple[bool, str]:
         """Check if a tool is allowed in the current mode.
-        
+
         Returns (allowed, error_message).
         Supports both 'allowed' (whitelist) and 'blocked' (blacklist) sets.
         """
         if self._current_mode not in MODE_TOOL_RESTRICTIONS:
             return True, ""
-        
+
         restrictions = MODE_TOOL_RESTRICTIONS[self._current_mode]
-        
+
         # Blacklist mode: specific tools are blocked
         blocked_tools = restrictions.get("blocked", set())
         if blocked_tools:
@@ -80,22 +79,22 @@ class ToolRouter:
                 error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
                 return False, error_msg.format(tool=name, mode=self._current_mode)
             return True, ""
-        
+
         # Whitelist mode: only specific tools allowed
         allowed_tools = restrictions.get("allowed", set())
         if name in allowed_tools:
             return True, ""
-        
+
         error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
         return False, error_msg.format(tool=name, mode=self._current_mode)
 
-    def get_tool(self, name: str) -> Optional[ToolSpec]:
+    def get_tool(self, name: str) -> ToolSpec | None:
         """Look up a tool by name."""
         return self.tools.get(name)
 
     def get_tool_specs_for_llm(self, filter_by_mode: bool = True) -> list[dict]:
         """Convert registered tools to OpenAI function-calling format.
-        
+
         If filter_by_mode is True, only returns tools allowed in the current mode.
         """
         specs = []
@@ -105,7 +104,7 @@ class ToolRouter:
                 allowed, _ = self.is_tool_allowed(tool.name)
                 if not allowed:
                     continue
-            
+
             specs.append({
                 "type": "function",
                 "function": {
@@ -128,7 +127,7 @@ class ToolRouter:
         enforce_mode: bool = True,
     ) -> tuple[str, bool]:
         """Execute a tool call, dispatching to handler or MCP.
-        
+
         If enforce_mode is True, checks if the tool is allowed in the current mode.
         """
         # Check mode restrictions first
@@ -141,7 +140,7 @@ class ToolRouter:
                     f"To use this tool, ask the user to switch modes using ask_user with suggest_mode parameter."
                 )
                 return warning, False
-        
+
         tool = self.tools.get(name)
         if not tool:
             return f"Unknown tool: {name}", False
@@ -218,14 +217,14 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router = ToolRouter()
 
     # Import and register all built-in tools
-    from .local import create_local_tools
-    from .github import create_github_tools
-    from .search import create_search_tools
-    from .research import create_research_tool
-    from .plan import create_plan_tool
-    from .papers import create_papers_tool
-    from .writing import create_writing_tool
     from .ask_user import create_ask_user_tool
+    from .github import create_github_tools
+    from .local import create_local_tools
+    from .papers import create_papers_tool
+    from .plan import create_plan_tool
+    from .research import create_research_tool
+    from .search import create_search_tools
+    from .writing import create_writing_tool
 
     router.register_many(create_local_tools())
     router.register_many(create_github_tools())

@@ -1,19 +1,19 @@
 """FastAPI application — OpenMLR backend entry point."""
 
 import os
-from pathlib import Path
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import load_config
-from .services.event_bus import EventBus
-from .services.session_manager import SessionManager
 from .db.engine import engine
 from .db.models import Base
+from .services.event_bus import EventBus
+from .services.session_manager import SessionManager
 
 FRONTEND_DIST = Path(__file__).parent.parent.parent / "frontend" / "dist"
 
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     """Startup: create tables & shared state.  Shutdown: teardown sessions."""
     import logging
     logger = logging.getLogger("openmlr.app")
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created")
@@ -35,13 +35,13 @@ async def lifespan(app: FastAPI):
     app.state.config = config
     app.state.event_bus = event_bus
     app.state.session_manager = session_manager
-    
+
     # Start Redis event bridge for cross-worker communication (background jobs)
     await event_bus.start_redis_bridge()
     logger.info("Redis event bridge started")
 
     yield
-    
+
     # Cleanup
     await event_bus.stop_redis_bridge()
     for conv_id in list(session_manager.sessions.keys()):
@@ -71,8 +71,8 @@ app.add_middleware(
 # ── API routers ──────────────────────────────────────────
 from .auth.router import router as auth_router
 from .routes.agent import router as agent_router
-from .routes.settings import router as settings_router
 from .routes.health import router as health_router
+from .routes.settings import router as settings_router
 
 app.include_router(auth_router)
 app.include_router(agent_router)

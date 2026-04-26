@@ -6,8 +6,9 @@ OpenAlex: polite pool (just needs mailto). CrossRef/ArXiv/PWC: fully open.
 
 import os
 import re
+
 import httpx
-from typing import Optional
+
 from ..agent.types import ToolSpec
 
 OPENALEX_API = "https://api.openalex.org"
@@ -315,7 +316,7 @@ async def _read_paper(paper_id: str, section: str = None) -> tuple[str, bool]:
         for i, s in enumerate(sections):
             indent = "  " if s.get("level", 2) > 2 else ""
             toc.append(f"{indent}{i}. {s['title']}")
-        toc.append(f"\nUse read_paper with section=<number or name> to read a section.")
+        toc.append("\nUse read_paper with section=<number or name> to read a section.")
         return "\n".join(toc), True
 
     target = _find_section(sections, section)
@@ -487,7 +488,7 @@ def _to_openalex_id(paper_id: str) -> str:
     return paper_id
 
 
-def _extract_arxiv_id(text: str) -> Optional[str]:
+def _extract_arxiv_id(text: str) -> str | None:
     match = re.search(r'(\d{4}\.\d{4,5}(?:v\d+)?)', text)
     if match:
         return match.group(1)
@@ -497,16 +498,16 @@ def _extract_arxiv_id(text: str) -> Optional[str]:
     return None
 
 
-def _extract_arxiv_from_ids(ids: dict) -> Optional[str]:
+def _extract_arxiv_from_ids(ids: dict) -> str | None:
     """Extract arxiv ID from OpenAlex ids dict."""
-    openalex_id = ids.get("openalex", "")
+    ids.get("openalex", "")
     doi = ids.get("doi", "")
     if "arXiv" in doi:
         return _extract_arxiv_id(doi)
     return None
 
 
-def _reconstruct_abstract(inverted_index: dict) -> Optional[str]:
+def _reconstruct_abstract(inverted_index: dict) -> str | None:
     """Reconstruct abstract from OpenAlex's inverted index format."""
     if not inverted_index:
         return None
@@ -549,7 +550,7 @@ def _parse_sections(soup) -> list[dict]:
     return sections
 
 
-def _find_section(sections: list[dict], query: str) -> Optional[dict]:
+def _find_section(sections: list[dict], query: str) -> dict | None:
     try:
         idx = int(query)
         if 0 <= idx < len(sections):

@@ -1,8 +1,7 @@
 """Tests for system prompt builder."""
 
-import pytest
 
-from openmlr.agent.prompts import build_system_prompt, COMPACT_PROMPT
+from openmlr.agent.prompts import COMPACT_PROMPT, build_system_prompt
 from openmlr.agent.types import ToolSpec
 
 

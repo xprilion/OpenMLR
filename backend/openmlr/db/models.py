@@ -1,13 +1,20 @@
 """SQLAlchemy ORM models for all tables."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey,
-    JSON, Float,
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
 )
-from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
@@ -15,7 +22,7 @@ class Base(DeclarativeBase):
 
 
 def _utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class User(Base):

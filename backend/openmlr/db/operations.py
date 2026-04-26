@@ -1,13 +1,18 @@
 """Database CRUD operations for conversations and messages."""
 
-from datetime import datetime, timezone
-from sqlalchemy import select, delete, update, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from .models import (
-    Conversation, Message, ResearchCorpus, WritingProject, SandboxConfig,
-    ConversationTask, ConversationResource, AgentJob, UserSetting,
-)
+from datetime import UTC, datetime
 
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .models import (
+    AgentJob,
+    Conversation,
+    ConversationResource,
+    ConversationTask,
+    Message,
+    UserSetting,
+)
 
 # ---- Conversations ----
 
@@ -218,7 +223,7 @@ async def upsert_conversation_tasks(
     await db.execute(
         delete(ConversationTask).where(ConversationTask.conversation_id == conv_id)
     )
-    
+
     # Insert new tasks
     new_tasks = []
     for idx, task_data in enumerate(tasks):
@@ -231,7 +236,7 @@ async def upsert_conversation_tasks(
         )
         db.add(task)
         new_tasks.append(task)
-    
+
     await db.commit()
     return new_tasks
 
@@ -300,12 +305,12 @@ async def upsert_conversation_resources(
 ) -> list[ConversationResource]:
     """Replace all resources for a conversation with the new list."""
     import uuid as uuid_mod
-    
+
     # Delete existing resources
     await db.execute(
         delete(ConversationResource).where(ConversationResource.conversation_id == conv_id)
     )
-    
+
     # Insert new resources
     new_resources = []
     for res_data in resources:
@@ -319,7 +324,7 @@ async def upsert_conversation_resources(
         )
         db.add(resource)
         new_resources.append(resource)
-    
+
     await db.commit()
     return new_resources
 
@@ -446,18 +451,18 @@ async def update_job_status(
     job = await get_agent_job(db, job_id)
     if not job:
         return False
-    
+
     job.status = status
     if error:
         job.error = error
     if worker_id:
         job.worker_id = worker_id
-    
+
     if status == "running" and not job.started_at:
-        job.started_at = datetime.now(timezone.utc)
+        job.started_at = datetime.now(UTC)
     elif status in ("completed", "failed", "cancelled"):
-        job.completed_at = datetime.now(timezone.utc)
-    
+        job.completed_at = datetime.now(UTC)
+
     await db.commit()
     return True
 

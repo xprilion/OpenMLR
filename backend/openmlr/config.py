@@ -1,12 +1,12 @@
 """Configuration loading with layered priority: env vars > project config > defaults."""
 
 import os
-import yaml
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
 
+import yaml
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -70,7 +70,7 @@ def detect_cheap_model() -> str:
     return "openrouter/openai/gpt-4o-mini"
 
 
-def load_config(config_path: Optional[Path] = None) -> AgentConfig:
+def load_config(config_path: Path | None = None) -> AgentConfig:
     """Load agent configuration with layered priority."""
     config = AgentConfig()
 

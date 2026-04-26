@@ -6,7 +6,8 @@ then blocks until the user answers. Answers come back via POST /api/answers.
 """
 
 import asyncio
-from ..agent.types import ToolSpec, AgentEvent
+
+from ..agent.types import AgentEvent, ToolSpec
 
 
 def create_ask_user_tool() -> ToolSpec:
@@ -99,8 +100,9 @@ async def _handle_ask_user(
 
     # Try Redis-based answer relay first (works with background jobs)
     try:
-        from ..services.redis_pubsub import wait_for_answers
         import os
+
+        from ..services.redis_pubsub import wait_for_answers
         if os.environ.get("USE_BACKGROUND_JOBS", "").lower() in ("true", "1", "yes"):
             answers = await wait_for_answers(session.conversation_id, timeout=300)
     except Exception:
@@ -113,7 +115,7 @@ async def _handle_ask_user(
 
         try:
             answers = await asyncio.wait_for(answer_future, timeout=300)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             session.pending_answers = None
             return "User did not answer within 5 minutes.", False
 

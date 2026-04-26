@@ -6,8 +6,9 @@ across Celery workers and server restarts.
 
 import json
 import logging
-from datetime import datetime, timezone
-from ..agent.types import ToolSpec, AgentEvent
+from datetime import UTC, datetime
+
+from ..agent.types import AgentEvent, ToolSpec
 from ..db import operations as ops
 
 logger = logging.getLogger("openmlr.tools.writing")
@@ -31,7 +32,7 @@ async def _load_project(conv_id: int) -> dict | None:
     """Load project from DB if not already cached."""
     if conv_id in _projects:
         return _projects[conv_id]
-    
+
     session_factory = _get_session_factory()
     async with session_factory() as db:
         resource = await ops.get_resource_by_id(db, f"paper-{conv_id}")
@@ -51,7 +52,7 @@ async def _load_project(conv_id: int) -> dict | None:
 async def _save_project(conv_id: int, proj: dict) -> None:
     """Save project metadata and draft to DB."""
     _projects[conv_id] = proj
-    
+
     session_factory = _get_session_factory()
     async with session_factory() as db:
         # Save project metadata (structure, bibliography, etc.)
@@ -225,7 +226,7 @@ def _create_project(conv_id: int, title: str) -> tuple[str, bool]:
         "outline": [],
         "sections": {},
         "bibliography": [],
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     if conv_id:
         _projects[conv_id] = proj

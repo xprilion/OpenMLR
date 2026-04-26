@@ -2,8 +2,6 @@
 
 import os
 import re
-from typing import Optional
-from ..agent.types import ToolSpec
 
 
 def substitute_env_vars(text: str) -> str:
@@ -35,7 +33,7 @@ def process_mcp_config(config: dict) -> dict:
 async def connect_mcp_servers(
     mcp_configs: dict,
     tool_router,
-    blocklist: Optional[set[str]] = None,
+    blocklist: set[str] | None = None,
 ) -> int:
     """
     Connect to configured MCP servers and register their tools.

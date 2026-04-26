@@ -2,8 +2,8 @@
 
 import asyncio
 import time
-from typing import Optional
-from .interface import SandboxInterface, EnvironmentInfo, ExecutionResult
+
+from .interface import EnvironmentInfo, ExecutionResult, SandboxInterface
 
 
 class SSHSandbox(SandboxInterface):
@@ -15,8 +15,8 @@ class SSHSandbox(SandboxInterface):
         self.host: str = ""
         self.port: int = 22
         self.username: str = ""
-        self.key_path: Optional[str] = None
-        self.password: Optional[str] = None
+        self.key_path: str | None = None
+        self.password: str | None = None
         self.workdir: str = "~"
 
     async def create(self, config: dict) -> "SSHSandbox":

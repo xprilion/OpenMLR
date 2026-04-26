@@ -1,6 +1,7 @@
 """Celery application configuration for background agent jobs."""
 
 import os
+
 from celery import Celery
 from dotenv import load_dotenv
 
@@ -23,23 +24,23 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    
+
     # Task execution settings
     task_acks_late=True,  # Acknowledge after completion for reliability
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,  # Don't prefetch, process one at a time
-    
+
     # Result backend settings
     result_expires=3600,  # Results expire after 1 hour
-    
+
     # Worker settings
     worker_concurrency=4,  # Number of concurrent workers
-    
+
     # Task routing (optional - can route different tasks to different queues)
     task_routes={
         "openmlr.tasks.agent_tasks.process_agent_message": {"queue": "agent"},
     },
-    
+
     # Default queue
     task_default_queue="default",
 )

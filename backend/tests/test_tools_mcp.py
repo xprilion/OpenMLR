@@ -1,7 +1,8 @@
 """Tests for MCP tools — env var substitution and config processing."""
 
 import pytest
-from openmlr.tools.mcp import substitute_env_vars, process_mcp_config
+
+from openmlr.tools.mcp import process_mcp_config, substitute_env_vars
 
 pytestmark = pytest.mark.asyncio
 

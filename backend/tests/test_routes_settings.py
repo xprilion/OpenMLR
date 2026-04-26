@@ -1,6 +1,7 @@
 """Tests for settings API routes."""
 
 import os
+
 import pytest
 from httpx import AsyncClient
 

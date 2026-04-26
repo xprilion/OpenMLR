@@ -1,7 +1,8 @@
 """Tests for Redis pub/sub — event publishing, answer relay, interrupt signaling."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.mark.asyncio
@@ -138,7 +139,6 @@ class TestWaitForAnswers:
         mock_redis.delete.assert_called_once()
 
     async def test_returns_none_on_timeout(self):
-        import time
         from openmlr.services.redis_pubsub import wait_for_answers
 
         mock_redis = AsyncMock()
@@ -176,6 +176,7 @@ class TestModuleConstants:
     def test_redis_url_from_env(self, monkeypatch):
         monkeypatch.setenv("REDIS_URL", "redis://custom:6379/1")
         from importlib import reload
+
         import openmlr.services.redis_pubsub
         reload(openmlr.services.redis_pubsub)
         assert openmlr.services.redis_pubsub.REDIS_URL == "redis://custom:6379/1"

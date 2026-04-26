@@ -1,10 +1,15 @@
 """Tests for agent core types — AgentEvent, OpType, Message, ToolCall, ToolSpec, LLMResult, Submission."""
 
 import json
-import pytest
 
 from openmlr.agent.types import (
-    AgentEvent, OpType, Message, ToolCall, ToolSpec, LLMResult, Submission,
+    AgentEvent,
+    LLMResult,
+    Message,
+    OpType,
+    Submission,
+    ToolCall,
+    ToolSpec,
 )
 
 

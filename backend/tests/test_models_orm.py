@@ -7,12 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 pytestmark = pytest.mark.asyncio
 from sqlalchemy import select
 
-from openmlr.db.models import (
-    User, Conversation, Message, ResearchCorpus,
-    WritingProject, SandboxConfig, ConversationTask,
-    ConversationResource, AgentJob, UserSetting,
-)
 from openmlr.auth.security import hash_password
+from openmlr.db.models import (
+    AgentJob,
+    Conversation,
+    ConversationResource,
+    ConversationTask,
+    Message,
+    ResearchCorpus,
+    SandboxConfig,
+    User,
+    UserSetting,
+    WritingProject,
+)
 
 
 class TestUserModel:
@@ -237,7 +244,6 @@ class TestUserSetting:
         await db_session.commit()
 
         # Verify we can query the setting back
-        from sqlalchemy import select
         result = await db_session.execute(
             select(UserSetting).where(
                 UserSetting.user_id == test_user.id,

@@ -1,13 +1,18 @@
 """Tests for local tools — bash, read, write, edit, and path validation."""
 
 import os
-import tempfile
 from pathlib import Path
+
 import pytest
 
 from openmlr.tools.local import (
-    create_local_tools, _validate_path, _handle_read, _handle_write, _handle_edit,
-    DOCKER_IMAGE, CONTAINER_PREFIX, ALLOW_DIRECT_EXEC, WORKSPACE_ROOT,
+    CONTAINER_PREFIX,
+    DOCKER_IMAGE,
+    _handle_edit,
+    _handle_read,
+    _handle_write,
+    _validate_path,
+    create_local_tools,
 )
 
 

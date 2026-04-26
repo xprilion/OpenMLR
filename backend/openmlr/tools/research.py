@@ -1,13 +1,12 @@
 """Research sub-agent — spawns independent context for deep research."""
 
-import asyncio
 import json
 import time
-from ..agent.types import ToolSpec, Message, AgentEvent, ToolCall
-from ..agent.llm import LLMProvider
-from ..agent.doom_loop import detect_doom_loop
-from ..config import AgentConfig
 
+from ..agent.doom_loop import detect_doom_loop
+from ..agent.llm import LLMProvider
+from ..agent.types import AgentEvent, Message, ToolCall, ToolSpec
+from ..config import AgentConfig
 
 MAX_RESEARCH_ITERATIONS = 60
 TOKEN_WARN_THRESHOLD = 170000
@@ -136,7 +135,7 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
             # Execute tools and emit granular events
             for tc in result.tool_calls:
                 tool_count += 1
-                
+
                 # Emit sub-agent tool call
                 if session:
                     await session.emit(AgentEvent(
@@ -207,9 +206,9 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
 def _get_research_tool_specs() -> list[dict]:
     """Get the read-only tool subset for research."""
-    from .search import create_search_tools
-    from .papers import create_papers_tool
     from .github import create_github_tools
+    from .papers import create_papers_tool
+    from .search import create_search_tools
 
     tools = []
     for spec in create_search_tools():
@@ -248,9 +247,9 @@ def _get_research_tool_specs() -> list[dict]:
 
 async def _execute_research_tool(tc: ToolCall) -> tuple[str, bool]:
     """Execute a tool call for the research sub-agent."""
-    from .search import _handle_web_search
+    from .github import _handle_find_examples, _handle_read_file
     from .papers import _handle_papers
-    from .github import _handle_read_file, _handle_find_examples
+    from .search import _handle_web_search
 
     handlers = {
         "web_search": _handle_web_search,
