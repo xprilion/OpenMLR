@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { X } from 'lucide-react';
 import { api } from '../api';
 import type { Provider } from '../types';
 
@@ -147,21 +148,36 @@ export function SettingsPanel({ onClose }: Props) {
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>Settings</h2>
-          <div className="settings-header-right">
-            {saveMsg && <span className="save-flash">{saveMsg}</span>}
-            <button className="modal-close-btn" onClick={onClose}>&times;</button>
+    <div 
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-surface rounded-xl border border-border w-full max-w-2xl max-h-[80vh] flex flex-col shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-xl font-semibold text-text">Settings</h2>
+          <div className="flex items-center gap-3">
+            {saveMsg && <span className="text-sm text-success">{saveMsg}</span>}
+            <button 
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+              onClick={onClose}
+            >
+              <X size={18} />
+            </button>
           </div>
         </div>
 
-        <div className="settings-tabs">
+        {/* Tabs */}
+        <div className="flex border-b border-border px-6">
           {tabs.map((t) => (
             <button
               key={t.id}
-              className={`settings-tab ${tab === t.id ? 'active' : ''}`}
+              className={`py-3 px-4 text-sm font-medium transition-colors ${
+                tab === t.id ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+              }`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -169,25 +185,26 @@ export function SettingsPanel({ onClose }: Props) {
           ))}
         </div>
 
-        <div className="settings-body">
-          {/* ── Providers ── */}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Providers */}
           {tab === 'providers' && (
-            <div className="settings-section">
-              <p className="settings-hint">
+            <div>
+              <p className="text-sm text-text-dim mb-4">
                 API keys are stored in the database per-user. They override .env values.
               </p>
-              <div className="provider-list">
+              <div className="flex flex-col gap-3 mb-6">
                 {providers.map((p) => (
-                  <div key={p.id} className="provider-row">
-                    <div className="provider-info">
-                      <span className="provider-name">{p.name}</span>
-                      <span className={`provider-status ${p.configured ? 'ok' : 'missing'}`}>
+                  <div key={p.id} className="flex items-center gap-3 p-3 bg-bg rounded-lg border border-border">
+                    <div className="flex-1">
+                      <span className="font-medium text-text block">{p.name}</span>
+                      <span className={`text-xs ${p.configured ? 'text-success' : 'text-text-dim'}`}>
                         {p.configured ? 'Configured' : 'Not set'}
                       </span>
                     </div>
                     <input
                       type="password"
-                      className="provider-key-input"
+                      className="w-48 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                       placeholder={p.key_env}
                       value={keyInputs[p.id] || ''}
                       onChange={(e) =>
@@ -198,7 +215,7 @@ export function SettingsPanel({ onClose }: Props) {
                 ))}
               </div>
               <button
-                className="settings-save-btn"
+                className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
                 onClick={saveProviderKeys}
                 disabled={saving || Object.values(keyInputs).every((v) => !v?.trim())}
               >
@@ -207,114 +224,140 @@ export function SettingsPanel({ onClose }: Props) {
             </div>
           )}
 
-          {/* ── Agent ── */}
+          {/* Agent */}
           {tab === 'agent' && (
-            <div className="settings-section">
-              <p className="settings-hint">
+            <div>
+              <p className="text-sm text-text-dim mb-4">
                 Model used for new conversations. Leave blank to auto-detect from configured providers.
               </p>
-              <div className="settings-field">
-                <label>Default Model</label>
-                <input
-                  type="text"
-                  placeholder="auto-detect (e.g. anthropic/claude-sonnet-4)"
-                  value={agentForm.default_model}
-                  onChange={(e) => setAgentForm((f) => ({ ...f, default_model: e.target.value }))}
-                />
-              </div>
-              <div className="settings-field">
-                <label>Research / Title Model (cheaper)</label>
-                <input
-                  type="text"
-                  placeholder="auto-detect (e.g. openai/gpt-4o-mini)"
-                  value={agentForm.research_model}
-                  onChange={(e) => setAgentForm((f) => ({ ...f, research_model: e.target.value }))}
-                />
-              </div>
-              <div className="settings-field checkbox-field">
-                <label>
+              <div className="flex flex-col gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Default Model</label>
                   <input
-                    type="checkbox"
-                    checked={agentForm.yolo_mode}
-                    onChange={(e) => setAgentForm((f) => ({ ...f, yolo_mode: e.target.checked }))}
+                    type="text"
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                    placeholder="auto-detect (e.g. anthropic/claude-sonnet-4)"
+                    value={agentForm.default_model}
+                    onChange={(e) => setAgentForm((f) => ({ ...f, default_model: e.target.value }))}
                   />
-                  YOLO Mode (auto-approve all tool calls)
-                </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Research / Title Model (cheaper)</label>
+                  <input
+                    type="text"
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                    placeholder="auto-detect (e.g. openai/gpt-4o-mini)"
+                    value={agentForm.research_model}
+                    onChange={(e) => setAgentForm((f) => ({ ...f, research_model: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                      checked={agentForm.yolo_mode}
+                      onChange={(e) => setAgentForm((f) => ({ ...f, yolo_mode: e.target.checked }))}
+                    />
+                    <span className="text-sm text-text">YOLO Mode (auto-approve all tool calls)</span>
+                  </label>
+                </div>
               </div>
-              <button className="settings-save-btn" onClick={saveAgentSettings} disabled={saving}>
+              <button 
+                className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                onClick={saveAgentSettings} 
+                disabled={saving}
+              >
                 {saving ? 'Saving...' : 'Save Agent Settings'}
               </button>
             </div>
           )}
 
-          {/* ── Sandbox ── */}
+          {/* Sandbox */}
           {tab === 'sandbox' && (
-            <div className="settings-section">
-              <p className="settings-hint">
+            <div>
+              <p className="text-sm text-text-dim mb-4">
                 Execution environment for running code. Local runs on your machine.
               </p>
-              <div className="settings-field">
-                <label>Default Sandbox</label>
-                <select
-                  value={sandboxForm.default_sandbox}
-                  onChange={(e) => setSandboxForm((f) => ({ ...f, default_sandbox: e.target.value }))}
-                >
-                  <option value="local">Local</option>
-                  <option value="ssh">SSH Remote</option>
-                  <option value="modal">Modal Cloud</option>
-                </select>
+              <div className="flex flex-col gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Default Sandbox</label>
+                  <select
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text focus:border-primary focus:outline-none"
+                    value={sandboxForm.default_sandbox}
+                    onChange={(e) => setSandboxForm((f) => ({ ...f, default_sandbox: e.target.value }))}
+                  >
+                    <option value="local">Local</option>
+                    <option value="ssh">SSH Remote</option>
+                    <option value="modal">Modal Cloud</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Modal Token ID</label>
+                  <input
+                    type="password"
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                    placeholder="MODAL_TOKEN_ID"
+                    value={sandboxForm.modal_token_id}
+                    onChange={(e) => setSandboxForm((f) => ({ ...f, modal_token_id: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Modal Token Secret</label>
+                  <input
+                    type="password"
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                    placeholder="MODAL_TOKEN_SECRET"
+                    value={sandboxForm.modal_token_secret}
+                    onChange={(e) => setSandboxForm((f) => ({ ...f, modal_token_secret: e.target.value }))}
+                  />
+                </div>
               </div>
-              <div className="settings-field">
-                <label>Modal Token ID</label>
-                <input
-                  type="password"
-                  placeholder="MODAL_TOKEN_ID"
-                  value={sandboxForm.modal_token_id}
-                  onChange={(e) => setSandboxForm((f) => ({ ...f, modal_token_id: e.target.value }))}
-                />
-              </div>
-              <div className="settings-field">
-                <label>Modal Token Secret</label>
-                <input
-                  type="password"
-                  placeholder="MODAL_TOKEN_SECRET"
-                  value={sandboxForm.modal_token_secret}
-                  onChange={(e) => setSandboxForm((f) => ({ ...f, modal_token_secret: e.target.value }))}
-                />
-              </div>
-              <button className="settings-save-btn" onClick={saveSandboxSettings} disabled={saving}>
+              <button 
+                className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                onClick={saveSandboxSettings} 
+                disabled={saving}
+              >
                 {saving ? 'Saving...' : 'Save Sandbox Settings'}
               </button>
             </div>
           )}
 
-          {/* ── Writing ── */}
+          {/* Writing */}
           {tab === 'writing' && (
-            <div className="settings-section">
-              <p className="settings-hint">Paper writing preferences.</p>
-              <div className="settings-field">
-                <label>Citation Style</label>
-                <select
-                  value={writingForm.citation_style}
-                  onChange={(e) => setWritingForm((f) => ({ ...f, citation_style: e.target.value }))}
-                >
-                  <option value="apa">APA</option>
-                  <option value="ieee">IEEE</option>
-                  <option value="acm">ACM</option>
-                  <option value="chicago">Chicago</option>
-                </select>
+            <div>
+              <p className="text-sm text-text-dim mb-4">Paper writing preferences.</p>
+              <div className="flex flex-col gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Citation Style</label>
+                  <select
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text focus:border-primary focus:outline-none"
+                    value={writingForm.citation_style}
+                    onChange={(e) => setWritingForm((f) => ({ ...f, citation_style: e.target.value }))}
+                  >
+                    <option value="apa">APA</option>
+                    <option value="ieee">IEEE</option>
+                    <option value="acm">ACM</option>
+                    <option value="chicago">Chicago</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Export Format</label>
+                  <select
+                    className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-text focus:border-primary focus:outline-none"
+                    value={writingForm.export_format}
+                    onChange={(e) => setWritingForm((f) => ({ ...f, export_format: e.target.value }))}
+                  >
+                    <option value="markdown">Markdown</option>
+                    <option value="latex">LaTeX</option>
+                  </select>
+                </div>
               </div>
-              <div className="settings-field">
-                <label>Export Format</label>
-                <select
-                  value={writingForm.export_format}
-                  onChange={(e) => setWritingForm((f) => ({ ...f, export_format: e.target.value }))}
-                >
-                  <option value="markdown">Markdown</option>
-                  <option value="latex">LaTeX</option>
-                </select>
-              </div>
-              <button className="settings-save-btn" onClick={saveWritingSettings} disabled={saving}>
+              <button 
+                className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                onClick={saveWritingSettings} 
+                disabled={saving}
+              >
                 {saving ? 'Saving...' : 'Save Writing Settings'}
               </button>
             </div>

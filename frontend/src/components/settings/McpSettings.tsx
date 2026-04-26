@@ -137,53 +137,70 @@ export function McpSettings() {
   };
 
   return (
-    <div className="settings-section">
-      {saveMsg && <span className="save-flash">{saveMsg}</span>}
-      <p className="settings-hint">
+    <div>
+      {saveMsg && (
+        <div className="mb-4 px-4 py-2 bg-success/10 text-success rounded-lg text-sm">
+          {saveMsg}
+        </div>
+      )}
+      
+      <p className="text-text-dim mb-6">
         Configure MCP (Model Context Protocol) servers to extend the agent with additional tools.
         MCP servers can provide custom tools, data sources, and integrations.
       </p>
 
       {/* Server list */}
-      <div className="mcp-server-list">
+      <div className="flex flex-col gap-3 mb-6">
         {servers.length === 0 && editingIndex === null && (
-          <p className="mcp-empty">No MCP servers configured. Add one to extend the agent's capabilities.</p>
+          <div className="text-center py-8 bg-surface rounded-lg border border-border text-text-dim">
+            No MCP servers configured. Add one to extend the agent's capabilities.
+          </div>
         )}
         
         {servers.map((server, index) => (
           editingIndex === index ? null : (
-            <div key={server.name} className={`mcp-server-card ${!server.enabled ? 'disabled' : ''}`}>
-              <div className="mcp-server-header">
-                <div className="mcp-server-info">
-                  <span className="mcp-server-name">{server.name}</span>
-                  <span className={`mcp-server-transport ${server.transport}`}>
+            <div 
+              key={server.name} 
+              className={`p-4 rounded-lg border ${
+                !server.enabled ? 'bg-surface/50 border-border opacity-60' : 'bg-surface border-border'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <span className="font-medium text-text">{server.name}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    server.transport === 'http' ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'
+                  }`}>
                     {server.transport.toUpperCase()}
                   </span>
-                  <span className={`mcp-server-status ${server.enabled ? 'enabled' : 'disabled'}`}>
+                  <span className={`text-xs ${server.enabled ? 'text-success' : 'text-text-dim'}`}>
                     {server.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
-                <div className="mcp-server-actions">
-                  <button className="mcp-btn-small" onClick={() => toggleServer(index)}>
+                <div className="flex items-center gap-2">
+                  <button 
+                    className="px-3 py-1 text-xs text-text-dim hover:text-text hover:bg-surface-hover rounded transition-colors"
+                    onClick={() => toggleServer(index)}
+                  >
                     {server.enabled ? 'Disable' : 'Enable'}
                   </button>
-                  <button className="mcp-btn-small" onClick={() => startEdit(index)}>
+                  <button 
+                    className="px-3 py-1 text-xs text-text-dim hover:text-text hover:bg-surface-hover rounded transition-colors"
+                    onClick={() => startEdit(index)}
+                  >
                     Edit
                   </button>
-                  <button className="mcp-btn-small danger" onClick={() => deleteServer(index)}>
+                  <button 
+                    className="px-3 py-1 text-xs text-error hover:bg-error-bg rounded transition-colors"
+                    onClick={() => deleteServer(index)}
+                  >
                     Delete
                   </button>
                 </div>
               </div>
-              <div className="mcp-server-detail">
-                {server.transport === 'http' && server.url && (
-                  <span className="mcp-server-url">{server.url}</span>
-                )}
-                {server.transport === 'stdio' && server.command && (
-                  <span className="mcp-server-command">
-                    {server.command} {(server.args || []).join(' ')}
-                  </span>
-                )}
+              <div className="text-sm text-text-dim font-mono truncate">
+                {server.transport === 'http' && server.url}
+                {server.transport === 'stdio' && `${server.command} ${(server.args || []).join(' ')}`}
               </div>
             </div>
           )
@@ -191,77 +208,89 @@ export function McpSettings() {
 
         {/* Edit/Add form */}
         {editingIndex !== null && (
-          <div className="mcp-edit-form">
-            <h4>{editingIndex === -1 ? 'Add MCP Server' : 'Edit MCP Server'}</h4>
+          <div className="p-5 bg-bg rounded-lg border border-primary">
+            <h4 className="font-semibold text-text mb-4">
+              {editingIndex === -1 ? 'Add MCP Server' : 'Edit MCP Server'}
+            </h4>
             
-            <div className="settings-field">
-              <label>Server Name</label>
-              <input
-                type="text"
-                placeholder="my-mcp-server"
-                value={editForm.name}
-                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </div>
-
-            <div className="settings-field">
-              <label>Transport</label>
-              <select
-                value={editForm.transport}
-                onChange={(e) => setEditForm((f) => ({ 
-                  ...f, 
-                  transport: e.target.value as 'http' | 'stdio' 
-                }))}
-              >
-                <option value="http">HTTP (SSE)</option>
-                <option value="stdio">Standard I/O (Command)</option>
-              </select>
-            </div>
-
-            {editForm.transport === 'http' && (
-              <div className="settings-field">
-                <label>Server URL</label>
+            <div className="flex flex-col gap-4 mb-5">
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">Server Name</label>
                 <input
                   type="text"
-                  placeholder="http://localhost:8080/sse"
-                  value={editForm.url || ''}
-                  onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))}
+                  className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                  placeholder="my-mcp-server"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
                 />
               </div>
-            )}
 
-            {editForm.transport === 'stdio' && (
-              <>
-                <div className="settings-field">
-                  <label>Command</label>
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">Transport</label>
+                <select
+                  className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text focus:border-primary focus:outline-none"
+                  value={editForm.transport}
+                  onChange={(e) => setEditForm((f) => ({ 
+                    ...f, 
+                    transport: e.target.value as 'http' | 'stdio' 
+                  }))}
+                >
+                  <option value="http">HTTP (SSE)</option>
+                  <option value="stdio">Standard I/O (Command)</option>
+                </select>
+              </div>
+
+              {editForm.transport === 'http' && (
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1.5">Server URL</label>
                   <input
                     type="text"
-                    placeholder="npx or uvx or path/to/binary"
-                    value={editForm.command || ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, command: e.target.value }))}
+                    className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                    placeholder="http://localhost:8080/sse"
+                    value={editForm.url || ''}
+                    onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))}
                   />
                 </div>
-                <div className="settings-field">
-                  <label>Arguments (one per line)</label>
-                  <textarea
-                    placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;/path/to/dir"
-                    value={(editForm.args || []).join('\n')}
-                    onChange={(e) => setEditForm((f) => ({ 
-                      ...f, 
-                      args: e.target.value.split('\n').filter(a => a.trim()) 
-                    }))}
-                    rows={4}
-                  />
-                </div>
-              </>
-            )}
+              )}
 
-            <div className="mcp-form-actions">
-              <button className="mcp-btn cancel" onClick={cancelEdit}>
+              {editForm.transport === 'stdio' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-text mb-1.5">Command</label>
+                    <input
+                      type="text"
+                      className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
+                      placeholder="npx or uvx or path/to/binary"
+                      value={editForm.command || ''}
+                      onChange={(e) => setEditForm((f) => ({ ...f, command: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text mb-1.5">Arguments (one per line)</label>
+                    <textarea
+                      className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none resize-none"
+                      placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir"}
+                      value={(editForm.args || []).join('\n')}
+                      onChange={(e) => setEditForm((f) => ({ 
+                        ...f, 
+                        args: e.target.value.split('\n').filter(a => a.trim()) 
+                      }))}
+                      rows={4}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                className="flex-1 py-2.5 bg-surface-hover text-text-dim rounded-lg hover:text-text transition-colors"
+                onClick={cancelEdit}
+              >
                 Cancel
               </button>
               <button 
-                className="mcp-btn save" 
+                className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
                 onClick={saveEdit}
                 disabled={saving}
               >
@@ -273,22 +302,31 @@ export function McpSettings() {
       </div>
 
       {editingIndex === null && (
-        <button className="settings-save-btn" onClick={startAdd}>
+        <button 
+          className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-colors"
+          onClick={startAdd}
+        >
           + Add MCP Server
         </button>
       )}
 
-      <div className="mcp-help">
-        <h4>Popular MCP Servers</h4>
-        <ul>
-          <li><strong>Filesystem</strong>: <code>npx -y @modelcontextprotocol/server-filesystem /path</code></li>
-          <li><strong>GitHub</strong>: <code>npx -y @modelcontextprotocol/server-github</code></li>
-          <li><strong>Brave Search</strong>: <code>npx -y @modelcontextprotocol/server-brave-search</code></li>
-          <li><strong>Postgres</strong>: <code>npx -y @modelcontextprotocol/server-postgres postgres://...</code></li>
+      {/* Help section */}
+      <div className="mt-8 p-5 bg-surface rounded-lg border border-border">
+        <h4 className="font-semibold text-text mb-3">Popular MCP Servers</h4>
+        <ul className="flex flex-col gap-2 text-sm text-text-dim mb-4">
+          <li><strong className="text-text">Filesystem</strong>: <code className="bg-bg px-1.5 py-0.5 rounded text-xs">npx -y @modelcontextprotocol/server-filesystem /path</code></li>
+          <li><strong className="text-text">GitHub</strong>: <code className="bg-bg px-1.5 py-0.5 rounded text-xs">npx -y @modelcontextprotocol/server-github</code></li>
+          <li><strong className="text-text">Brave Search</strong>: <code className="bg-bg px-1.5 py-0.5 rounded text-xs">npx -y @modelcontextprotocol/server-brave-search</code></li>
+          <li><strong className="text-text">Postgres</strong>: <code className="bg-bg px-1.5 py-0.5 rounded text-xs">npx -y @modelcontextprotocol/server-postgres postgres://...</code></li>
         </ul>
-        <p>
+        <p className="text-sm text-text-dim">
           Learn more at{' '}
-          <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener noreferrer">
+          <a 
+            href="https://modelcontextprotocol.io/docs" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
             modelcontextprotocol.io
           </a>
         </p>

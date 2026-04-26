@@ -49,6 +49,24 @@ async def _load_project(conv_id: int) -> dict | None:
     return None
 
 
+async def _get_author_info(db, conv_id: int) -> dict | None:
+    """Fetch author settings for the conversation's user."""
+    # Get conversation to find user_id
+    conv = await ops.get_conversation(db, conv_id)
+    if not conv or not conv.user_id:
+        return None
+    
+    # Fetch author-related settings
+    author_info = {}
+    for key in ["author_name", "author_email", "author_affiliation", "author_orcid"]:
+        setting = await ops.get_user_setting(db, conv.user_id, "writing", key)
+        if setting:
+            field = key.replace("author_", "")
+            author_info[field] = setting
+    
+    return author_info if author_info else None
+
+
 async def _save_project(conv_id: int, proj: dict) -> None:
     """Save project metadata and draft to DB."""
     _projects[conv_id] = proj
@@ -63,8 +81,9 @@ async def _save_project(conv_id: int, proj: dict) -> None:
             resource_type="doc",
             content=json.dumps(proj, default=str),
         )
-        # Save the rendered draft as the paper resource
-        draft, _ = _get_draft_from_proj(proj)
+        # Fetch author info and save the rendered draft as the paper resource
+        author_info = await _get_author_info(db, conv_id)
+        draft, _ = _get_draft_from_proj(proj, author_info)
         await ops.upsert_paper_resource(db, conv_id, proj.get("title", "Paper"), draft)
 
 
@@ -203,7 +222,7 @@ async def _handle_writing(
             await _emit_resources(session, conv_id)
         return result, ok
     elif operation == "get_draft":
-        return _get_draft(conv_id)
+        return await _get_draft(conv_id)
     elif operation == "list_sections":
         return _list_sections(conv_id)
     else:
@@ -297,16 +316,40 @@ def _add_citation(conv_id: int, citation: dict) -> tuple[str, bool]:
     return f"Added citation [@{key}]. Bibliography: {len(proj['bibliography'])} entries.", True
 
 
-def _get_draft(conv_id: int) -> tuple[str, bool]:
+async def _get_draft(conv_id: int) -> tuple[str, bool]:
     proj = _get_project(conv_id)
     if not proj:
         return "No paper project exists.", False
-    return _get_draft_from_proj(proj)
+    
+    # Fetch author info
+    author_info = None
+    if conv_id:
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            author_info = await _get_author_info(db, conv_id)
+    
+    return _get_draft_from_proj(proj, author_info)
 
 
-def _get_draft_from_proj(proj: dict) -> tuple[str, bool]:
+def _get_draft_from_proj(proj: dict, author_info: dict | None = None) -> tuple[str, bool]:
     """Generate the full markdown draft from a project dict."""
     lines = [f"# {proj['title']}\n"]
+    
+    # Add author information block if available
+    if author_info:
+        author_lines = []
+        if author_info.get("name"):
+            author_lines.append(f"**{author_info['name']}**")
+        if author_info.get("affiliation"):
+            author_lines.append(f"*{author_info['affiliation']}*")
+        if author_info.get("email"):
+            author_lines.append(f"Email: {author_info['email']}")
+        if author_info.get("orcid"):
+            author_lines.append(f"ORCID: [{author_info['orcid']}](https://orcid.org/{author_info['orcid']})")
+        
+        if author_lines:
+            lines.append("\n".join(author_lines))
+            lines.append("\n---\n")
 
     if proj.get("outline"):
         for sec in proj["outline"]:

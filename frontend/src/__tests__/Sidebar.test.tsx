@@ -54,11 +54,10 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
-    expect(screen.getByText('+ New Chat')).toBeInTheDocument();
+    expect(screen.getByText('New Chat')).toBeInTheDocument();
   });
 
   it('renders conversation titles', () => {
@@ -72,7 +71,6 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -80,7 +78,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('Research project')).toBeInTheDocument();
   });
 
-  it('highlights current conversation', () => {
+  it('highlights current conversation with bg-primary/10 class', () => {
     render(
       <MemoryRouter>
         <Sidebar
@@ -91,12 +89,13 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
-    const items = document.querySelectorAll('.conversation-item');
-    expect(items[0].classList.contains('active')).toBe(true);
+    // Find the conversation item containing "First conversation"
+    const convItem = screen.getByText('First conversation').closest('div');
+    // Check that the parent container has the active styling (bg-primary/10)
+    expect(convItem?.className).toContain('bg-primary/10');
   });
 
   it('calls onSwitch when conversation clicked', () => {
@@ -111,7 +110,6 @@ describe('Sidebar', () => {
           onSwitch={onSwitch}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -130,7 +128,6 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -148,14 +145,13 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
     expect(screen.getByText('Test User')).toBeInTheDocument();
   });
 
-  it('renders action buttons', () => {
+  it('renders settings and sign out buttons', () => {
     render(
       <MemoryRouter>
         <Sidebar
@@ -166,52 +162,11 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
-    expect(screen.getByText(/Undo/)).toBeInTheDocument();
-    expect(screen.getByText(/Compact/)).toBeInTheDocument();
-  });
-
-  it('calls onAction for undo', () => {
-    const onAction = vi.fn();
-    render(
-      <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onAction={onAction}
-        />
-      </MemoryRouter>
-    );
-    fireEvent.click(screen.getByText(/Undo/));
-    expect(onAction).toHaveBeenCalledWith('undo');
-  });
-
-  it('calls onAction for compact', () => {
-    const onAction = vi.fn();
-    render(
-      <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onAction={onAction}
-        />
-      </MemoryRouter>
-    );
-    fireEvent.click(screen.getByText(/Compact/));
-    expect(onAction).toHaveBeenCalledWith('compact');
+    expect(screen.getByTitle('Settings')).toBeInTheDocument();
+    expect(screen.getByTitle('Sign out')).toBeInTheDocument();
   });
 
   it('filters conversations by search', () => {
@@ -225,7 +180,6 @@ describe('Sidebar', () => {
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
-          onAction={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -233,5 +187,24 @@ describe('Sidebar', () => {
     fireEvent.change(searchInput, { target: { value: 'Research' } });
     expect(screen.getByText('Research project')).toBeInTheDocument();
     expect(screen.queryByText('First conversation')).not.toBeInTheDocument();
+  });
+
+  it('calls onNew when new chat button clicked', () => {
+    const onNew = vi.fn();
+    render(
+      <MemoryRouter>
+        <Sidebar
+          conversations={mockConversations}
+          currentUuid={null}
+          user={mockUser}
+          convStatuses={{}}
+          onSwitch={vi.fn()}
+          onNew={onNew}
+          onDelete={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByText('New Chat'));
+    expect(onNew).toHaveBeenCalled();
   });
 });

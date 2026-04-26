@@ -92,7 +92,8 @@ describe('LoginPage', () => {
     await user.type(screen.getByPlaceholderText('Username'), 'testuser');
     await user.type(screen.getByPlaceholderText('Password'), 'password123');
 
-    const submitButton = screen.getByText('Sign In', { selector: '.login-submit' });
+    // Find the submit button by type="submit" attribute
+    const submitButton = document.querySelector('button[type="submit"]') as HTMLElement;
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -120,7 +121,7 @@ describe('LoginPage', () => {
     await user.type(screen.getByPlaceholderText('Username'), 'newuser');
     await user.type(screen.getByPlaceholderText('Display name (optional)'), 'New');
     await user.type(screen.getByPlaceholderText('Password'), 'password123');
-    await user.click(screen.getByText('Create Account', { selector: '.login-submit' }));
+    await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
     await waitFor(() => {
       expect(api.register).toHaveBeenCalledWith('newuser', 'password123', 'New');
@@ -140,7 +141,10 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Username'), 'wrong');
     await user.type(screen.getByPlaceholderText('Password'), 'wrong');
-    await user.click(screen.getByText('Sign In', { selector: '.login-submit' }));
+    
+    // Find the submit button by type="submit" attribute
+    const submitButton = document.querySelector('button[type="submit"]') as HTMLElement;
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
@@ -159,7 +163,10 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Username'), 'test');
     await user.type(screen.getByPlaceholderText('Password'), 'pass');
-    await user.click(screen.getByText('Sign In', { selector: '.login-submit' }));
+    
+    // Find the submit button by type="submit" attribute
+    const submitButton = document.querySelector('button[type="submit"]') as HTMLElement;
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(screen.getByText('Authentication failed')).toBeInTheDocument();
@@ -179,13 +186,17 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Username'), 'newuser');
     await user.type(screen.getByPlaceholderText('Password'), 'password');
-    await user.click(screen.getByText('Create Account', { selector: '.login-submit' }));
+    await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
     await waitFor(() => {
       expect(screen.getByText('Username taken')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    // Switch back to Sign In - get all buttons and find the one in the tabs (not the submit)
+    const signInButtons = screen.getAllByText('Sign In');
+    // The tab button doesn't have type="submit"
+    const tabButton = signInButtons.find(btn => btn.getAttribute('type') !== 'submit');
+    fireEvent.click(tabButton!);
     await waitFor(() => {
       expect(screen.queryByText('Username taken')).not.toBeInTheDocument();
     });
@@ -203,7 +214,10 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Username'), 'test');
     await user.type(screen.getByPlaceholderText('Password'), 'pass');
-    await user.click(screen.getByText('Sign In', { selector: '.login-submit' }));
+    
+    // Find the submit button by type="submit" attribute
+    const submitButton = document.querySelector('button[type="submit"]') as HTMLElement;
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(screen.getByText('Please wait...')).toBeInTheDocument();

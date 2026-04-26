@@ -33,7 +33,9 @@ describe('MessageList', () => {
     ];
     render(<MessageList messages={messages} />);
     expect(screen.getByText('plan')).toBeInTheDocument();
-    expect(screen.getByText('plan')).toHaveClass('msg-user-mode');
+    // Check that the badge has proper styling (Tailwind uses text-[10px] for the badge)
+    const badge = screen.getByText('plan');
+    expect(badge.className).toContain('uppercase');
     expect(screen.getByText('Plan my project')).toBeInTheDocument();
   });
 
@@ -111,14 +113,16 @@ describe('MessageList', () => {
     expect(screen.getByText('Context compacted')).toBeInTheDocument();
   });
 
-  it('renders error message', () => {
+  it('renders error message with error styling', () => {
     const messages: Message[] = [
       msg({ id: 'e1', role: 'error', content: 'Something went wrong' }),
     ];
     render(<MessageList messages={messages} />);
     const el = screen.getByText('Something went wrong');
     expect(el).toBeInTheDocument();
-    expect(el).toHaveClass('msg-error');
+    // Check that the parent div has error styling (Tailwind uses bg-error-bg and text-error)
+    const errorDiv = el.closest('div');
+    expect(errorDiv?.className).toContain('text-error');
   });
 
   it('tool call row toggles output on click', () => {
@@ -141,16 +145,16 @@ describe('MessageList', () => {
     // Output should NOT be visible initially (not expanded)
     expect(screen.queryByText(outputText)).not.toBeInTheDocument();
 
-    // Click to expand
-    const button = container.querySelector('.tc-compact') as HTMLElement;
+    // Click to expand - find the button with the tool name
+    const button = container.querySelector('button');
     expect(button).toBeTruthy();
-    fireEvent.click(button);
+    fireEvent.click(button!);
 
     // Output should now be visible
     expect(screen.getByText(outputText)).toBeInTheDocument();
 
     // Click again to collapse
-    fireEvent.click(button);
+    fireEvent.click(button!);
     expect(screen.queryByText(outputText)).not.toBeInTheDocument();
   });
 });

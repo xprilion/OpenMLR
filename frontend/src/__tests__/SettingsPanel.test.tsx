@@ -82,13 +82,16 @@ describe('SettingsPanel', () => {
     expect(screen.getByText('Export Format')).toBeInTheDocument();
   });
 
-  it('calls onClose when close clicked', async () => {
+  it('calls onClose when close button clicked', async () => {
     const onClose = vi.fn();
-    render(<SettingsPanel onClose={onClose} />);
+    const { container } = render(<SettingsPanel onClose={onClose} />);
     await waitFor(() => {
-      const closeBtn = screen.getByText('×');
-      fireEvent.click(closeBtn);
+      expect(screen.getByText('Settings')).toBeInTheDocument();
     });
+    // Close button now uses lucide X icon, find it by the SVG class
+    const closeBtn = container.querySelector('.lucide-x')?.closest('button');
+    expect(closeBtn).toBeTruthy();
+    fireEvent.click(closeBtn!);
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -96,9 +99,11 @@ describe('SettingsPanel', () => {
     const onClose = vi.fn();
     render(<SettingsPanel onClose={onClose} />);
     await waitFor(() => {
-      const overlay = document.querySelector('.modal-overlay');
-      fireEvent.click(overlay!);
+      expect(screen.getByText('Settings')).toBeInTheDocument();
     });
+    // The overlay is the fixed div with bg-black/60
+    const overlay = document.querySelector('.fixed.inset-0');
+    fireEvent.click(overlay!);
     expect(onClose).toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { api } from '../api';
 import type { QuestionsPayload } from '../types';
 
@@ -55,59 +56,103 @@ export function QuestionDrawer({ payload, onDone, onClose }: Props) {
   };
 
   return (
-    <div className="question-drawer">
-      <div className="question-drawer-header">
-        <div className="question-drawer-title">{context || 'Clarifying questions'}</div>
-        <div className="question-tabs">
+    <div className="absolute inset-x-0 bottom-0 bg-surface border-t border-border shadow-xl animate-slide-up z-30">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="font-semibold text-text">{context || 'Clarifying questions'}</div>
+        <div className="flex items-center gap-2">
           {questions.map((q, i) => (
             <button
               key={q.id}
-              className={`question-tab ${i === currentIdx ? 'active' : ''} ${answers[q.id] ? 'answered' : ''}`}
+              className={`w-8 h-8 rounded-full text-sm font-medium transition-all ${
+                i === currentIdx 
+                  ? 'bg-primary text-white' 
+                  : answers[q.id] 
+                    ? 'bg-success/20 text-success border border-success' 
+                    : 'bg-surface-hover text-text-dim border border-border'
+              }`}
               onClick={() => setCurrentIdx(i)}
-            >{i + 1}</button>
-          ))}
-        </div>
-        <button className="question-drawer-close" onClick={onClose}>&times;</button>
-      </div>
-
-      <div className="question-body">
-        <div className="question-text">{current.question}</div>
-        <div className="question-options">
-          {current.options.map((opt) => (
-            <button
-              key={opt.label}
-              className={`question-option ${answers[current.id] === opt.label && !textInputs[current.id] ? 'selected' : ''}`}
-              onClick={() => selectOption(opt.label)}
             >
-              <span className="option-label">{opt.label}</span>
-              {opt.description && <span className="option-desc">{opt.description}</span>}
+              {i + 1}
             </button>
           ))}
         </div>
+        <button 
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="px-6 py-5">
+        <div className="text-lg font-medium text-text mb-4">{current.question}</div>
+        
+        <div className="flex flex-wrap gap-2 mb-4">
+          {current.options.map((opt) => (
+            <button
+              key={opt.label}
+              className={`px-4 py-2.5 rounded-lg text-sm transition-all ${
+                answers[current.id] === opt.label && !textInputs[current.id]
+                  ? 'bg-primary text-white'
+                  : 'bg-surface-hover text-text border border-border hover:border-primary'
+              }`}
+              onClick={() => selectOption(opt.label)}
+            >
+              <span className="font-medium">{opt.label}</span>
+              {opt.description && <span className="block text-xs opacity-70 mt-0.5">{opt.description}</span>}
+            </button>
+          ))}
+        </div>
+        
         {allowText && (
-          <div className="question-text-input">
-            <input
-              type="text"
-              placeholder="Or type your own answer..."
-              value={textInputs[current.id] || ''}
-              onChange={(e) => setTextAnswer(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && textInputs[current.id]?.trim()) {
-                  if (!isLast) setCurrentIdx((i) => i + 1);
-                }
-              }}
-            />
-          </div>
+          <input
+            type="text"
+            className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
+            placeholder="Or type your own answer..."
+            value={textInputs[current.id] || ''}
+            onChange={(e) => setTextAnswer(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && textInputs[current.id]?.trim()) {
+                if (!isLast) setCurrentIdx((i) => i + 1);
+              }
+            }}
+          />
         )}
       </div>
 
-      <div className="question-footer">
-        <div className="question-progress">{Object.keys(answers).length} / {questions.length}</div>
-        <div className="question-actions">
-          {currentIdx > 0 && <button className="question-nav" onClick={() => setCurrentIdx((i) => i - 1)}>Previous</button>}
-          {!isLast && <button className="question-nav" onClick={() => setCurrentIdx((i) => i + 1)}>Next</button>}
+      {/* Footer */}
+      <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-bg">
+        <div className="text-sm text-text-dim">
+          {Object.keys(answers).length} / {questions.length}
+        </div>
+        <div className="flex items-center gap-3">
+          {currentIdx > 0 && (
+            <button 
+              className="flex items-center gap-1 px-4 py-2 text-sm text-text-dim hover:text-text transition-colors"
+              onClick={() => setCurrentIdx((i) => i - 1)}
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+          )}
+          {!isLast && (
+            <button 
+              className="flex items-center gap-1 px-4 py-2 text-sm text-text-dim hover:text-text transition-colors"
+              onClick={() => setCurrentIdx((i) => i + 1)}
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          )}
           {allAnswered && (
-            <button className="question-submit" onClick={submit} disabled={submitting}>
+            <button 
+              className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-all disabled:opacity-50"
+              onClick={submit} 
+              disabled={submitting}
+            >
+              <Send size={16} />
               {submitting ? 'Submitting...' : suggest_mode ? `Submit & ${suggest_mode}` : 'Submit'}
             </button>
           )}

@@ -21,14 +21,16 @@ describe('InputArea', () => {
     render(<InputArea {...defaultProps()} />);
     const toggle = screen.getByText('P');
     expect(toggle).toBeInTheDocument();
-    expect(toggle).toHaveClass('mode-plan');
+    // Tailwind uses bg-warning (yellow) for plan mode
+    expect(toggle.className).toContain('bg-warning');
   });
 
   it('renders mode toggle button showing E in execute mode', () => {
     render(<InputArea {...defaultProps({ mode: 'execute' })} />);
     const toggle = screen.getByText('E');
     expect(toggle).toBeInTheDocument();
-    expect(toggle).toHaveClass('mode-execute');
+    // Tailwind uses bg-primary (blue) for execute mode
+    expect(toggle.className).toContain('bg-primary');
   });
 
   it('clicking toggle switches mode', () => {
@@ -46,7 +48,8 @@ describe('InputArea', () => {
         {...defaultProps({ text: 'hello', onSend, onTextChange })}
       />,
     );
-    const sendBtn = screen.getByRole('button', { name: '↑' });
+    // Send button now uses Lucide icon and title attribute
+    const sendBtn = screen.getByTitle('Send message');
     fireEvent.click(sendBtn);
     expect(onSend).toHaveBeenCalledWith('hello', 'plan');
     expect(onTextChange).toHaveBeenCalledWith('');
@@ -85,7 +88,7 @@ describe('InputArea', () => {
 
   it('empty text disables send button', () => {
     render(<InputArea {...defaultProps({ text: '' })} />);
-    const sendBtn = screen.getByRole('button', { name: '↑' });
+    const sendBtn = screen.getByTitle('Send message');
     expect(sendBtn).toBeDisabled();
   });
 

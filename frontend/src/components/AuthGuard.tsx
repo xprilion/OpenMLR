@@ -26,7 +26,11 @@ export function AuthGuard({ onAuth, user }: Props) {
   }, [user, onAuth]);
 
   if (checking) {
-    return <div className="app loading-screen"><div className="loading-spinner">Loading...</div></div>;
+    return (
+      <div className="flex flex-col h-screen bg-bg items-center justify-center">
+        <div className="text-text-dim animate-pulse">Loading...</div>
+      </div>
+    );
   }
 
   if (!user) {

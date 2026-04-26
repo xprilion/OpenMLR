@@ -74,7 +74,7 @@ describe('ConfirmDialog', () => {
 
   it('calls onCancel when overlay clicked', () => {
     const onCancel = vi.fn();
-    render(
+    const { container } = render(
       <ConfirmDialog
         title="Test"
         message="Test message"
@@ -82,8 +82,9 @@ describe('ConfirmDialog', () => {
         onCancel={onCancel}
       />
     );
-    const overlay = document.querySelector('.modal-overlay');
-    fireEvent.click(overlay!);
+    // The overlay is the outermost div with fixed positioning
+    const overlay = container.firstChild as HTMLElement;
+    fireEvent.click(overlay);
     expect(onCancel).toHaveBeenCalled();
   });
 
@@ -115,7 +116,7 @@ describe('ConfirmDialog', () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  it('applies danger class to confirm button', () => {
+  it('applies danger styling to confirm button', () => {
     render(
       <ConfirmDialog
         title="Danger"
@@ -126,10 +127,11 @@ describe('ConfirmDialog', () => {
       />
     );
     const confirmBtn = screen.getByRole('button', { name: 'Confirm' });
-    expect(confirmBtn.className).toContain('btn-danger');
+    // Tailwind uses bg-error for danger buttons
+    expect(confirmBtn.className).toContain('bg-error');
   });
 
-  it('uses btn-confirm class for non-danger', () => {
+  it('uses primary styling for non-danger', () => {
     render(
       <ConfirmDialog
         title="Safe"
@@ -139,7 +141,8 @@ describe('ConfirmDialog', () => {
       />
     );
     const confirmBtn = screen.getByRole('button', { name: 'Confirm' });
-    expect(confirmBtn.className).toContain('btn-confirm');
+    // Tailwind uses bg-primary for normal buttons
+    expect(confirmBtn.className).toContain('bg-primary');
   });
 
   it('cleans up Escape listener on unmount', () => {

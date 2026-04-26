@@ -127,10 +127,13 @@ describe('QuestionDrawer', () => {
   it('calls onClose when X clicked', () => {
     vi.mocked(api.submitAnswers).mockResolvedValue({});
     const onClose = vi.fn();
-    render(
+    const { container } = render(
       <QuestionDrawer payload={defaultPayload} onDone={vi.fn()} onClose={onClose} />
     );
-    fireEvent.click(screen.getByText('×'));
+    // Close button now uses Lucide X icon
+    const closeBtn = container.querySelector('.lucide-x')?.closest('button');
+    expect(closeBtn).toBeTruthy();
+    fireEvent.click(closeBtn!);
     expect(onClose).toHaveBeenCalled();
   });
 });

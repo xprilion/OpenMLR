@@ -36,20 +36,31 @@ export function ConfirmDialog({
   }, [onCancel]);
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>{title}</h3>
-        <p className="confirm-message">{message}</p>
-        <div className="confirm-actions">
+    <div 
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={onCancel}
+    >
+      <div 
+        className="bg-surface rounded-xl border border-border p-6 max-w-md w-full shadow-xl animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-text mb-3">{title}</h3>
+        <p className="text-text-dim mb-6 leading-relaxed">{message}</p>
+        
+        <div className="flex gap-3">
           <button
             ref={cancelRef}
-            className="btn-cancel"
+            className="flex-1 py-2.5 px-4 rounded-lg border border-border text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
             onClick={onCancel}
           >
             {cancelLabel}
           </button>
           <button
-            className={danger ? 'btn-danger' : 'btn-confirm'}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-white transition-colors ${
+              danger 
+                ? 'bg-error hover:opacity-90' 
+                : 'bg-primary hover:bg-primary-hover'
+            }`}
             onClick={onConfirm}
           >
             {confirmLabel}

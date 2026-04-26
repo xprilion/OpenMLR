@@ -179,7 +179,9 @@ describe('RightPanel', () => {
         onViewReport={vi.fn()}
       />
     );
-    const badge = document.querySelector('.toggle-badge');
+    // The badge is shown inside the toggle button with task count
+    const toggleButton = screen.getByTitle('Tasks & resources');
+    const badge = toggleButton.querySelector('span');
     expect(badge?.textContent).toBe('3');
   });
 });

@@ -19,7 +19,21 @@ describe('WritingSettings', () => {
   it('renders hint', async () => {
     render(<WritingSettings />);
     await waitFor(() => {
-      expect(screen.getByText('Paper writing preferences.')).toBeInTheDocument();
+      expect(screen.getByText('Paper writing preferences and author information.')).toBeInTheDocument();
+    });
+  });
+
+  it('renders author information fields', async () => {
+    render(<WritingSettings />);
+    await waitFor(() => {
+      expect(screen.getByText('Author Information')).toBeInTheDocument();
+      expect(screen.getByText('Full Name')).toBeInTheDocument();
+      expect(screen.getByText('Email')).toBeInTheDocument();
+      expect(screen.getByText('Affiliation')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('e.g., Jane Doe')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('e.g., jane.doe@university.edu')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('e.g., Department of Computer Science, MIT')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('e.g., 0000-0002-1234-5678')).toBeInTheDocument();
     });
   });
 
