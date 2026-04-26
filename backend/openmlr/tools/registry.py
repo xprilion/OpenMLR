@@ -9,47 +9,28 @@ from ..agent.types import ToolSpec, ToolCall
 # Tools not listed are allowed in all modes
 MODE_TOOL_RESTRICTIONS = {
     "plan": {
-        # In plan mode: only planning, asking, and reading tools
+        # Plan mode: ask questions, create plans, read context — NO execution tools
         "allowed": {
             "ask_user", "plan_tool",
-            # Read-only tools
+            # Read-only tools for gathering context
             "read_file", "list_dir", "glob_files", "grep_search",
-        },
-        "blocked_message": (
-            "Tool '{tool}' is not available in PLAN mode. "
-            "Plan mode is for planning and asking questions only. "
-            "Suggest switching to research or write mode using ask_user with suggest_mode."
-        ),
-    },
-    "research": {
-        # In research mode: search, papers, reading, planning — NO ask_user
-        "allowed": {
-            "plan_tool",
-            "web_search", "papers", "research",
-            "read_file", "list_dir", "glob_files", "grep_search",
+            "web_search", "papers",
             "github_search", "github_read_file", "github_read_repo",
         },
         "blocked_message": (
-            "Tool '{tool}' is not available in RESEARCH mode. "
-            "Research mode is for searching, reading papers, and gathering information. "
-            "Do NOT ask the user questions in this mode — just do the research. "
-            "If you need clarification, present your findings first."
+            "Tool '{tool}' is not available in PLAN mode. "
+            "Plan mode is for asking questions, planning tasks, and gathering context. "
+            "Switch to Execute mode to run tools, write content, or execute code."
         ),
     },
-    "write": {
-        # In write mode: writing, planning, reading, limited search — NO ask_user
-        "allowed": {
-            "plan_tool", "writing",
-            "read_file", "list_dir", "glob_files", "grep_search",
-            "web_search", "papers",  # For citations
-        },
+    "execute": {
+        # Execute mode: all tools EXCEPT ask_user — just do the work
+        "blocked": {"ask_user"},
         "blocked_message": (
-            "Tool '{tool}' is not available in WRITE mode. "
-            "Write mode is for drafting and editing content. "
-            "Do NOT ask the user questions in this mode — just write."
+            "Tool '{tool}' is not available in EXECUTE mode. "
+            "Execute mode is for doing the work — do not ask questions, just execute the plan."
         ),
     },
-    # "general" mode has no restrictions
 }
 
 
@@ -85,13 +66,23 @@ class ToolRouter:
         """Check if a tool is allowed in the current mode.
         
         Returns (allowed, error_message).
+        Supports both 'allowed' (whitelist) and 'blocked' (blacklist) sets.
         """
         if self._current_mode not in MODE_TOOL_RESTRICTIONS:
             return True, ""
         
         restrictions = MODE_TOOL_RESTRICTIONS[self._current_mode]
-        allowed_tools = restrictions.get("allowed", set())
         
+        # Blacklist mode: specific tools are blocked
+        blocked_tools = restrictions.get("blocked", set())
+        if blocked_tools:
+            if name in blocked_tools:
+                error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
+                return False, error_msg.format(tool=name, mode=self._current_mode)
+            return True, ""
+        
+        # Whitelist mode: only specific tools allowed
+        allowed_tools = restrictions.get("allowed", set())
         if name in allowed_tools:
             return True, ""
         
@@ -162,7 +153,14 @@ class ToolRouter:
             kwargs = dict(arguments)
             if "session" in sig.parameters:
                 kwargs["session"] = session
-            return await tool.handler(**kwargs) if kwargs else await tool.handler(arguments)
+            # Also pass tool_call_id if the handler accepts it
+            if "tool_call_id" in sig.parameters and "tool_call_id" not in kwargs:
+                kwargs["tool_call_id"] = kwargs.pop("id", "")
+            try:
+                return await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
+            except TypeError as e:
+                # Handle argument mismatches (model sending wrong param names)
+                return f"Tool argument error: {e}. Expected parameters: {list(sig.parameters.keys())}", False
 
         # MCP tool (no handler — dispatch to MCP client)
         if self._mcp_client:

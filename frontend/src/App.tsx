@@ -63,7 +63,6 @@ function ChatUI({
   const [viewingReport, setViewingReport] = useState<Resource | null>(null);
   const [inputMode, setInputMode] = useState<Mode>('plan');
   const [inputText, setInputText] = useState('');
-  const [pendingModeSwitch, setPendingModeSwitch] = useState<string | null>(null);
 
   // Ref to always have current conv UUID in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -491,21 +490,6 @@ function ChatUI({
             setCurrentConvStatus('processing');
             setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]); 
           }} onClose={() => setQuestionsPayload(null)} />}
-          {pendingModeSwitch && (
-            <div className="mode-switch-prompt">
-              <div className="mode-switch-content">
-                <span>Agent suggests switching to <strong>{pendingModeSwitch}</strong> mode</span>
-                <div className="mode-switch-actions">
-                  <button className="btn-confirm" onClick={() => { setInputMode(pendingModeSwitch as Mode); setPendingModeSwitch(null); setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: `Switched to ${pendingModeSwitch} mode.` }]); }}>
-                    Switch to {pendingModeSwitch}
-                  </button>
-                  <button className="btn-cancel" onClick={() => { setPendingModeSwitch(null); setMessages((prev) => [...prev, { id: nextId(), role: 'system', content: `Mode switch declined. Staying in ${inputMode} mode.` }]); }}>
-                    Stay in {inputMode}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
           <InputArea 
             disabled={effectiveProcessing} 
             showStop={effectiveTurnActive}

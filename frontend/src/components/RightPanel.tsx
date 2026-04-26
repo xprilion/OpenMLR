@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { api } from '../api';
 import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
 
 interface Props {
@@ -13,11 +14,57 @@ interface Props {
 
 const STATUS_ICON: Record<string, string> = { pending: '○', in_progress: '◉', completed: '✓', cancelled: '✗' };
 const STATUS_CLASS: Record<string, string> = { pending: 'task-pending', in_progress: 'task-progress', completed: 'task-done', cancelled: 'task-cancelled' };
-const RES_ICON: Record<string, string> = { paper: '📄', code: '💻', dataset: '📊', doc: '📝', report: '📋' };
+const RES_ICON: Record<string, string> = { plan: '📌', paper: '📄', code: '💻', dataset: '📊', doc: '📝', report: '📋' };
+
+/** Convert markdown to a basic LaTeX document. */
+function markdownToLatex(md: string, title: string): string {
+  const lines: string[] = [
+    '\\documentclass{article}',
+    '\\usepackage[utf8]{inputenc}',
+    '\\usepackage{amsmath,amssymb}',
+    '\\usepackage{hyperref}',
+    '',
+    `\\title{${title}}`,
+    '\\author{}',
+    '\\date{\\today}',
+    '',
+    '\\begin{document}',
+    '\\maketitle',
+    '',
+  ];
+  for (const line of md.split('\n')) {
+    if (line.startsWith('### ')) {
+      lines.push(`\\subsubsection{${line.slice(4)}}`);
+    } else if (line.startsWith('## ')) {
+      lines.push(`\\subsection{${line.slice(3)}}`);
+    } else if (line.startsWith('# ')) {
+      // Skip title heading — already in \maketitle
+      continue;
+    } else {
+      lines.push(line);
+    }
+  }
+  lines.push('\\end{document}');
+  return lines.join('\n');
+}
+
+/** Trigger a file download from a string. */
+function downloadFile(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 export function RightPanel({ tasks, resources, contextUsage, searchBudget, visible, onToggle, onViewReport }: Props) {
   const hasContent = tasks.length > 0 || resources.length > 0;
   const [splitY, setSplitY] = useState(50); // percentage for tasks section
+  const [exporting, setExporting] = useState(false);
   const dragging = useRef(false);
   const panelRef = useRef<HTMLElement>(null);
 
@@ -34,6 +81,31 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
   }, []);
 
   const onMouseUp = useCallback(() => { dragging.current = false; }, []);
+
+  // Find the paper resource (if any)
+  const paperResource = resources.find((r) => r.type === 'paper');
+  // Non-paper resources for the general list
+  const otherResources = resources.filter((r) => r.type !== 'paper');
+
+  /** Fetch paper content and download in the given format. */
+  const handleExport = useCallback(async (format: 'markdown' | 'latex') => {
+    if (!paperResource?.id) return;
+    setExporting(true);
+    try {
+      const data = await api.getReport(paperResource.id);
+      const content: string = data.content || '';
+      if (format === 'latex') {
+        const latex = markdownToLatex(content, paperResource.title);
+        downloadFile(latex, 'paper.tex', 'application/x-tex');
+      } else {
+        downloadFile(content, 'paper.md', 'text/markdown');
+      }
+    } catch {
+      // silently fail — could add a toast here
+    } finally {
+      setExporting(false);
+    }
+  }, [paperResource]);
 
   if (!visible) {
     if (!hasContent && !contextUsage) return null;
@@ -89,6 +161,37 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
         </div>
       )}
 
+      {/* Paper section — only shown when a paper resource exists */}
+      {paperResource && (
+        <div className="right-section paper-section">
+          <div className="right-section-label">Paper</div>
+          <div className="paper-card">
+            <button className="paper-title-btn" onClick={() => onViewReport(paperResource)}>
+              <span className="resource-icon">📄</span>
+              <span className="paper-title-text">{paperResource.title}</span>
+            </button>
+            <div className="paper-actions">
+              <button
+                className="paper-export-btn"
+                disabled={exporting}
+                onClick={() => handleExport('markdown')}
+                title="Download as Markdown"
+              >
+                .md
+              </button>
+              <button
+                className="paper-export-btn"
+                disabled={exporting}
+                onClick={() => handleExport('latex')}
+                title="Download as LaTeX"
+              >
+                .tex
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tasks section */}
       <div className="right-section" style={{ flex: `0 0 ${splitY}%`, overflow: 'auto' }}>
         <div className="right-section-label">Tasks ({done}/{tasks.length})</div>
@@ -108,13 +211,13 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
 
       {/* Resources section */}
       <div className="right-section" style={{ flex: `0 0 ${100 - splitY}%`, overflow: 'auto' }}>
-        <div className="right-section-label">Resources ({resources.length})</div>
+        <div className="right-section-label">Resources ({otherResources.length})</div>
         <div className="resource-list">
-          {resources.map((r, i) => (
-            <div key={i} className={`resource-item ${r.type === 'report' ? 'resource-report' : ''}`}>
+          {[...otherResources].sort((a, b) => (a.type === 'plan' ? -1 : b.type === 'plan' ? 1 : 0)).map((r, i) => (
+            <div key={i} className={`resource-item ${r.type === 'report' ? 'resource-report' : ''} ${r.type === 'plan' ? 'resource-plan' : ''}`}>
               <span className="resource-icon">{RES_ICON[r.type] || '📄'}</span>
               <div className="resource-info">
-                {r.type === 'report' && r.id ? (
+                {(r.type === 'report' || r.type === 'plan') && r.id ? (
                   <button className="resource-title-btn" onClick={() => onViewReport(r)}>
                     {r.title}
                   </button>
@@ -129,7 +232,7 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
               </div>
             </div>
           ))}
-          {resources.length === 0 && <div className="right-empty-inline">No resources yet</div>}
+          {otherResources.length === 0 && <div className="right-empty-inline">No resources yet</div>}
         </div>
       </div>
     </aside>

@@ -156,6 +156,41 @@ async def publish_answers(conversation_id: int, answers: dict) -> None:
         logger.warning(f"Failed to publish answers to Redis: {e}")
 
 
+INTERRUPT_KEY_PREFIX = "openmlr:interrupt:"
+
+
+async def publish_interrupt(conversation_id: int) -> None:
+    """Set a Redis key to signal interruption to a background worker."""
+    try:
+        client = await get_redis()
+        key = f"{INTERRUPT_KEY_PREFIX}{conversation_id}"
+        await client.set(key, "1", ex=60)  # TTL 60 seconds
+        logger.info(f"Published interrupt for conversation {conversation_id}")
+    except Exception as e:
+        logger.warning(f"Failed to publish interrupt to Redis: {e}")
+
+
+async def check_interrupt(conversation_id: int) -> bool:
+    """Check whether an interrupt signal exists for the given conversation."""
+    try:
+        client = await get_redis()
+        key = f"{INTERRUPT_KEY_PREFIX}{conversation_id}"
+        return await client.exists(key) > 0
+    except Exception as e:
+        logger.warning(f"Failed to check interrupt in Redis: {e}")
+        return False
+
+
+async def clear_interrupt(conversation_id: int) -> None:
+    """Remove the interrupt key after it has been consumed."""
+    try:
+        client = await get_redis()
+        key = f"{INTERRUPT_KEY_PREFIX}{conversation_id}"
+        await client.delete(key)
+    except Exception as e:
+        logger.warning(f"Failed to clear interrupt in Redis: {e}")
+
+
 async def wait_for_answers(conversation_id: int, timeout: float = 300) -> dict | None:
     """Wait for user answers from Redis. Used by background worker's ask_user handler."""
     try:

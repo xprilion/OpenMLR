@@ -6,10 +6,21 @@ Tasks and resources are persisted to the database per conversation.
 import logging
 from datetime import datetime, timezone
 from ..agent.types import ToolSpec, AgentEvent
-from ..db.engine import async_session
 from ..db import operations as ops
 
 logger = logging.getLogger("openmlr.tools.plan")
+
+
+def _get_session_factory():
+    """Get the correct async session factory for the current context (web or worker)."""
+    from ..db.engine import _worker_engine, async_session
+    # If we're in a Celery worker context, use the worker engine
+    eng = _worker_engine.get(None)
+    if eng is not None:
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+        return async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
+    # Otherwise use the main web engine
+    return async_session
 
 
 def create_plan_tool() -> ToolSpec:
@@ -82,7 +93,8 @@ async def _handle_plan(
         logger.warning("No conversation_id in session, plan tool cannot persist")
         return "Error: No active conversation.", False
 
-    async with async_session() as db:
+    session_factory = _get_session_factory()
+    async with session_factory() as db:
         if operation == "create":
             if not tasks:
                 return "Provide 'tasks' array.", False
@@ -90,6 +102,12 @@ async def _handle_plan(
             task_list = [{"title": t.get("title", ""), "status": t.get("status", "pending")} for t in tasks]
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
+            
+            # Auto-save plan as PLAN.md resource (pinned)
+            plan_md = _generate_plan_md(task_list)
+            await ops.upsert_plan_resource(db, conv_id, plan_md)
+            await _emit_resources(session, conv_id, db)
+            
             return await _format_plan(db, conv_id), True
 
         elif operation == "add":
@@ -102,6 +120,11 @@ async def _handle_plan(
             task_list.append({"title": title, "status": "pending"})
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
+            
+            # Update PLAN.md
+            await ops.upsert_plan_resource(db, conv_id, _generate_plan_md(task_list))
+            await _emit_resources(session, conv_id, db)
+            
             return await _format_plan(db, conv_id), True
 
         elif operation == "update":
@@ -217,9 +240,28 @@ async def _handle_plan(
 
 async def get_report_content(report_id: str) -> str | None:
     """Retrieve a stored report by ID. Used by the API."""
-    async with async_session() as db:
+    session_factory = _get_session_factory()
+    async with session_factory() as db:
         resource = await ops.get_resource_by_id(db, report_id)
         return resource.content if resource else None
+
+
+def _generate_plan_md(tasks: list[dict]) -> str:
+    """Generate a PLAN.md markdown document from the task list."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    icons = {"pending": "- [ ]", "in_progress": "- [~]", "completed": "- [x]", "cancelled": "- [-]"}
+    lines = [
+        "# Plan",
+        "",
+        f"*Last updated: {now}*",
+        "",
+    ]
+    for t in tasks:
+        status = t.get("status", "pending")
+        lines.append(f"{icons.get(status, '- [ ]')} {t.get('title', '')}")
+    done = sum(1 for t in tasks if t.get("status") == "completed")
+    lines.extend(["", f"**Progress: {done}/{len(tasks)}**"])
+    return "\n".join(lines)
 
 
 def _generate_completion_report(task_title: str, summary: str = None, next_hints: str = None) -> str:
