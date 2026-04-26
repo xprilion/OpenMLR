@@ -33,9 +33,14 @@ Open `http://localhost:3000`. Create an account. Start researching.
 
 ### One-click deploy
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR)
-
-[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)
+<div style="display: flex; gap: 10px; margin-top: 10px;">
+  <a href="https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR" target="_blank" rel="noopener">
+    <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" width="146" height="32">
+  </a>
+  <a href="https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR" target="_blank" rel="noopener">
+    <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy to Heroku" width="196" height="32">
+  </a>
+</div>
 
 See [Setup & Installation](/setup) for local development and more options.
 

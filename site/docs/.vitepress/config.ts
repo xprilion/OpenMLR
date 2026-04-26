@@ -7,9 +7,19 @@ export default defineConfig({
   description:
     "OpenMLR - AI-powered ML Research Agent that plans tasks, researches papers, writes drafts, and executes code",
 
+  cleanUrls: true,
+
   head: [
     // Basic meta
     ["meta", { name: "author", content: "Anubhav Singh" }],
+    ["meta", { name: "theme-color", content: "#3eaf7c" }],
+    [
+      "meta",
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1.0, viewport-fit=cover",
+      },
+    ],
     [
       "meta",
       {
@@ -19,6 +29,10 @@ export default defineConfig({
       },
     ],
     ["link", { rel: "canonical", href: "https://openmlr.dev" }],
+    ["link", { rel: "preconnect", href: "https://render.com" }],
+    ["link", { rel: "preconnect", href: "https://www.herokucdn.com" }],
+    ["link", { rel: "dns-prefetch", href: "https://render.com" }],
+    ["link", { rel: "dns-prefetch", href: "https://www.herokucdn.com" }],
 
     // Open Graph
     ["meta", { property: "og:type", content: "website" }],
