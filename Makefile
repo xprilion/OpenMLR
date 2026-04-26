@@ -115,8 +115,15 @@ test-docs: ## Verify docs site builds cleanly
 	cd site && npx vitepress build docs
 
 .PHONY: test-coverage
-test-coverage: ## Run all tests with coverage reports
-	cd $(BACKEND) && uv run pytest tests/ --tb=short -v
+test-coverage: test-coverage-backend test-coverage-frontend ## Run all tests with coverage reports
+
+.PHONY: test-coverage-backend
+test-coverage-backend: ## Backend tests with coverage
+	cd $(BACKEND) && uv run pytest tests/ --cov --cov-report=term-missing --tb=short -v
+
+.PHONY: test-coverage-frontend
+test-coverage-frontend: ## Frontend tests with coverage
+	cd $(FRONTEND) && pnpm test --coverage
 	cd $(FRONTEND) && pnpm test
 
 # ─── Docker ───────────────────────────────────────────────

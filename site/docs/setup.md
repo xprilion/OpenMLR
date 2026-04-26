@@ -149,8 +149,8 @@ Run `make help` for the full list:
 | `make db-upgrade` | Run migrations |
 | **Testing** | |
 | `make test` | Run all tests (backend + frontend + docs build) |
-| `make test-backend` | Backend tests only (149 tests) |
-| `make test-frontend` | Frontend tests only (29 tests) |
+| `make test-backend` | Backend tests only (591 tests) |
+| `make test-frontend` | Frontend tests only (182 tests) |
 | `make test-docs` | Docs build check |
 | **Other** | |
 | `make check` | Type-check backend + frontend |
