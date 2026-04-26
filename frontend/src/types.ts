@@ -89,7 +89,7 @@ export interface PlanTask {
 export interface Resource {
   title: string;
   url: string;
-  type: 'paper' | 'code' | 'dataset' | 'doc' | 'report';
+  type: 'paper' | 'code' | 'dataset' | 'doc' | 'report' | 'plan';
   id?: string;    // for reports — used to fetch content
   content?: string;
 }

@@ -125,9 +125,9 @@ export function MessageList({ messages }: Props) {
         <div key={msg.id} className={`msg msg-${msg.role}`}>
           {/* User messages */}
           {msg.role === 'user' && (
-            <div className="msg-user-bubble">
+            <div className={`msg-user-bubble ${msg.metadata?.tool === 'execute' ? 'mode-execute' : ''}`}>
               {msg.metadata?.tool && (
-                <span className="msg-user-mode">{msg.metadata.tool}</span>
+                <span className={`msg-user-mode ${msg.metadata.tool === 'execute' ? 'mode-execute' : ''}`}>{msg.metadata.tool}</span>
               )}
               {msg.content}
             </div>

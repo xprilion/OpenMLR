@@ -270,7 +270,18 @@ async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) 
         return f"Error reading: {str(e)}", False
 
 
-async def _handle_write(path: str, content: str, **kwargs) -> tuple[str, bool]:
+async def _handle_write(path: str = "", content: str = "", **kwargs) -> tuple[str, bool]:
+    # Handle models that abbreviate argument names (e.g., 'p' for 'path', 'c' for 'content')
+    if not path:
+        path = kwargs.get("p", kwargs.get("file", kwargs.get("filepath", "")))
+    if not content:
+        content = kwargs.get("c", kwargs.get("text", kwargs.get("data", "")))
+    
+    if not path:
+        return "Error: 'path' argument is required.", False
+    if not content:
+        return "Error: 'content' argument is required.", False
+    
     try:
         target = Path(path).expanduser()
         if not target.is_absolute():

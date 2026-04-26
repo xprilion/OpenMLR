@@ -48,35 +48,17 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
         session.pending_approval = None
 
     # Set the mode on the tool router for strict enforcement
-    effective_mode = mode if mode in ("plan", "research", "write") else "general"
+    effective_mode = mode if mode in ("plan", "execute") else "execute"
     tool_router.set_mode(effective_mode)
 
-    # Inject per-message mode context if provided
-    if mode and mode in ("plan", "research", "write"):
-        mode_hints = {
-            "plan": (
-                "[Mode: PLAN — STRICT ENFORCEMENT]\n"
-                "- Only ask_user and plan_tool are available\n"
-                "- Do NOT execute any research, writing, or code tools\n"
-                "- Ask clarifying questions and create a plan\n"
-                "- When ready, use ask_user with suggest_mode='research' or 'write' to propose switching"
-            ),
-            "research": (
-                "[Mode: RESEARCH — STRICT ENFORCEMENT]\n"
-                "- Search papers, web, and gather information only\n"
-                "- Do NOT write content or execute code\n"
-                "- Add all sources as resources via plan_tool\n"
-                "- When research is complete, use ask_user with suggest_mode='write' to propose switching"
-            ),
-            "write": (
-                "[Mode: WRITE — STRICT ENFORCEMENT]\n"
-                "- Write and edit content only\n"
-                "- Use writing tool for paper sections\n"
-                "- Reference resources gathered in research phase\n"
-                "- When writing is complete, generate a report via plan_tool"
-            ),
-        }
-        session.context_manager.add_message(Message(role="system", content=mode_hints[mode]))
+    # Inject per-message mode hint (short reinforcement of system prompt rules)
+    mode_hint = (
+        f"[Mode: {effective_mode.upper()}] "
+        + ("Plan only — ask questions, gather context, create plan. No execution."
+           if effective_mode == "plan" else
+           "Execute the plan — do the work, no questions. All tools except ask_user.")
+    )
+    session.context_manager.add_message(Message(role="system", content=mode_hint))
 
     session.context_manager.add_message(Message(role="user", content=user_message))
 

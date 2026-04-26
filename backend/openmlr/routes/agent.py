@@ -387,12 +387,43 @@ async def submit_answers(
 
 
 @router.post("/interrupt")
-async def interrupt(request: Request, user: User = Depends(get_current_user)):
-    """Cancel the current agent turn."""
-    active = _sm(request).get_current_session()
+async def interrupt(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel the current agent turn (in-process and background workers)."""
+    sm = _sm(request)
+
+    # 1. Cancel the in-process session (works for inline / non-Celery mode)
+    active = sm.get_current_session()
     if active:
         active.session.cancel()
-        await _bus(request).broadcast(AgentEvent(event_type="interrupted"))
+
+    # 2. For background Celery workers: relay interrupt via Redis + revoke task
+    conv_id = sm.current_conversation_id
+    if conv_id:
+        from ..services.redis_pubsub import publish_interrupt
+        await publish_interrupt(conv_id)
+
+        # Also try to revoke active Celery tasks for this conversation
+        try:
+            from ..services.job_manager import get_job_manager, USE_BACKGROUND_JOBS
+            if USE_BACKGROUND_JOBS:
+                job_manager = get_job_manager()
+                active_jobs = await job_manager.get_active_jobs(db, conv_id)
+                for job_info in active_jobs:
+                    jid = job_info["job_id"]
+                    # Revoke with SIGTERM so the worker process is interrupted
+                    if job_manager.celery_app:
+                        job_manager.celery_app.control.revoke(jid, terminate=True, signal="SIGTERM")
+                        logger.info(f"Revoked Celery task {jid} for conversation {conv_id}")
+                    # Mark the job as cancelled in DB
+                    await ops.update_job_status(db, jid, "cancelled")
+        except Exception as e:
+            logger.warning(f"Failed to revoke background jobs: {e}")
+
+    await _bus(request).broadcast(AgentEvent(event_type="interrupted"))
     return {"ok": True}
 
 

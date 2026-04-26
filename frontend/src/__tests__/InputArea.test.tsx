@@ -6,7 +6,7 @@ import type { Mode } from '../components/InputArea';
 function defaultProps(overrides: Partial<React.ComponentProps<typeof InputArea>> = {}) {
   return {
     disabled: false,
-    mode: 'general' as Mode,
+    mode: 'plan' as Mode,
     onModeChange: vi.fn(),
     onSend: vi.fn(),
     onStop: vi.fn(),
@@ -17,30 +17,25 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof InputArea>>
 }
 
 describe('InputArea', () => {
-  it('renders mode buttons (Plan, Research, Write, General)', () => {
+  it('renders mode toggle button showing P in plan mode', () => {
     render(<InputArea {...defaultProps()} />);
-    expect(screen.getByText('Plan')).toBeInTheDocument();
-    expect(screen.getByText('Research')).toBeInTheDocument();
-    expect(screen.getByText('Write')).toBeInTheDocument();
-    expect(screen.getByText('General')).toBeInTheDocument();
+    const toggle = screen.getByText('P');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveClass('mode-plan');
   });
 
-  it('active mode button has active class', () => {
-    render(<InputArea {...defaultProps({ mode: 'research' })} />);
-    // The button with title="Research" should have the active class
-    const researchBtn = screen.getByTitle('Research');
-    expect(researchBtn).toHaveClass('active');
-
-    // Other buttons should not have active class
-    const planBtn = screen.getByTitle('Plan');
-    expect(planBtn).not.toHaveClass('active');
+  it('renders mode toggle button showing E in execute mode', () => {
+    render(<InputArea {...defaultProps({ mode: 'execute' })} />);
+    const toggle = screen.getByText('E');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveClass('mode-execute');
   });
 
-  it('clicking mode button calls onModeChange', () => {
+  it('clicking toggle switches mode', () => {
     const onModeChange = vi.fn();
-    render(<InputArea {...defaultProps({ onModeChange })} />);
-    fireEvent.click(screen.getByTitle('Write'));
-    expect(onModeChange).toHaveBeenCalledWith('write');
+    render(<InputArea {...defaultProps({ mode: 'plan', onModeChange })} />);
+    fireEvent.click(screen.getByText('P'));
+    expect(onModeChange).toHaveBeenCalledWith('execute');
   });
 
   it('send button click calls onSend with text and mode', () => {
@@ -48,47 +43,26 @@ describe('InputArea', () => {
     const onTextChange = vi.fn();
     render(
       <InputArea
-        {...defaultProps({
-          text: 'Hello there',
-          mode: 'plan',
-          onSend,
-          onTextChange,
-        })}
+        {...defaultProps({ text: 'hello', onSend, onTextChange })}
       />,
     );
     const sendBtn = screen.getByRole('button', { name: '↑' });
     fireEvent.click(sendBtn);
-    expect(onSend).toHaveBeenCalledWith('Hello there', 'plan');
+    expect(onSend).toHaveBeenCalledWith('hello', 'plan');
     expect(onTextChange).toHaveBeenCalledWith('');
   });
 
-  it('Enter key submits (without shift)', () => {
+  it('enter key submits', () => {
     const onSend = vi.fn();
-    const onTextChange = vi.fn();
-    render(
-      <InputArea
-        {...defaultProps({
-          text: 'Enter submit test',
-          onSend,
-          onTextChange,
-        })}
-      />,
-    );
+    render(<InputArea {...defaultProps({ text: 'msg', onSend })} />);
     const textarea = screen.getByRole('textbox');
-    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-    expect(onSend).toHaveBeenCalledWith('Enter submit test', 'general');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledOnce();
   });
 
-  it('Shift+Enter does not submit', () => {
+  it('shift+enter does not submit', () => {
     const onSend = vi.fn();
-    render(
-      <InputArea
-        {...defaultProps({
-          text: 'Shift enter test',
-          onSend,
-        })}
-      />,
-    );
+    render(<InputArea {...defaultProps({ text: 'msg', onSend })} />);
     const textarea = screen.getByRole('textbox');
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
     expect(onSend).not.toHaveBeenCalled();
@@ -113,5 +87,19 @@ describe('InputArea', () => {
     render(<InputArea {...defaultProps({ text: '' })} />);
     const sendBtn = screen.getByRole('button', { name: '↑' });
     expect(sendBtn).toBeDisabled();
+  });
+
+  it('keyboard shortcut Cmd+B switches to plan', () => {
+    const onModeChange = vi.fn();
+    render(<InputArea {...defaultProps({ mode: 'execute', onModeChange })} />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(onModeChange).toHaveBeenCalledWith('plan');
+  });
+
+  it('keyboard shortcut Cmd+E switches to execute', () => {
+    const onModeChange = vi.fn();
+    render(<InputArea {...defaultProps({ mode: 'plan', onModeChange })} />);
+    fireEvent.keyDown(window, { key: 'e', metaKey: true });
+    expect(onModeChange).toHaveBeenCalledWith('execute');
   });
 });

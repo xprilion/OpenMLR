@@ -324,6 +324,75 @@ async def upsert_conversation_resources(
     return new_resources
 
 
+PLAN_RESOURCE_ID = "plan-md"
+
+
+async def upsert_plan_resource(db: AsyncSession, conv_id: int, content: str) -> ConversationResource:
+    """Create or update the pinned PLAN.md resource for a conversation."""
+    existing = await get_resource_by_id(db, f"{PLAN_RESOURCE_ID}-{conv_id}")
+    if existing:
+        existing.content = content
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+    return await add_conversation_resource(
+        db, conv_id,
+        title="PLAN.md",
+        resource_type="plan",
+        content=content,
+        resource_id=f"{PLAN_RESOURCE_ID}-{conv_id}",
+    )
+
+
+PAPER_RESOURCE_ID = "paper"
+
+
+async def upsert_paper_resource(
+    db: AsyncSession, conv_id: int, title: str, content: str,
+) -> ConversationResource:
+    """Create or update the paper draft resource for a conversation."""
+    rid = f"{PAPER_RESOURCE_ID}-{conv_id}"
+    existing = await get_resource_by_id(db, rid)
+    if existing:
+        existing.title = title
+        existing.content = content
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+    return await add_conversation_resource(
+        db, conv_id,
+        title=title,
+        resource_type="paper",
+        content=content,
+        resource_id=rid,
+    )
+
+
+async def upsert_resource(
+    db: AsyncSession, conv_id: int,
+    resource_id: str, title: str, resource_type: str,
+    content: str = None, url: str = None,
+) -> ConversationResource:
+    """Create or update a resource by resource_id."""
+    existing = await get_resource_by_id(db, resource_id)
+    if existing:
+        existing.title = title
+        existing.content = content
+        if url:
+            existing.url = url
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+    return await add_conversation_resource(
+        db, conv_id,
+        title=title,
+        resource_type=resource_type,
+        content=content,
+        url=url,
+        resource_id=resource_id,
+    )
+
+
 # ---- Agent Jobs ----
 
 async def create_agent_job(

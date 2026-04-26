@@ -149,6 +149,25 @@ async def _async_process_message(
     
     session.on_event(_broadcast)
     
+    # Start a background task that polls Redis for an interrupt signal
+    # and cancels the session when found.
+    async def _poll_interrupt():
+        from ..services.redis_pubsub import check_interrupt, clear_interrupt
+        try:
+            while True:
+                await asyncio.sleep(2)
+                if await check_interrupt(conversation_id):
+                    logger.info(f"Interrupt detected via Redis for conversation {conversation_id}, cancelling session")
+                    session.cancel()
+                    await clear_interrupt(conversation_id)
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"Interrupt poll error: {e}")
+
+    interrupt_task = asyncio.create_task(_poll_interrupt())
+
     try:
         # Run the agent turn
         await run_agent_turn(session, tool_router, message, mode=mode)
@@ -175,12 +194,26 @@ async def _async_process_message(
         raise
     
     finally:
+        # Stop the interrupt polling task
+        interrupt_task.cancel()
+        try:
+            await interrupt_task
+        except asyncio.CancelledError:
+            pass
+
         # Cleanup
         try:
             await sandbox_manager.destroy()
         except Exception:
             pass
         
+        # Clear any lingering interrupt key
+        try:
+            from ..services.redis_pubsub import clear_interrupt
+            await clear_interrupt(conversation_id)
+        except Exception:
+            pass
+
         # Broadcast ready status
         await publish_event(AgentEvent(
             event_type="status",
