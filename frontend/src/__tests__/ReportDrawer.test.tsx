@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import ReactMarkdown from 'react-markdown';
 import { ReportDrawer } from '../components/ReportDrawer';
 
 vi.mock('../api', () => ({
