@@ -12,7 +12,7 @@ class TestAppCreation:
         assert app.title == "OpenMLR"
 
     async def test_app_version(self):
-        assert app.version == "2.0.0"
+        assert app.version == "0.3.0"
 
     async def test_app_routers_registered(self):
         route_paths = [r.path for r in app.routes]

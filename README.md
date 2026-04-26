@@ -16,6 +16,7 @@ A self-hosted ML research agent that plans, researches, writes papers, and execu
 - **Plan + Execute modes** — Plan mode gathers context; Execute mode does the work. Toggle with `Cmd+M`.
 - **Paper research** — OpenAlex, Semantic Scholar, arXiv, CrossRef, Papers With Code. Reads full papers, crawls citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Export to Markdown/LaTeX.
+- **Compute environments** — Execute code on local Docker, SSH remotes, or Modal cloud. Probe GPU/CPU capabilities.
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
 - **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio).
 - **MCP servers** — Connect external tools via the Model Context Protocol.

@@ -76,6 +76,7 @@ export default defineConfig({
       "configuration",
       "modes",
       "tools",
+      "compute",
       "architecture",
       "agent-harness",
       "api",
@@ -113,6 +114,7 @@ export default defineConfig({
         items: [
           { text: "Modes (Plan / Execute)", link: "/modes" },
           { text: "Agent Tools", link: "/tools" },
+          { text: "Compute Environments", link: "/compute" },
         ],
       },
       {

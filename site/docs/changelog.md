@@ -5,6 +5,35 @@ description: OpenMLR version history and release notes. Track new features, impr
 
 # Changelog
 
+## v0.3.0
+
+Compute environments, UI improvements, and bug fixes.
+
+### Compute Environments
+- **Multi-backend compute** — Execute code on local Docker, SSH remotes, or Modal cloud
+- **SSH key management** — Generate Ed25519/RSA keys, upload existing keys via Settings > Compute
+- **Compute probing** — Detect OS, GPUs (with CUDA version), Python versions, and disk space
+- **Compute selection** — Switch between configured compute nodes mid-conversation
+- **Connection pooling** — SSH connections are reused across tool calls for performance
+- **Docker-in-Docker detection** — Worker container executes commands directly when already in Docker
+
+### UI Improvements
+- **Collapsible Tasks & Resources** — Click section headers in the right panel to collapse/expand
+- **Fixed right panel layout** — Right panel no longer causes page scroll issues when toggled
+- **Improved scroll behavior** — Message list scrolls correctly without affecting page layout
+
+### Bug Fixes
+- Fixed `scrollIntoView` causing entire page to scroll when RightPanel is open
+- Fixed `_get_draft` database call using wrong function name
+- Fixed test suite failures related to async database mocking
+
+### Internal
+- Added `_running_in_container()` detection for Docker Compose worker environments
+- Improved test coverage for compute and writing tools
+- Updated Settings nav to reflect current menu structure
+
+---
+
 ## v0.2.0
 
 Major rewrite of the mode system, paper writing, processing architecture, and UI routing.
