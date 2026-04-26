@@ -197,6 +197,7 @@ async def switch_conversation(
         conv.id, conv.uuid,
         model=effective_model, mode=conv.mode or "general",
         existing_messages=msg_dicts, username=user.display_name or user.username,
+        user_id=user.id, db=db,
     )
     sm.current_conversation_id = conv.id
 
@@ -281,6 +282,7 @@ async def send_message(
         conv.id, conv.uuid,
         model=effective_model, mode=conv.mode or "general",
         existing_messages=history, username=user.display_name or user.username,
+        user_id=user.id, db=db,
     )
 
     # Wire DB persistence once per session

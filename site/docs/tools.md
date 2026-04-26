@@ -18,24 +18,36 @@ The agent has access to built-in tools organized by category. Tool availability 
 
 | Tool | Description | Plan | Execute |
 |------|-------------|:----:|:-------:|
-| `papers` | Search OpenAlex, read ArXiv papers, get citations, find code/datasets | yes | yes |
+| `papers` | Search papers, read ArXiv, get citations, find code/datasets | yes | yes |
 | `web_search` | Brave web search | yes | yes |
 | `research` | Spawn an independent research sub-agent with its own context | no | yes |
-| `github_search` | Search GitHub for repos and code | yes | yes |
-| `github_read` | Read files from GitHub repos | yes | yes |
+| `github_read_file` | Read files from GitHub repos | yes | yes |
+| `github_list_repos` | List repos for a user/org | yes | yes |
+| `github_find_examples` | Find code examples by filename pattern | yes | yes |
+| `github_search_repos` | Search GitHub repositories by query | yes | yes |
+| `github_get_readme` | Get README from a repository | yes | yes |
 
 ### Papers Operations
 
 | Operation | Source | Description |
 |-----------|--------|-------------|
-| `search` | OpenAlex | Full-text search with year/citation filters |
+| `search` | OpenAlex | Full-text search with year/citation filters (primary) |
+| `arxiv_search` | arXiv | Search arXiv directly — best for ML/CS/Physics preprints |
+| `semantic_search` | Semantic Scholar | Search with abstracts, good for recent papers |
 | `trending` | OpenAlex | Recent highly-cited papers |
 | `details` | OpenAlex + CrossRef | Full metadata, abstract, OA links |
-| `read_paper` | ArXiv (ar5iv) | Parse HTML into sections, read by name/number |
+| `read_paper` | arXiv (ar5iv) | Parse HTML into sections, read by name/number |
 | `citations` | OpenAlex | References + cited-by with batch fetching |
 | `recommend` | OpenAlex | Related works |
+| `author_papers` | OpenAlex | Papers by a specific author |
 | `find_code` | Papers With Code | GitHub repos linked to papers |
 | `find_datasets` | Papers With Code | Datasets linked to papers |
+
+::: tip Search source recommendations
+- **arXiv search**: Latest ML/AI preprints, CS research, physics papers
+- **OpenAlex search**: Broad academic coverage across all fields, great for citation data
+- **Semantic Scholar**: When you need abstracts or Semantic Scholar IDs
+:::
 
 ### Research Sub-Agent
 

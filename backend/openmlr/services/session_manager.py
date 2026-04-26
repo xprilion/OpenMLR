@@ -1,5 +1,7 @@
 """Session manager — manages per-conversation agent sessions."""
 
+import logging
+
 from ..agent.llm import LLMProvider
 from ..agent.loop import run_agent_turn
 from ..agent.prompts import build_system_prompt
@@ -7,8 +9,11 @@ from ..agent.session import Session
 from ..agent.types import AgentEvent
 from ..config import AgentConfig
 from ..sandbox.manager import SandboxManager
+from ..tools.mcp import MCPManager
 from ..tools.registry import ToolRouter, create_tool_router
 from .event_bus import EventBus
+
+log = logging.getLogger(__name__)
 
 
 class ActiveSession:
@@ -19,12 +24,14 @@ class ActiveSession:
         session: Session,
         tool_router: ToolRouter,
         sandbox_manager: SandboxManager,
+        mcp_manager: MCPManager,
         conversation_id: int,
         uuid: str,
     ):
         self.session = session
         self.tool_router = tool_router
         self.sandbox_manager = sandbox_manager
+        self.mcp_manager = mcp_manager
         self.conversation_id = conversation_id
         self.uuid = uuid
         self._persist_wired = False
@@ -57,6 +64,8 @@ class SessionManager:
         mode: str = "general",
         existing_messages: list[dict] = None,
         username: str = "user",
+        user_id: int | None = None,
+        db = None,
     ) -> ActiveSession:
         """Get existing session or create a new one with system prompt."""
         existing = self.sessions.get(conversation_id)
@@ -78,8 +87,28 @@ class SessionManager:
         session = Session(config=config, conversation_id=conversation_id)
         sandbox_manager = SandboxManager()
         tool_router = create_tool_router(sandbox_manager)
+        mcp_manager = MCPManager()
 
-        # Build and set system prompt
+        # Load MCP servers from user settings if available
+        if user_id and db:
+            try:
+                from ..db import operations as ops
+                user_settings = await ops.get_all_settings(db, user_id, category="mcp")
+                mcp_settings = user_settings.get("mcp", {})
+                mcp_servers = mcp_settings.get("servers", {})
+
+                if mcp_servers:
+                    count = await mcp_manager.connect_servers(
+                        mcp_servers,
+                        tool_router,
+                        blocklist=set(),
+                    )
+                    if count > 0:
+                        log.info(f"Session {conversation_id}: loaded {count} MCP tools")
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to load MCP servers - {e}")
+
+        # Build and set system prompt (after MCP tools are registered)
         session.context_manager.system_prompt = build_system_prompt(
             tool_specs=tool_router.get_raw_specs(),
             mode=mode,
@@ -100,6 +129,7 @@ class SessionManager:
             session=session,
             tool_router=tool_router,
             sandbox_manager=sandbox_manager,
+            mcp_manager=mcp_manager,
             conversation_id=conversation_id,
             uuid=uuid,
         )
@@ -120,6 +150,11 @@ class SessionManager:
                     pass
             try:
                 await active.sandbox_manager.destroy()
+            except Exception:
+                pass
+            # Disconnect MCP servers
+            try:
+                await active.mcp_manager.disconnect_all()
             except Exception:
                 pass
         if self.current_conversation_id == conversation_id:

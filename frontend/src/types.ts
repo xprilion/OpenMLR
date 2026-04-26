@@ -57,6 +57,8 @@ export interface Provider {
   name: string;
   key_env: string;
   configured: boolean;
+  categories: string[];
+  docs_url?: string;
 }
 
 // ── Structured Questions ────────────────────────────────
