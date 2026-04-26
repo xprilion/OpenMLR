@@ -584,25 +584,25 @@ function ChatUI({
         <div className="flex flex-col flex-1 overflow-hidden relative">
           {/* Empty state */}
           {messages.length === 0 && !effectiveProcessing && (
-            <div className="flex flex-col items-center justify-center flex-1 text-center px-6 py-12 relative overflow-hidden">
+            <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
               {/* Large embossed background text */}
               <div 
-                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none px-2"
                 aria-hidden="true"
               >
                 <span 
-                  className="text-[12rem] sm:text-[16rem] lg:text-[20rem] font-black tracking-tighter"
+                  className="text-[4rem] xs:text-[6rem] sm:text-[10rem] md:text-[14rem] lg:text-[18rem] xl:text-[20rem] font-black tracking-tighter whitespace-nowrap animate-[emboss-pulse_4s_ease-in-out_infinite]"
                   style={{
                     color: 'transparent',
-                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.08)',
-                    textShadow: '0 0 80px rgba(59, 130, 246, 0.05)',
+                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.12)',
+                    textShadow: '0 0 60px rgba(59, 130, 246, 0.08), 0 0 120px rgba(59, 130, 246, 0.04)',
                   }}
                 >
                   OpenMLR
                 </span>
               </div>
               {/* Foreground prompt */}
-              <p className="text-xl text-text-dim z-10">What would you like to research?</p>
+              <p className="text-lg sm:text-xl text-text-dim z-10">What would you like to research?</p>
             </div>
           )}
           
