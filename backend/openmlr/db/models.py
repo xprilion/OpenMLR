@@ -39,6 +39,8 @@ class User(Base):
     settings = relationship("UserSetting", back_populates="user", cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     sandbox_configs = relationship("SandboxConfig", back_populates="user", cascade="all, delete-orphan")
+    ssh_keys = relationship("SSHKey", back_populates="user", cascade="all, delete-orphan")
+    compute_nodes = relationship("ComputeNode", back_populates="user", cascade="all, delete-orphan")
     research_corpus = relationship("ResearchCorpus", back_populates="user", cascade="all, delete-orphan")
     writing_projects = relationship("WritingProject", back_populates="user", cascade="all, delete-orphan")
 
@@ -109,6 +111,49 @@ class SandboxConfig(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     user = relationship("User", back_populates="sandbox_configs")
+
+
+class SSHKey(Base):
+    __tablename__ = "ssh_keys"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    fingerprint = Column(String(255), nullable=False)
+    algorithm = Column(String(50), nullable=False)
+    public_key = Column(Text, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    user = relationship("User", back_populates="ssh_keys")
+    __table_args__ = (
+        # Unique constraint on (user_id, filename)
+        {},
+    )
+
+
+class ComputeNode(Base):
+    __tablename__ = "compute_nodes"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)
+    type = Column(String(20), nullable=False)  # local, ssh, modal
+    config = Column(JSON, nullable=False, default=dict)
+    capabilities = Column(JSON, nullable=True)
+    health_status = Column(String(20), default="unknown", nullable=False)
+    last_probed_at = Column(DateTime(timezone=True), nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    is_default = Column(Boolean, default=False)
+    priority = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+
+    user = relationship("User", back_populates="compute_nodes")
+    __table_args__ = (
+        # Unique constraint on (user_id, name)
+        {},
+    )
 
 
 class ResearchCorpus(Base):

@@ -1,6 +1,8 @@
 """Sandbox tools — expose execution environments to the agent."""
 
-from ..agent.types import ToolSpec
+import asyncio
+
+from ..agent.types import AgentEvent, ToolSpec
 
 
 def create_sandbox_tools(sandbox_manager) -> list[ToolSpec]:
@@ -56,13 +58,14 @@ def create_sandbox_tools(sandbox_manager) -> list[ToolSpec]:
             name="sandbox_exec",
             description=(
                 "Execute a command in the active sandbox. If no sandbox is active, "
-                "falls back to local execution."
+                "falls back to local execution. Use stream=true for long-running commands."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Shell command to execute"},
-                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 120)"},
+                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 120, max 3600)"},
+                    "stream": {"type": "boolean", "description": "Stream output in real-time for long-running commands (default false)"},
                 },
                 "required": ["command"],
             },
@@ -102,17 +105,24 @@ async def _handle_probe(sandbox_manager, session=None, **kwargs) -> tuple[str, b
         return "No active sandbox. Using local environment.\n" + await _local_probe(), True
 
     try:
-        info = await sandbox.probe_environment()
+        caps = await sandbox.probe_environment()
         lines = [
             f"## Sandbox Environment ({sandbox_manager.active_type})\n",
-            f"OS: {info.os}",
-            f"Python: {info.python_version}",
-            f"GPU: {'Yes — ' + info.gpu_info if info.gpu_available else 'No'}",
-            f"Disk: {info.available_disk_gb:.1f} GB free",
-            f"RAM: {info.available_ram_gb:.1f} GB free",
+            f"Platform: {caps.platform}",
+            f"CPU: {caps.cpu_cores} cores ({caps.cpu_arch})",
+            f"Python: {', '.join(caps.python_versions) if caps.python_versions else 'unknown'}",
         ]
-        if info.installed_packages:
-            lines.append(f"\nKey packages: {', '.join(info.installed_packages[:20])}")
+        if caps.gpu_available and caps.gpu_info:
+            for gpu in caps.gpu_info:
+                lines.append(f"GPU: {gpu.model} ({gpu.vram_gb:.0f} GB VRAM)")
+        elif caps.gpu_available:
+            lines.append("GPU: available")
+        else:
+            lines.append("GPU: not available")
+        lines.append(f"Disk: {caps.available_disk_gb:.1f} GB free")
+        lines.append(f"RAM: {caps.available_ram_gb:.1f} GB free")
+        if caps.installed_packages:
+            lines.append(f"\nKey packages: {', '.join(caps.installed_packages[:20])}")
         return "\n".join(lines), True
     except Exception as e:
         return f"Probe failed: {str(e)}", False
@@ -156,7 +166,7 @@ async def _handle_create(sandbox_manager, provider: str, config: dict = None, se
         return f"Failed to create sandbox: {str(e)}", False
 
 
-async def _handle_exec(sandbox_manager, command: str, timeout: int = 120, session=None, **kwargs) -> tuple[str, bool]:
+async def _handle_exec(sandbox_manager, command: str, timeout: int = 120, stream: bool = False, session=None, **kwargs) -> tuple[str, bool]:
     sandbox = sandbox_manager.get_active()
     if not sandbox:
         # Fall back to local execution
@@ -164,8 +174,25 @@ async def _handle_exec(sandbox_manager, command: str, timeout: int = 120, sessio
         return await _handle_bash(command=command, timeout=timeout)
 
     try:
-        result = await sandbox.execute(command, timeout=timeout)
-        return result.output, result.success
+        if stream and session:
+            # Stream output via tool_log events
+            # on_chunk may be called from a worker thread (SSH), so use
+            # call_soon_threadsafe to schedule the coroutine on the event loop.
+            loop = asyncio.get_running_loop()
+
+            def on_chunk(text: str, is_stderr: bool):
+                prefix = "STDERR: " if is_stderr else ""
+                event = AgentEvent(
+                    event_type="tool_log",
+                    data={"message": f"{prefix}{text.rstrip()}"},
+                )
+                loop.call_soon_threadsafe(asyncio.ensure_future, session.emit(event))
+
+            result = await sandbox.execute_stream(command, timeout=timeout, on_chunk=on_chunk)
+            return result.output, result.success
+        else:
+            result = await sandbox.execute(command, timeout=timeout)
+            return result.output, result.success
     except Exception as e:
         return f"Execution error: {str(e)}", False
 

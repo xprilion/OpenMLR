@@ -17,6 +17,8 @@ MODE_TOOL_RESTRICTIONS = {
             "github_search", "github_read_file", "github_read_repo",
             "github_find_examples", "github_search_repos", "github_get_readme",
             "github_list_repos",
+            # Compute planning (read-only / advisory)
+            "compute_list", "compute_plan", "compute_probe",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -43,6 +45,13 @@ class ToolRouter:
         self._mcp_client = None
         self._blocklist: set[str] = set()
         self._current_mode: str = "general"
+        self._user_id: int | None = None
+        self._db = None
+
+    def set_context(self, user_id: int | None = None, db=None) -> None:
+        """Set per-request context (user_id, db) for tools that need them."""
+        self._user_id = user_id
+        self._db = db
 
     def register(self, spec: ToolSpec) -> None:
         """Register a tool."""
@@ -157,6 +166,11 @@ class ToolRouter:
             # Also pass tool_call_id if the handler accepts it
             if "tool_call_id" in sig.parameters and "tool_call_id" not in kwargs:
                 kwargs["tool_call_id"] = kwargs.pop("id", "")
+            # Inject user_id and db for tools that need them (compute tools)
+            if "user_id" in sig.parameters and "user_id" not in kwargs:
+                kwargs["user_id"] = self._user_id
+            if "db" in sig.parameters and "db" not in kwargs:
+                kwargs["db"] = self._db
             try:
                 return await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
             except TypeError as e:
@@ -236,6 +250,10 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router.register(create_papers_tool())
     router.register(create_writing_tool())
     router.register(create_ask_user_tool())
+
+    # Register compute tools
+    from .compute_tools import create_compute_tools
+    router.register_many(create_compute_tools())
 
     # Register sandbox tools if manager provided
     if sandbox_manager:

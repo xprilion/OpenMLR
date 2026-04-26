@@ -66,6 +66,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/configs:/app/backend/configs
+      - ./.keys:/app/.keys
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -93,6 +94,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/configs:/app/backend/configs
+      - ./.keys:/app/.keys
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

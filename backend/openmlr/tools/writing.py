@@ -55,7 +55,7 @@ async def _get_author_info(db, conv_id: int) -> dict | None:
     conv = await ops.get_conversation(db, conv_id)
     if not conv or not conv.user_id:
         return None
-    
+
     # Fetch author-related settings
     author_info = {}
     for key in ["author_name", "author_email", "author_affiliation", "author_orcid"]:
@@ -63,7 +63,7 @@ async def _get_author_info(db, conv_id: int) -> dict | None:
         if setting:
             field = key.replace("author_", "")
             author_info[field] = setting
-    
+
     return author_info if author_info else None
 
 
@@ -320,21 +320,21 @@ async def _get_draft(conv_id: int) -> tuple[str, bool]:
     proj = _get_project(conv_id)
     if not proj:
         return "No paper project exists.", False
-    
+
     # Fetch author info
     author_info = None
     if conv_id:
         session_factory = _get_session_factory()
         async with session_factory() as db:
             author_info = await _get_author_info(db, conv_id)
-    
+
     return _get_draft_from_proj(proj, author_info)
 
 
 def _get_draft_from_proj(proj: dict, author_info: dict | None = None) -> tuple[str, bool]:
     """Generate the full markdown draft from a project dict."""
     lines = [f"# {proj['title']}\n"]
-    
+
     # Add author information block if available
     if author_info:
         author_lines = []
@@ -346,7 +346,7 @@ def _get_draft_from_proj(proj: dict, author_info: dict | None = None) -> tuple[s
             author_lines.append(f"Email: {author_info['email']}")
         if author_info.get("orcid"):
             author_lines.append(f"ORCID: [{author_info['orcid']}](https://orcid.org/{author_info['orcid']})")
-        
+
         if author_lines:
             lines.append("\n".join(author_lines))
             lines.append("\n---\n")

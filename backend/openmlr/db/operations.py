@@ -7,10 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
     AgentJob,
+    ComputeNode,
     Conversation,
     ConversationResource,
     ConversationTask,
     Message,
+    SSHKey,
     UserSetting,
 )
 
@@ -73,6 +75,13 @@ async def update_conversation_title(db: AsyncSession, conv_id: int, title: str):
 async def update_conversation_model(db: AsyncSession, conv_id: int, model: str):
     await db.execute(
         update(Conversation).where(Conversation.id == conv_id).values(model=model)
+    )
+    await db.commit()
+
+
+async def update_conversation_extra(db: AsyncSession, conv_id: int, extra: dict):
+    await db.execute(
+        update(Conversation).where(Conversation.id == conv_id).values(extra=extra)
     )
     await db.commit()
 
@@ -495,3 +504,147 @@ async def get_user_agent_settings(db: AsyncSession, user_id: int) -> dict:
     for s in result.scalars().all():
         settings[s.key] = _clean_json_value(s.value)
     return settings
+
+
+# ---- SSH Keys ----
+
+async def create_ssh_key(
+    db: AsyncSession, user_id: int, filename: str, fingerprint: str,
+    algorithm: str, public_key: str, comment: str | None = None,
+) -> SSHKey:
+    key = SSHKey(
+        user_id=user_id,
+        filename=filename,
+        fingerprint=fingerprint,
+        algorithm=algorithm,
+        public_key=public_key,
+        comment=comment,
+    )
+    db.add(key)
+    await db.commit()
+    await db.refresh(key)
+    return key
+
+
+async def get_ssh_keys(db: AsyncSession, user_id: int) -> list[SSHKey]:
+    result = await db.execute(
+        select(SSHKey).where(SSHKey.user_id == user_id).order_by(SSHKey.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_ssh_key_by_filename(db: AsyncSession, user_id: int, filename: str) -> SSHKey | None:
+    result = await db.execute(
+        select(SSHKey).where(SSHKey.user_id == user_id, SSHKey.filename == filename)
+    )
+    return result.scalar_one_or_none()
+
+
+async def delete_ssh_key(db: AsyncSession, user_id: int, filename: str) -> bool:
+    result = await db.execute(
+        select(SSHKey).where(SSHKey.user_id == user_id, SSHKey.filename == filename)
+    )
+    key = result.scalar_one_or_none()
+    if not key:
+        return False
+    await db.delete(key)
+    await db.commit()
+    return True
+
+
+# ---- Compute Nodes ----
+
+async def create_compute_node(
+    db: AsyncSession, user_id: int, name: str, node_type: str, config: dict,
+    is_default: bool = False, priority: int = 0,
+) -> ComputeNode:
+    node = ComputeNode(
+        user_id=user_id,
+        name=name,
+        type=node_type,
+        config=config,
+        is_default=is_default,
+        priority=priority,
+    )
+    db.add(node)
+    await db.commit()
+    await db.refresh(node)
+    return node
+
+
+async def get_compute_nodes(db: AsyncSession, user_id: int) -> list[ComputeNode]:
+    result = await db.execute(
+        select(ComputeNode).where(ComputeNode.user_id == user_id).order_by(ComputeNode.priority.desc(), ComputeNode.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_compute_node_by_id(db: AsyncSession, node_id: int, user_id: int | None = None) -> ComputeNode | None:
+    query = select(ComputeNode).where(ComputeNode.id == node_id)
+    if user_id is not None:
+        query = query.where(ComputeNode.user_id == user_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_compute_node_by_name(db: AsyncSession, user_id: int, name: str) -> ComputeNode | None:
+    result = await db.execute(
+        select(ComputeNode).where(ComputeNode.user_id == user_id, ComputeNode.name == name)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_compute_node(
+    db: AsyncSession, node_id: int, user_id: int, **kwargs,
+) -> ComputeNode | None:
+    result = await db.execute(
+        select(ComputeNode).where(ComputeNode.id == node_id, ComputeNode.user_id == user_id)
+    )
+    node = result.scalar_one_or_none()
+    if not node:
+        return None
+    for key, value in kwargs.items():
+        if hasattr(node, key):
+            setattr(node, key, value)
+    await db.commit()
+    await db.refresh(node)
+    return node
+
+
+async def delete_compute_node(db: AsyncSession, node_id: int, user_id: int) -> bool:
+    result = await db.execute(
+        select(ComputeNode).where(ComputeNode.id == node_id, ComputeNode.user_id == user_id)
+    )
+    node = result.scalar_one_or_none()
+    if not node:
+        return False
+    await db.delete(node)
+    await db.commit()
+    return True
+
+
+async def set_default_compute_node(db: AsyncSession, user_id: int, node_id: int | None) -> None:
+    # Clear existing default
+    await db.execute(
+        update(ComputeNode)
+        .where(ComputeNode.user_id == user_id, ComputeNode.is_default.is_(True))
+        .values(is_default=False)
+    )
+    # Set new default
+    if node_id is not None:
+        await db.execute(
+            update(ComputeNode)
+            .where(ComputeNode.id == node_id, ComputeNode.user_id == user_id)
+            .values(is_default=True)
+        )
+    await db.commit()
+
+
+async def get_default_compute_node(db: AsyncSession, user_id: int) -> ComputeNode | None:
+    result = await db.execute(
+        select(ComputeNode).where(
+            ComputeNode.user_id == user_id,
+            ComputeNode.is_default.is_(True),
+        )
+    )
+    return result.scalar_one_or_none()

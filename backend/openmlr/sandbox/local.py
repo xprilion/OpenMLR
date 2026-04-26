@@ -2,25 +2,42 @@
 
 import asyncio
 import os
-import platform
-import shutil
 import time
 from pathlib import Path
 
-from .interface import EnvironmentInfo, ExecutionResult, SandboxInterface
+from ..compute.probe import probe_sandbox
+from .interface import ExecutionResult, SandboxInterface
 
 
 class LocalSandbox(SandboxInterface):
     """Execute commands directly on the local machine."""
 
-    def __init__(self, workdir: str = None):
+    def __init__(self, workdir: str = None, workspace_manager=None):
+        self._workspace_manager = workspace_manager
+        self._conversation_uuid = None
         self.workdir = workdir or os.getcwd()
 
     async def create(self, config: dict) -> "LocalSandbox":
         self.workdir = config.get("workdir", os.getcwd())
+        self._conversation_uuid = config.get("conversation_uuid")
+
+        # If workspace manager is available and conversation UUID is set,
+        # use the per-conversation workspace
+        if self._workspace_manager and self._conversation_uuid:
+            ws_path = self._workspace_manager.create_workspace(self._conversation_uuid)
+            self.workdir = str(ws_path)
+        elif self._workspace_manager:
+            # Fallback: create workspace without UUID
+            ws_path = self._workspace_manager.create_workspace("default")
+            self.workdir = str(ws_path)
+
         return self
 
     async def execute(self, command: str, timeout: int = 120) -> ExecutionResult:
+        return await self.execute_stream(command, timeout)
+
+    async def execute_stream(self, command: str, timeout: int = 120, on_chunk=None) -> ExecutionResult:
+        """Execute a command with optional streaming output."""
         start = time.monotonic()
         try:
             proc = await asyncio.create_subprocess_shell(
@@ -29,25 +46,47 @@ class LocalSandbox(SandboxInterface):
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.workdir,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
 
             output_parts = []
-            if stdout:
-                output_parts.append(stdout.decode("utf-8", errors="replace"))
-            if stderr:
-                output_parts.append(f"STDERR:\n{stderr.decode('utf-8', errors='replace')}")
 
-            output = "\n".join(output_parts) if output_parts else "(no output)"
+            async def _read_stream(stream, is_stderr):
+                """Read a stream and emit chunks."""
+                while True:
+                    try:
+                        line = await asyncio.wait_for(stream.readline(), timeout=0.5)
+                        if not line:
+                            break
+                        text = line.decode("utf-8", errors="replace")
+                        if on_chunk:
+                            on_chunk(text, is_stderr)
+                        output_parts.append(text)
+                    except TimeoutError:
+                        # Check if process is done
+                        if proc.returncode is not None:
+                            break
+                        continue
+
+            # Read stdout and stderr concurrently
+            await asyncio.gather(
+                _read_stream(proc.stdout, False),
+                _read_stream(proc.stderr, True),
+            )
+
+            # Wait for process to complete
+            try:
+                returncode = await asyncio.wait_for(proc.wait(), timeout=1.0)
+            except TimeoutError:
+                returncode = proc.returncode if proc.returncode is not None else -1
+
+            output = "".join(output_parts) if output_parts else "(no output)"
             if len(output) > 50000:
                 output = output[:50000] + "\n...[truncated]"
 
             duration = time.monotonic() - start
             return ExecutionResult(
                 output=output,
-                success=proc.returncode == 0,
-                exit_code=proc.returncode,
+                success=returncode == 0,
+                exit_code=returncode,
                 duration_seconds=duration,
             )
         except TimeoutError:
@@ -97,45 +136,8 @@ class LocalSandbox(SandboxInterface):
             for e in target.iterdir()
         ])
 
-    async def probe_environment(self) -> EnvironmentInfo:
-        info = EnvironmentInfo(
-            os=f"{platform.system()} {platform.release()}",
-        )
-
-        # Python version
-        result = await self.execute("python3 --version", timeout=5)
-        if result.success:
-            info.python_version = result.output.strip()
-
-        # GPU
-        result = await self.execute(
-            "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader",
-            timeout=5,
-        )
-        if result.success and result.output.strip():
-            info.gpu_available = True
-            info.gpu_info = result.output.strip()
-
-        # Disk
-        total, used, free = shutil.disk_usage(self.workdir)
-        info.available_disk_gb = free / (1024 ** 3)
-
-        # RAM
-        try:
-            import psutil
-            info.available_ram_gb = psutil.virtual_memory().available / (1024 ** 3)
-        except ImportError:
-            pass
-
-        # Key packages
-        result = await self.execute("pip list --format=freeze 2>/dev/null | head -30", timeout=10)
-        if result.success:
-            info.installed_packages = [
-                line.split("==")[0] for line in result.output.strip().split("\n")
-                if "==" in line
-            ]
-
-        return info
+    async def probe_environment(self):
+        return await probe_sandbox(self)
 
     async def destroy(self) -> None:
         pass  # Local sandbox has nothing to clean up

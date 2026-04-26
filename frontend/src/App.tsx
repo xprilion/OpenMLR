@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Copy, Check } from 'lucide-react';
+import { ComputeSelector } from './components/ComputeSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
@@ -20,7 +21,7 @@ import { SettingsPage } from './components/SettingsPage';
 import { ProvidersSettings } from './components/settings/ProvidersSettings';
 import { AgentSettings } from './components/settings/AgentSettings';
 import { McpSettings } from './components/settings/McpSettings';
-import { SandboxSettings } from './components/settings/SandboxSettings';
+import { ComputeSettings } from './components/settings/ComputeSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
 
 let msgId = 0;
@@ -100,6 +101,8 @@ function ChatUI({
   const [viewingReport, setViewingReport] = useState<Resource | null>(null);
   const [inputMode, setInputMode] = useState<Mode>('plan');
   const [inputText, setInputText] = useState('');
+  const [computeNodes, setComputeNodes] = useState<any[]>([]);
+  const [activeCompute, setActiveCompute] = useState<any>(null);
 
   // Ref to always have current conv UUID in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -120,14 +123,33 @@ function ChatUI({
     }
   }, []);
 
+  const loadComputeNodes = useCallback(async () => {
+    try {
+      const data = await api.getComputeNodes();
+      setComputeNodes(data.nodes || []);
+    } catch {
+      setComputeNodes([]);
+    }
+  }, []);
+
+  const loadActiveCompute = useCallback(async (uuid: string) => {
+    try {
+      const data = await api.getConversationCompute(uuid);
+      setActiveCompute(data.node || null);
+    } catch {
+      setActiveCompute(null);
+    }
+  }, []);
+
   // Initial load - load conversations and activate the correct one
   useEffect(() => { 
     const init = async () => {
+      await loadComputeNodes();
       const convs = await loadConversations();
       
       // If URL has a conversation UUID, load it directly
       if (routeUuid) {
-        switchConv(routeUuid);
+        await switchConv(routeUuid);
         return;
       }
       
@@ -146,7 +168,7 @@ function ChatUI({
         const first = convs[0];
         setCurrentConvUuid(first.uuid);
         navigate(`/${first.uuid}`, { replace: true });
-        switchConv(first.uuid);
+        await switchConv(first.uuid);
       }
     };
     init();
@@ -197,6 +219,9 @@ function ChatUI({
         }
         return { id: nextId(), role: m.role, content: m.content };
       }) || []);
+
+      // Load active compute for this conversation
+      await loadActiveCompute(uuid);
     } catch { /* */ }
   };
 
@@ -214,6 +239,8 @@ function ChatUI({
       setMessages([]); setTasks([]); setResources([]); setContextUsage(null); setSearchBudget(null);
       setApprovalEvent(null); setQuestionsPayload(null);
       if (conv.model) setModel(conv.model);
+      // Load default compute for new conversation
+      await loadActiveCompute(conv.uuid);
       navigate(`/${conv.uuid}`, { replace: true });
     } catch { /* */ }
   };
@@ -226,10 +253,23 @@ function ChatUI({
       if (currentConvUuid === uuid) {
         setCurrentConvUuid(null); setMessages([]); setTasks([]); setResources([]);
         setApprovalEvent(null); setQuestionsPayload(null);
+        setActiveCompute(null);
         navigate('/', { replace: true });
       }
     } catch { /* */ }
   };
+
+  const handleComputeChange = useCallback(async (nodeId: number | null) => {
+    if (!currentConvUuid) return;
+    try {
+      if (nodeId === null) {
+        await api.clearConversationCompute(currentConvUuid);
+      } else {
+        await api.setConversationCompute(currentConvUuid, nodeId);
+      }
+      await loadActiveCompute(currentConvUuid);
+    } catch { /* */ }
+  }, [currentConvUuid, loadActiveCompute]);
 
   // Helper to reload messages from DB for a given conversation
   const reloadConversationMessages = useCallback(async (uuid: string) => {
@@ -401,7 +441,7 @@ function ChatUI({
         });
         break;
       case 'questions': setCurrentConvStatus('waiting_input'); setQuestionsPayload(data as QuestionsPayload); break;
-      case 'plan_update': 
+      case 'plan_update': {
         setTasks(data?.tasks || []); 
         setRightPanelOpen(true); 
         // Auto-compact after all tasks are completed
@@ -410,6 +450,7 @@ function ChatUI({
           setTimeout(() => api.compact().catch(() => {}), 1000);
         }
         break;
+      }
       case 'resources_update': setResources(data?.resources || []); setRightPanelOpen(true); break;
       case 'context_usage': if (data) setContextUsage(data as ContextUsage); break;
       case 'search_budget': if (data) setSearchBudget(data as SearchBudget); break;
@@ -521,6 +562,11 @@ function ChatUI({
           />
         </div>
         <div className="flex items-center gap-2">
+          <ComputeSelector
+            currentNode={activeCompute}
+            nodes={computeNodes}
+            onChange={handleComputeChange}
+          />
           <ModelModal currentModel={modelLabel} onModelChange={setModel} />
           <CopyModelButton model={model} />
         </div>
@@ -626,7 +672,7 @@ export default function App() {
             <Route path="providers" element={<ProvidersSettings />} />
             <Route path="agent" element={<AgentSettings />} />
             <Route path="mcp" element={<McpSettings />} />
-            <Route path="sandbox" element={<SandboxSettings />} />
+            <Route path="compute" element={<ComputeSettings />} />
             <Route path="writing" element={<WritingSettings />} />
           </Route>
         </Route>

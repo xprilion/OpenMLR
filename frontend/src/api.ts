@@ -85,6 +85,10 @@ export const api = {
   getConversation: (uuid: string) => get(`/api/conversations/${uuid}`),
   deleteConversation: (uuid: string) => del(`/api/conversations/${uuid}`),
   switchConversation: (uuid: string) => post(`/api/conversations/${uuid}/switch`, {}),
+  getConversationCompute: (uuid: string) => get(`/api/conversations/${uuid}/compute`),
+  setConversationCompute: (uuid: string, nodeId: number | null) =>
+    post(`/api/conversations/${uuid}/compute`, { node_id: nodeId }),
+  clearConversationCompute: (uuid: string) => del(`/api/conversations/${uuid}/compute`),
 
   // Settings
   getSettings: () => get('/api/settings'),
@@ -106,4 +110,21 @@ export const api = {
   getModels: () => get('/api/models'),
   getStatus: () => get('/api/status'),
   saveConfig: (config: Record<string, string>) => post('/api/config', config),
+
+  // SSH Keys
+  getKeys: () => get('/api/keys'),
+  createKey: (body: Record<string, any>) => post('/api/keys', body),
+  deleteKey: (filename: string) => del(`/api/keys/${filename}`),
+
+  // Compute Nodes
+  getComputeNodes: () => get('/api/compute/nodes'),
+  createComputeNode: (body: Record<string, any>) => post('/api/compute/nodes', body),
+  getComputeNode: (id: number) => get(`/api/compute/nodes/${id}`),
+  updateComputeNode: (id: number, body: Record<string, any>) => put(`/api/compute/nodes/${id}`, body),
+  deleteComputeNode: (id: number) => del(`/api/compute/nodes/${id}`),
+  testComputeNode: (id: number) => post(`/api/compute/nodes/${id}/test`, {}),
+  testComputeConfig: (type: string, config: Record<string, any>) =>
+    post('/api/compute/test', { type, config }),
+  probeComputeNode: (id: number) => post(`/api/compute/nodes/${id}/probe`, {}),
+  setDefaultComputeNode: (id: number) => post(`/api/compute/nodes/${id}/set-default`, {}),
 };

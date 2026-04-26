@@ -85,8 +85,46 @@ class SessionManager:
         )
 
         session = Session(config=config, conversation_id=conversation_id)
-        sandbox_manager = SandboxManager()
+
+        # Determine effective compute node
+        effective_node = None
+        if user_id and db:
+            try:
+                from ..db import operations as ops
+                # Check conversation override
+                conv = await ops.get_conversation_by_id(db, conversation_id)
+                if conv and conv.extra:
+                    override_node_id = conv.extra.get("compute_node_id")
+                    if override_node_id:
+                        effective_node = await ops.get_compute_node_by_id(db, override_node_id, user_id)
+
+                # Fall back to user default
+                if not effective_node:
+                    effective_node = await ops.get_default_compute_node(db, user_id)
+
+                if effective_node:
+                    log.info(f"Session {conversation_id}: using compute node '{effective_node.name}' ({effective_node.type})")
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to load compute node - {e}")
+
+        # Initialize workspace manager and sandbox manager
+        from ..compute import WorkspaceManager
+        workspace_manager = WorkspaceManager()
+        sandbox_manager = SandboxManager(
+            workspace_manager=workspace_manager,
+            conversation_uuid=uuid,
+        )
+
+        # If a compute node is configured, activate it
+        if effective_node:
+            try:
+                await sandbox_manager.create(effective_node.type, effective_node.config)
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to create sandbox for node '{effective_node.name}' - {e}")
+
         tool_router = create_tool_router(sandbox_manager)
+        # Inject user/db context for compute tools
+        tool_router.set_context(user_id=user_id, db=db)
         mcp_manager = MCPManager()
 
         # Load MCP servers from user settings if available
@@ -108,11 +146,53 @@ class SessionManager:
             except Exception as e:
                 log.warning(f"Session {conversation_id}: failed to load MCP servers - {e}")
 
+        # Build compute environment info for system prompt
+        compute_env = ""
+        if effective_node:
+            caps = effective_node.capabilities or {}
+            lines = [f"\n## Active Compute Environment: {effective_node.name} ({effective_node.type})"]
+            if caps.get("platform"):
+                lines.append(f"- Platform: {caps['platform']}")
+            if caps.get("cpu_cores"):
+                lines.append(f"- CPU: {caps['cpu_cores']} cores ({caps.get('cpu_arch', 'unknown')})")
+            if caps.get("available_ram_gb"):
+                lines.append(f"- RAM: {caps['available_ram_gb']:.1f} GB available")
+            if caps.get("gpu_available"):
+                gpu_info = caps.get("gpu_info", [])
+                for gpu in gpu_info[:1]:
+                    lines.append(f"- GPU: {gpu.get('model', 'unknown')} ({gpu.get('vram_gb', 0):.0f} GB VRAM)")
+                    if gpu.get("cuda_version"):
+                        lines.append(f"  - CUDA: {gpu['cuda_version']}")
+            if caps.get("python_versions"):
+                lines.append(f"- Python: {', '.join(caps['python_versions'])}")
+            if caps.get("docker_available"):
+                lines.append("- Docker: available")
+            if caps.get("installed_packages"):
+                pkgs = caps["installed_packages"][:10]
+                lines.append(f"- Key packages: {', '.join(pkgs)}")
+
+            # Add available nodes for context
+            all_nodes = []
+            if user_id and db:
+                try:
+                    all_nodes = await ops.get_compute_nodes(db, user_id)
+                except Exception:
+                    pass
+            if len(all_nodes) > 1:
+                lines.append("\n### Other Available Nodes")
+                for node in all_nodes:
+                    if node.id != effective_node.id:
+                        status = "online" if node.health_status == "online" else "offline"
+                        lines.append(f"- {node.name} ({node.type}): {status}")
+
+            compute_env = "\n".join(lines)
+
         # Build and set system prompt (after MCP tools are registered)
         session.context_manager.system_prompt = build_system_prompt(
             tool_specs=tool_router.get_raw_specs(),
             mode=mode,
             username=username,
+            compute_env=compute_env,
         )
 
         # Wire event broadcasting

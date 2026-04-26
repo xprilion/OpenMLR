@@ -207,6 +207,128 @@ async def switch_conversation(
     return {"ok": True}
 
 
+# ── Per-Conversation Compute ─────────────────────────────
+
+@router.get("/conversations/{uuid}/compute")
+async def get_conversation_compute(
+    uuid: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the active compute node for a conversation."""
+    conv = await _get_conv_or_404(db, uuid, user.id)
+
+    # Check conversation override first
+    if conv.extra and conv.extra.get("compute_node_id"):
+        node = await ops.get_compute_node_by_id(db, conv.extra["compute_node_id"], user.id)
+        if node:
+            return {
+                "node": {
+                    "id": node.id,
+                    "name": node.name,
+                    "type": node.type,
+                },
+                "source": "conversation",
+            }
+
+    # Fall back to user's default
+    default_node = await ops.get_default_compute_node(db, user.id)
+    if default_node:
+        return {
+            "node": {
+                "id": default_node.id,
+                "name": default_node.name,
+                "type": default_node.type,
+            },
+            "source": "default",
+        }
+
+    return {"node": None, "source": None}
+
+
+@router.post("/conversations/{uuid}/compute")
+async def set_conversation_compute(
+    uuid: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bind a compute node to a conversation."""
+    body = await request.json()
+    node_id = body.get("node_id")
+
+    conv = await _get_conv_or_404(db, uuid, user.id)
+
+    if node_id is None:
+        # Clear override
+        extra = conv.extra or {}
+        extra.pop("compute_node_id", None)
+        extra.pop("compute_node_name", None)
+        await ops.update_conversation_extra(db, conv.id, extra)
+        return {"ok": True, "node": None}
+
+    # Validate node exists and belongs to user
+    node = await ops.get_compute_node_by_id(db, node_id, user.id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Compute node not found")
+
+    extra = conv.extra or {}
+    extra["compute_node_id"] = node.id
+    extra["compute_node_name"] = node.name
+    await ops.update_conversation_extra(db, conv.id, extra)
+
+    # Update active session if it exists — must rebuild tool_router
+    # since sandbox tools capture sandbox_manager in closures
+    sm = _sm(request)
+    active = sm.get_session(conv.id)
+    if active:
+        from ..compute import WorkspaceManager
+        from ..sandbox.manager import SandboxManager
+        from ..tools.registry import create_tool_router
+
+        workspace_manager = WorkspaceManager()
+        sandbox_manager = SandboxManager(
+            workspace_manager=workspace_manager,
+            conversation_uuid=conv.uuid,
+        )
+        await sandbox_manager.create(node.type, node.config)
+        # Destroy old sandbox
+        try:
+            await active.sandbox_manager.destroy()
+        except Exception:
+            pass
+        active.sandbox_manager = sandbox_manager
+        # Rebuild tool router with new sandbox_manager
+        active.tool_router = create_tool_router(sandbox_manager)
+        active.tool_router.set_context(user_id=user.id, db=db)
+
+    return {
+        "ok": True,
+        "node": {
+            "id": node.id,
+            "name": node.name,
+            "type": node.type,
+        },
+    }
+
+
+@router.delete("/conversations/{uuid}/compute")
+async def clear_conversation_compute(
+    uuid: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear the compute override for a conversation (falls back to default)."""
+    conv = await _get_conv_or_404(db, uuid, user.id)
+
+    extra = conv.extra or {}
+    extra.pop("compute_node_id", None)
+    extra.pop("compute_node_name", None)
+    await ops.update_conversation_extra(db, conv.id, extra)
+
+    return {"ok": True}
+
+
 # ── Messaging ────────────────────────────────────────────
 
 @router.post("/message")
