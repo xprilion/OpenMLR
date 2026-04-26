@@ -1,19 +1,9 @@
 """Abstract sandbox interface and data types."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-
-@dataclass
-class EnvironmentInfo:
-    """Information about a sandbox environment."""
-    os: str = "unknown"
-    python_version: str = "unknown"
-    gpu_available: bool = False
-    gpu_info: str | None = None
-    installed_packages: list[str] = field(default_factory=list)
-    available_disk_gb: float = 0.0
-    available_ram_gb: float = 0.0
+from ..compute.capabilities import ComputeCapabilities
 
 
 @dataclass
@@ -41,6 +31,23 @@ class SandboxInterface(ABC):
         """Execute a shell command in the sandbox."""
         ...
 
+    async def execute_stream(self, command: str, timeout: int = 120, on_chunk=None):
+        """Execute a command and stream output chunks via callback.
+
+        Args:
+            command: Shell command to execute
+            timeout: Timeout in seconds
+            on_chunk: Callback function(text: str, is_stderr: bool) called for each chunk
+
+        Returns:
+            ExecutionResult with full output
+        """
+        # Default implementation falls back to regular execute
+        result = await self.execute(command, timeout)
+        if on_chunk and result.output:
+            on_chunk(result.output, False)
+        return result
+
     @abstractmethod
     async def read_file(self, path: str) -> str:
         """Read a file from the sandbox filesystem."""
@@ -67,7 +74,7 @@ class SandboxInterface(ABC):
         ...
 
     @abstractmethod
-    async def probe_environment(self) -> EnvironmentInfo:
+    async def probe_environment(self) -> ComputeCapabilities:
         """Probe the sandbox environment for capabilities."""
         ...
 

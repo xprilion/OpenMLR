@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 
 export type Mode = 'plan' | 'execute';
@@ -52,10 +52,24 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
   }, [mode, onModeChange]);
 
   const isPlan = mode === 'plan';
+  
+  // Use shorter placeholders on mobile (check window width)
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  const placeholder = isPlan 
+    ? (isMobile ? 'Plan your research...' : 'Plan: ask questions, gather context, create plan...')
+    : (isMobile ? 'Execute task...' : 'Execute: tell the agent what to do...');
 
   return (
-    <div className="px-6 py-4 bg-bg border-t border-border">
-      <div className="flex items-center gap-3 max-w-4xl mx-auto">
+    <div className="px-3 sm:px-6 py-3 sm:py-4 bg-bg border-t border-border">
+      <div className="flex items-center gap-2 sm:gap-3 max-w-4xl mx-auto">
         {/* Mode toggle button - fixed height to match input */}
         <button
           className={`h-11 w-11 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 transition-all ${
@@ -77,10 +91,19 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
           }}
-          placeholder={isPlan ? 'Plan: ask questions, gather context, create plan...' : 'Execute: tell the agent what to do...'}
+          placeholder={placeholder}
           rows={1}
           disabled={disabled}
-          className="flex-1 min-h-[44px] bg-surface border border-border rounded-lg px-4 py-2.5 text-base text-text placeholder-text-dim resize-none focus:border-primary focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed leading-normal"
+          className="flex-1 min-h-[44px] bg-surface border border-border rounded-lg px-4 py-2.5 text-base text-text placeholder-text-dim resize-none focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed leading-normal"
+          style={{
+            borderColor: undefined,
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = isPlan ? '#f59e0b' : '#3b82f6';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '';
+          }}
         />
         
         {/* Stop button - same height as mode toggle */}
@@ -97,7 +120,11 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
         {/* Send button - same height as mode toggle */}
         {!disabled && (
           <button 
-            className="h-11 w-11 rounded-lg flex items-center justify-center bg-primary text-white hover:bg-primary-hover transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-11 w-11 rounded-lg flex items-center justify-center transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: isPlan ? '#f59e0b' : '#3b82f6',
+              color: isPlan ? '#000' : '#fff',
+            }}
             onClick={submit} 
             disabled={!text.trim()}
             title="Send message"

@@ -11,6 +11,7 @@ from openmlr.tools.local import (
     _handle_edit,
     _handle_read,
     _handle_write,
+    _running_in_container,
     _validate_path,
     create_local_tools,
 )
@@ -222,3 +223,26 @@ class TestModuleConstants:
         import openmlr.tools.local
         allow = openmlr.tools.local.ALLOW_DIRECT_EXEC
         assert allow is False
+
+
+class TestRunningInContainer:
+    def test_returns_bool(self):
+        # Just verify it returns a boolean (actual detection depends on environment)
+        result = _running_in_container()
+        assert isinstance(result, bool)
+
+    def test_kubernetes_env_detected(self, monkeypatch):
+        # Simulate Kubernetes environment
+        monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+        # Reload the function to pick up the env var
+        assert _running_in_container() is True
+
+    def test_dockerenv_file_not_present_outside_container(self, monkeypatch, tmp_path):
+        # When /.dockerenv doesn't exist and no other indicators
+        monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+        # The function checks for /.dockerenv at system root, so on a host system
+        # this should return False (unless we're actually in a container)
+        # This is more of a smoke test
+        result = _running_in_container()
+        # Can't assert specific value as it depends on actual runtime environment
+        assert isinstance(result, bool)

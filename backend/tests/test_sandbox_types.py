@@ -2,34 +2,43 @@
 
 import pytest
 
-from openmlr.sandbox.interface import EnvironmentInfo, ExecutionResult, SandboxInterface
+from openmlr.compute.capabilities import ComputeCapabilities, GPUInfo
+from openmlr.sandbox.interface import ExecutionResult, SandboxInterface
 from openmlr.sandbox.local import LocalSandbox
 
 
-class TestEnvironmentInfo:
+class TestComputeCapabilities:
     def test_defaults(self):
-        info = EnvironmentInfo()
-        assert info.os == "unknown"
-        assert info.python_version == "unknown"
-        assert info.gpu_available is False
-        assert info.gpu_info is None
-        assert info.installed_packages == []
-        assert info.available_disk_gb == 0.0
-        assert info.available_ram_gb == 0.0
+        caps = ComputeCapabilities()
+        assert caps.platform == "unknown"
+        assert caps.cpu_cores == 0
+        assert caps.gpu_available is False
+        assert caps.gpu_info == []
+        assert caps.installed_packages == []
+        assert caps.available_disk_gb == 0.0
+        assert caps.available_ram_gb == 0.0
 
     def test_custom_values(self):
-        info = EnvironmentInfo(
-            os="Linux",
-            python_version="3.12.0",
+        caps = ComputeCapabilities(
+            platform="Linux 6.5.0",
+            cpu_cores=8,
             gpu_available=True,
-            gpu_info="NVIDIA A100",
-            installed_packages=["torch", "numpy"],
+            gpu_info=[GPUInfo(model="NVIDIA A100", vram_gb=80.0)],
+            installed_packages=["torch==2.3.0", "numpy==1.26.0"],
             available_disk_gb=50.0,
             available_ram_gb=32.0,
         )
-        assert info.os == "Linux"
-        assert info.gpu_available is True
-        assert "torch" in info.installed_packages
+        assert caps.platform == "Linux 6.5.0"
+        assert caps.gpu_available is True
+        assert len(caps.gpu_info) == 1
+        assert caps.gpu_info[0].model == "NVIDIA A100"
+
+    def test_to_dict_roundtrip(self):
+        caps = ComputeCapabilities(cpu_cores=4, gpu_available=True)
+        d = caps.to_dict()
+        caps2 = ComputeCapabilities.from_dict(d)
+        assert caps2.cpu_cores == 4
+        assert caps2.gpu_available is True
 
 
 class TestExecutionResult:

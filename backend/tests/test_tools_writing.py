@@ -103,18 +103,26 @@ class TestWriteSection:
 
 class TestGetDraft:
     async def test_no_project(self):
+        from unittest.mock import AsyncMock, patch
+
         from openmlr.tools.writing import _projects
         _projects.clear()
-        result, ok = _get_draft(conv_id=999)
+        # Mock _get_author_info to avoid database calls
+        with patch('openmlr.tools.writing._get_author_info', new_callable=AsyncMock, return_value=None):
+            result, ok = await _get_draft(conv_id=999)
         assert ok is False
 
     async def test_generates_draft(self):
+        from unittest.mock import AsyncMock, patch
+
         from openmlr.tools.writing import _projects
         _projects.clear()
         _create_project(conv_id=1, title="The Paper")
         _set_outline(conv_id=1, outline=[{"id": "intro", "title": "Introduction"}])
         _write_section(conv_id=1, section_id="intro", content="This is the intro.")
-        result, ok = _get_draft(conv_id=1)
+        # Mock _get_author_info to avoid database calls
+        with patch('openmlr.tools.writing._get_author_info', new_callable=AsyncMock, return_value=None):
+            result, ok = await _get_draft(conv_id=1)
         assert ok is True
         assert "# The Paper" in result
         assert "Introduction" in result

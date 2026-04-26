@@ -25,6 +25,7 @@ def build_system_prompt(
     mode: str = "general",
     username: str = "user",
     sandbox_info: str = "none",
+    compute_env: str = "",
     config: AgentConfig | None = None,
 ) -> str:
     """Build the full system prompt from YAML template."""
@@ -58,6 +59,7 @@ def build_system_prompt(
         timezone="UTC",
         username=username,
         sandbox_info=sandbox_info,
+        compute_env=compute_env,
     )
 
     return prompt

@@ -13,7 +13,9 @@ import {
   FileEdit,
   ClipboardList,
   Download,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { api } from '../api';
 import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
@@ -93,6 +95,8 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
   const hasContent = tasks.length > 0 || resources.length > 0;
   const [splitY, setSplitY] = useState(50); // percentage for tasks section
   const [exporting, setExporting] = useState(false);
+  const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  const [resourcesCollapsed, setResourcesCollapsed] = useState(false);
   const dragging = useRef(false);
   const panelRef = useRef<HTMLElement>(null);
 
@@ -135,8 +139,17 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
     }
   }, [paperResource]);
 
+  const done = tasks.filter((t) => t.status === 'completed').length;
+  const ctxPct = contextUsage ? Math.round(contextUsage.ratio * 100) : 0;
+  const ctxColor = ctxPct > 80 ? 'bg-error' : ctxPct > 60 ? 'bg-warning' : 'bg-success';
+
+  // Don't render anything if there's no content and no context usage
+  if (!hasContent && !contextUsage && !visible) {
+    return null;
+  }
+
+  // Collapsed state: show toggle button (fixed position, doesn't affect layout)
   if (!visible) {
-    if (!hasContent && !contextUsage) return null;
     return (
       <button 
         className="fixed right-4 top-20 z-20 w-10 h-10 rounded-lg bg-surface border border-border flex items-center justify-center text-text-dim hover:text-text hover:border-primary transition-all shadow-md"
@@ -153,13 +166,10 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
     );
   }
 
-  const done = tasks.filter((t) => t.status === 'completed').length;
-  const ctxPct = contextUsage ? Math.round(contextUsage.ratio * 100) : 0;
-  const ctxColor = ctxPct > 80 ? 'bg-error' : ctxPct > 60 ? 'bg-warning' : 'bg-success';
-
+  // Expanded state: fixed position sidebar that doesn't affect main layout
   return (
     <aside
-      className="w-72 min-w-[240px] bg-surface border-l border-border flex flex-col shrink-0 max-lg:hidden"
+      className="fixed right-0 top-14 bottom-0 w-72 bg-surface border-l border-border flex flex-col z-10 max-lg:hidden"
       ref={panelRef}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -240,34 +250,40 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
       )}
 
       {/* Tasks section */}
-      <div className="px-4 py-3 overflow-auto" style={{ flex: `0 0 ${splitY}%` }}>
-        <div className="text-xs uppercase tracking-wider text-text-dim font-semibold mb-2">
+      <div className="px-4 py-3 overflow-auto" style={{ flex: tasksCollapsed ? '0 0 auto' : `0 0 ${splitY}%` }}>
+        <button 
+          className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 hover:text-text transition-colors w-full text-left"
+          onClick={() => setTasksCollapsed(!tasksCollapsed)}
+        >
+          {tasksCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           Tasks ({done}/{tasks.length})
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {tasks.map((t, i) => (
-            <div 
-              key={i} 
-              className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm ${
-                t.status === 'completed' ? 'text-text-dim' : 
-                t.status === 'in_progress' ? 'text-primary bg-primary/10' : 
-                t.status === 'cancelled' ? 'text-error line-through' : 'text-text'
-              }`}
-            >
-              <span className={`shrink-0 ${
-                t.status === 'completed' ? 'text-success' : 
-                t.status === 'in_progress' ? 'text-primary' : 
-                t.status === 'cancelled' ? 'text-error' : 'text-text-dim'
-              }`}>
-                {STATUS_ICONS[t.status] || <Circle size={14} />}
-              </span>
-              <span className="truncate">{t.title}</span>
-            </div>
-          ))}
-          {tasks.length === 0 && (
-            <div className="text-sm text-text-dim py-2">No tasks yet</div>
-          )}
-        </div>
+        </button>
+        {!tasksCollapsed && (
+          <div className="flex flex-col gap-1.5">
+            {tasks.map((t, i) => (
+              <div 
+                key={i} 
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm ${
+                  t.status === 'completed' ? 'text-text-dim' : 
+                  t.status === 'in_progress' ? 'text-primary bg-primary/10' : 
+                  t.status === 'cancelled' ? 'text-error line-through' : 'text-text'
+                }`}
+              >
+                <span className={`shrink-0 ${
+                  t.status === 'completed' ? 'text-success' : 
+                  t.status === 'in_progress' ? 'text-primary' : 
+                  t.status === 'cancelled' ? 'text-error' : 'text-text-dim'
+                }`}>
+                  {STATUS_ICONS[t.status] || <Circle size={14} />}
+                </span>
+                <span className="truncate">{t.title}</span>
+              </div>
+            ))}
+            {tasks.length === 0 && (
+              <div className="text-sm text-text-dim py-2">No tasks yet</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Draggable separator */}
@@ -277,50 +293,56 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
       />
 
       {/* Resources section */}
-      <div className="px-4 py-3 overflow-auto" style={{ flex: `0 0 ${100 - splitY}%` }}>
-        <div className="text-xs uppercase tracking-wider text-text-dim font-semibold mb-2">
+      <div className="px-4 py-3 overflow-auto" style={{ flex: resourcesCollapsed ? '0 0 auto' : `0 0 ${100 - splitY}%` }}>
+        <button 
+          className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 hover:text-text transition-colors w-full text-left"
+          onClick={() => setResourcesCollapsed(!resourcesCollapsed)}
+        >
+          {resourcesCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           Resources ({otherResources.length})
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {[...otherResources].sort((a, b) => (a.type === 'plan' ? -1 : b.type === 'plan' ? 1 : 0)).map((r, i) => (
-            <div 
-              key={i} 
-              className={`flex items-start gap-2 px-2.5 py-2 rounded-lg text-sm ${
-                r.type === 'report' || r.type === 'plan' ? 'bg-primary/5 border border-primary/20' : ''
-              }`}
-            >
-              <span className="shrink-0 text-text-dim mt-0.5">
-                {RES_ICONS[r.type] || <FileText size={14} />}
-              </span>
-              <div className="flex-1 min-w-0">
-                {(r.type === 'report' || r.type === 'plan') && r.id ? (
-                  <button 
-                    className="text-left font-medium text-text hover:text-primary transition-colors truncate block w-full"
-                    onClick={() => onViewReport(r)}
-                  >
-                    {r.title}
-                  </button>
-                ) : (
-                  <span className="font-medium text-text truncate block">{r.title}</span>
-                )}
-                {r.url && (
-                  <a 
-                    className="text-xs text-text-dim hover:text-primary truncate flex items-center gap-1 mt-0.5"
-                    href={r.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink size={10} />
-                    {r.url.length > 35 ? r.url.slice(0, 35) + '...' : r.url}
-                  </a>
-                )}
+        </button>
+        {!resourcesCollapsed && (
+          <div className="flex flex-col gap-1.5">
+            {[...otherResources].sort((a, b) => (a.type === 'plan' ? -1 : b.type === 'plan' ? 1 : 0)).map((r, i) => (
+              <div 
+                key={i} 
+                className={`flex items-start gap-2 px-2.5 py-2 rounded-lg text-sm ${
+                  r.type === 'report' || r.type === 'plan' ? 'bg-primary/5 border border-primary/20' : ''
+                }`}
+              >
+                <span className="shrink-0 text-text-dim mt-0.5">
+                  {RES_ICONS[r.type] || <FileText size={14} />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  {(r.type === 'report' || r.type === 'plan') && r.id ? (
+                    <button 
+                      className="text-left font-medium text-text hover:text-primary transition-colors truncate block w-full"
+                      onClick={() => onViewReport(r)}
+                    >
+                      {r.title}
+                    </button>
+                  ) : (
+                    <span className="font-medium text-text truncate block">{r.title}</span>
+                  )}
+                  {r.url && (
+                    <a 
+                      className="text-xs text-text-dim hover:text-primary truncate flex items-center gap-1 mt-0.5"
+                      href={r.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink size={10} />
+                      {r.url.length > 35 ? r.url.slice(0, 35) + '...' : r.url}
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-          {otherResources.length === 0 && (
-            <div className="text-sm text-text-dim py-2">No resources yet</div>
-          )}
-        </div>
+            ))}
+            {otherResources.length === 0 && (
+              <div className="text-sm text-text-dim py-2">No resources yet</div>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );

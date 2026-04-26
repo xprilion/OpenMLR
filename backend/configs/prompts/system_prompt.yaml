@@ -145,3 +145,13 @@ prompt: |
   - Date: {{ date }}
   - User: {{ username }}
   - Mode: {{ mode }}
+
+  {% if compute_env %}
+  {{ compute_env }}
+  {% endif %}
+
+  # Compute Planning
+  When starting tasks that require significant computation (training models, processing large datasets, etc.):
+  1. Use `compute_plan` to verify the active node meets requirements
+  2. If not, use `compute_select` to switch to a suitable node
+  3. Always `sandbox_probe` before executing code on a node for the first time

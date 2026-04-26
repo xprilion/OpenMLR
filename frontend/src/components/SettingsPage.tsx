@@ -1,11 +1,11 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { ArrowLeft, Key, Bot, Server, Box, PenTool } from 'lucide-react';
+import { ArrowLeft, Key, Bot, Server, Cpu, PenTool } from 'lucide-react';
 
 const navItems = [
   { path: '/settings/providers', label: 'Providers', icon: Key },
   { path: '/settings/agent', label: 'Agent', icon: Bot },
   { path: '/settings/mcp', label: 'MCP Servers', icon: Server },
-  { path: '/settings/sandbox', label: 'Sandbox', icon: Box },
+  { path: '/settings/compute', label: 'Compute', icon: Cpu },
   { path: '/settings/writing', label: 'Writing', icon: PenTool },
 ];
 

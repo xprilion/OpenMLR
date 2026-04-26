@@ -13,7 +13,7 @@ celery_app = Celery(
     "openmlr",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["openmlr.tasks.agent_tasks"],
+    include=["openmlr.tasks.agent_tasks", "openmlr.tasks.compute_tasks"],
 )
 
 # Celery configuration
@@ -43,6 +43,18 @@ celery_app.conf.update(
 
     # Default queue
     task_default_queue="default",
+
+    # Beat schedule for periodic tasks
+    beat_schedule={
+        "health-check-all-nodes": {
+            "task": "openmlr.tasks.compute_tasks.health_check_all_nodes",
+            "schedule": 300.0,  # Every 5 minutes
+        },
+        "cleanup-old-workspaces": {
+            "task": "openmlr.tasks.compute_tasks.cleanup_old_workspaces",
+            "schedule": 86400.0,  # Every 24 hours
+        },
+    },
 )
 
 

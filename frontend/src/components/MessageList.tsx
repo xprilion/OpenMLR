@@ -5,6 +5,7 @@ import type { Message, SubAgentChild } from '../types';
 
 interface Props {
   messages: Message[];
+  hasDrawerOpen?: boolean; // When QuestionDrawer is visible
 }
 
 /** Format seconds into human-readable duration */
@@ -123,13 +124,34 @@ function SubAgentBlock({ msg, expanded, onToggle }: { msg: Message; expanded: bo
   );
 }
 
-export function MessageList({ messages }: Props) {
+export function MessageList({ messages, hasDrawerOpen }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Track message count to detect new messages (not layout changes)
+  const prevMessageCountRef = useRef<number>(0);
 
+  // Only scroll to bottom when NEW messages are added
+  // This prevents scrolling on layout changes (e.g., RightPanel opening)
+  // Using container.scrollTop instead of scrollIntoView to avoid scrolling parent containers
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const currentCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+    
+    // Only scroll if message count increased (new message added)
+    if (currentCount > prevCount && prevCount > 0) {
+      // Small delay to let DOM settle, then scroll
+      const timer = setTimeout(() => {
+        const container = containerRef.current;
+        if (container) {
+          // Scroll the container itself, not using scrollIntoView which can affect parents
+          container.scrollTop = container.scrollHeight;
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+    
+    prevMessageCountRef.current = currentCount;
+  }, [messages.length]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -141,7 +163,11 @@ export function MessageList({ messages }: Props) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-2">
+    <div 
+      ref={containerRef}
+      className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-2 min-h-0"
+      style={{ paddingBottom: hasDrawerOpen ? '280px' : undefined }}
+    >
       {messages.map((msg) => (
         <div key={msg.id} className="flex animate-fade-in">
           {/* User messages */}
@@ -222,7 +248,6 @@ export function MessageList({ messages }: Props) {
           )}
         </div>
       ))}
-      <div ref={bottomRef} />
     </div>
   );
 }

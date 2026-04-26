@@ -1,6 +1,5 @@
 """SandboxManager — lifecycle management and provider selection."""
 
-
 from .interface import SandboxInterface
 from .local import LocalSandbox
 from .modal_sandbox import ModalSandbox
@@ -10,9 +9,11 @@ from .ssh import SSHSandbox
 class SandboxManager:
     """Manages sandbox lifecycle: create, switch, destroy."""
 
-    def __init__(self):
+    def __init__(self, workspace_manager=None, conversation_uuid: str = None):
         self._active: SandboxInterface | None = None
         self.active_type: str = "none"
+        self._workspace_manager = workspace_manager
+        self._conversation_uuid = conversation_uuid
 
     def get_active(self) -> SandboxInterface | None:
         return self._active
@@ -25,8 +26,11 @@ class SandboxManager:
 
         config = config or {}
 
+        # Inject workspace and conversation context
+        config["conversation_uuid"] = self._conversation_uuid
+
         if provider == "local":
-            sandbox = LocalSandbox()
+            sandbox = LocalSandbox(workspace_manager=self._workspace_manager)
         elif provider == "ssh":
             sandbox = SSHSandbox()
         elif provider == "modal":

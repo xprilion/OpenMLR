@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Copy, Check } from 'lucide-react';
+import { ComputeSelector } from './components/ComputeSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
@@ -20,7 +21,7 @@ import { SettingsPage } from './components/SettingsPage';
 import { ProvidersSettings } from './components/settings/ProvidersSettings';
 import { AgentSettings } from './components/settings/AgentSettings';
 import { McpSettings } from './components/settings/McpSettings';
-import { SandboxSettings } from './components/settings/SandboxSettings';
+import { ComputeSettings } from './components/settings/ComputeSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
 
 let msgId = 0;
@@ -100,6 +101,8 @@ function ChatUI({
   const [viewingReport, setViewingReport] = useState<Resource | null>(null);
   const [inputMode, setInputMode] = useState<Mode>('plan');
   const [inputText, setInputText] = useState('');
+  const [computeNodes, setComputeNodes] = useState<any[]>([]);
+  const [activeCompute, setActiveCompute] = useState<any>(null);
 
   // Ref to always have current conv UUID in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -120,14 +123,33 @@ function ChatUI({
     }
   }, []);
 
+  const loadComputeNodes = useCallback(async () => {
+    try {
+      const data = await api.getComputeNodes();
+      setComputeNodes(data.nodes || []);
+    } catch {
+      setComputeNodes([]);
+    }
+  }, []);
+
+  const loadActiveCompute = useCallback(async (uuid: string) => {
+    try {
+      const data = await api.getConversationCompute(uuid);
+      setActiveCompute(data.node || null);
+    } catch {
+      setActiveCompute(null);
+    }
+  }, []);
+
   // Initial load - load conversations and activate the correct one
   useEffect(() => { 
     const init = async () => {
+      await loadComputeNodes();
       const convs = await loadConversations();
       
       // If URL has a conversation UUID, load it directly
       if (routeUuid) {
-        switchConv(routeUuid);
+        await switchConv(routeUuid);
         return;
       }
       
@@ -146,7 +168,7 @@ function ChatUI({
         const first = convs[0];
         setCurrentConvUuid(first.uuid);
         navigate(`/${first.uuid}`, { replace: true });
-        switchConv(first.uuid);
+        await switchConv(first.uuid);
       }
     };
     init();
@@ -197,6 +219,9 @@ function ChatUI({
         }
         return { id: nextId(), role: m.role, content: m.content };
       }) || []);
+
+      // Load active compute for this conversation
+      await loadActiveCompute(uuid);
     } catch { /* */ }
   };
 
@@ -214,6 +239,8 @@ function ChatUI({
       setMessages([]); setTasks([]); setResources([]); setContextUsage(null); setSearchBudget(null);
       setApprovalEvent(null); setQuestionsPayload(null);
       if (conv.model) setModel(conv.model);
+      // Load default compute for new conversation
+      await loadActiveCompute(conv.uuid);
       navigate(`/${conv.uuid}`, { replace: true });
     } catch { /* */ }
   };
@@ -226,10 +253,23 @@ function ChatUI({
       if (currentConvUuid === uuid) {
         setCurrentConvUuid(null); setMessages([]); setTasks([]); setResources([]);
         setApprovalEvent(null); setQuestionsPayload(null);
+        setActiveCompute(null);
         navigate('/', { replace: true });
       }
     } catch { /* */ }
   };
+
+  const handleComputeChange = useCallback(async (nodeId: number | null) => {
+    if (!currentConvUuid) return;
+    try {
+      if (nodeId === null) {
+        await api.clearConversationCompute(currentConvUuid);
+      } else {
+        await api.setConversationCompute(currentConvUuid, nodeId);
+      }
+      await loadActiveCompute(currentConvUuid);
+    } catch { /* */ }
+  }, [currentConvUuid, loadActiveCompute]);
 
   // Helper to reload messages from DB for a given conversation
   const reloadConversationMessages = useCallback(async (uuid: string) => {
@@ -401,7 +441,7 @@ function ChatUI({
         });
         break;
       case 'questions': setCurrentConvStatus('waiting_input'); setQuestionsPayload(data as QuestionsPayload); break;
-      case 'plan_update': 
+      case 'plan_update': {
         setTasks(data?.tasks || []); 
         setRightPanelOpen(true); 
         // Auto-compact after all tasks are completed
@@ -410,6 +450,7 @@ function ChatUI({
           setTimeout(() => api.compact().catch(() => {}), 1000);
         }
         break;
+      }
       case 'resources_update': setResources(data?.resources || []); setRightPanelOpen(true); break;
       case 'context_usage': if (data) setContextUsage(data as ContextUsage); break;
       case 'search_budget': if (data) setSearchBudget(data as SearchBudget); break;
@@ -512,15 +553,20 @@ function ChatUI({
   return (
     <div className="flex flex-col h-screen bg-bg">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 h-14 bg-surface border-b border-border shrink-0 gap-4">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-lg text-primary tracking-tight">OpenMLR</span>
+      <header className="flex items-center justify-between px-3 sm:px-6 h-14 bg-surface border-b border-border shrink-0 gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <span className="font-bold text-base sm:text-lg text-primary tracking-tight">OpenMLR</span>
           <span 
             className={`w-2 h-2 rounded-full transition-colors duration-300 ${connected ? 'bg-success' : 'bg-error'}`} 
             title={connected ? 'Connected' : 'Disconnected'}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+          <ComputeSelector
+            currentNode={activeCompute}
+            nodes={computeNodes}
+            onChange={handleComputeChange}
+          />
           <ModelModal currentModel={modelLabel} onModelChange={setModel} />
           <CopyModelButton model={model} />
         </div>
@@ -535,32 +581,35 @@ function ChatUI({
           onDelete={handleDeleteConversation}
         />
         
-        <div className="flex flex-col flex-1 overflow-hidden relative">
+        <div 
+          className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200"
+          style={{ paddingRight: rightPanelOpen ? '288px' : undefined }}
+        >
           {/* Empty state */}
           {messages.length === 0 && !effectiveProcessing && (
-            <div className="flex flex-col items-center justify-center flex-1 text-center px-6 py-12 relative overflow-hidden">
+            <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
               {/* Large embossed background text */}
               <div 
-                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none px-2"
                 aria-hidden="true"
               >
                 <span 
-                  className="text-[12rem] sm:text-[16rem] lg:text-[20rem] font-black tracking-tighter"
+                  className="text-[4rem] xs:text-[6rem] sm:text-[10rem] md:text-[14rem] lg:text-[18rem] xl:text-[20rem] font-black tracking-tighter whitespace-nowrap animate-[emboss-pulse_4s_ease-in-out_infinite]"
                   style={{
                     color: 'transparent',
-                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.08)',
-                    textShadow: '0 0 80px rgba(59, 130, 246, 0.05)',
+                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.12)',
+                    textShadow: '0 0 60px rgba(59, 130, 246, 0.08), 0 0 120px rgba(59, 130, 246, 0.04)',
                   }}
                 >
                   OpenMLR
                 </span>
               </div>
               {/* Foreground prompt */}
-              <p className="text-xl text-text-dim z-10">What would you like to research?</p>
+              <p className="text-lg sm:text-xl text-text-dim z-10">What would you like to research?</p>
             </div>
           )}
           
-          <MessageList messages={messages} />
+          <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
           {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
           {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary) => { 
             setQuestionsPayload(null); 
@@ -579,6 +628,7 @@ function ChatUI({
           />
         </div>
         
+        {/* RightPanel is fixed position, doesn't affect flex layout */}
         <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
       </div>
       
@@ -626,7 +676,7 @@ export default function App() {
             <Route path="providers" element={<ProvidersSettings />} />
             <Route path="agent" element={<AgentSettings />} />
             <Route path="mcp" element={<McpSettings />} />
-            <Route path="sandbox" element={<SandboxSettings />} />
+            <Route path="compute" element={<ComputeSettings />} />
             <Route path="writing" element={<WritingSettings />} />
           </Route>
         </Route>

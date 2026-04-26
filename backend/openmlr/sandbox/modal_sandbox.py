@@ -3,7 +3,8 @@
 import asyncio
 import time
 
-from .interface import EnvironmentInfo, ExecutionResult, SandboxInterface
+from ..compute.probe import probe_sandbox
+from .interface import ExecutionResult, SandboxInterface
 
 
 class ModalSandbox(SandboxInterface):
@@ -117,7 +118,7 @@ class ModalSandbox(SandboxInterface):
     async def write_file(self, path: str, content: str) -> bool:
         self._ensure_active()
         # Use heredoc for safe content transfer
-        content.replace("'", "'\\''")
+        content = content.replace("'", "'\\''")
         result = await self.execute(
             f"mkdir -p $(dirname '{path}') && cat > '{path}' << 'OPEN_MLR_EOF'\n{content}\nOPEN_MLR_EOF",
             timeout=10,
@@ -143,49 +144,8 @@ class ModalSandbox(SandboxInterface):
             return []
         return [line for line in result.output.strip().split("\n") if line]
 
-    async def probe_environment(self) -> EnvironmentInfo:
-        info = EnvironmentInfo()
-
-        result = await self.execute("uname -s -r", timeout=5)
-        if result.success:
-            info.os = result.output.strip()
-
-        result = await self.execute("python3 --version", timeout=5)
-        if result.success:
-            info.python_version = result.output.strip()
-
-        result = await self.execute(
-            "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null",
-            timeout=10,
-        )
-        if result.success and result.output.strip():
-            info.gpu_available = True
-            info.gpu_info = result.output.strip()
-
-        result = await self.execute("df -BG --output=avail / 2>/dev/null | tail -1", timeout=5)
-        if result.success:
-            try:
-                info.available_disk_gb = float(result.output.strip().replace("G", ""))
-            except ValueError:
-                pass
-
-        result = await self.execute(
-            "free -g 2>/dev/null | grep Mem | awk '{print $7}'", timeout=5
-        )
-        if result.success:
-            try:
-                info.available_ram_gb = float(result.output.strip())
-            except ValueError:
-                pass
-
-        result = await self.execute("pip list --format=freeze 2>/dev/null | head -30", timeout=10)
-        if result.success:
-            info.installed_packages = [
-                line.split("==")[0] for line in result.output.strip().split("\n")
-                if "==" in line
-            ]
-
-        return info
+    async def probe_environment(self):
+        return await probe_sandbox(self)
 
     async def destroy(self) -> None:
         if self._sandbox:
