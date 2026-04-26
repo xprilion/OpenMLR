@@ -1,73 +1,70 @@
 # Modes
 
-OpenMLR uses three per-message modes. Switch modes using the selector above
-the input area. Code execution is available in all modes.
+OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focused on the right kind of work.
 
-## Plan mode
+## Plan Mode (P)
 
-**Purpose**: Clarify scope before doing work.
+**Purpose**: Gather context, ask questions, create structured plans before doing any work.
 
-The agent will:
-- Ask structured questions using a bottom drawer UI (2-4 options + free text)
-- Break tasks into a plan visible in the right panel
-- Not execute code or modify files
-- Suggest switching to Research or Write mode when ready
+**What the agent can do:**
+- Ask clarifying questions via `ask_user` (structured options UI)
+- Create and update task plans via `plan_tool`
+- Read files and search the codebase (read-only filesystem tools)
+- Search the web and papers for context
+- Generate `PLAN.md` and pin it in resources
 
-## Research mode
+**What the agent cannot do:**
+- Write or edit files
+- Execute code (bash, sandbox)
+- Write paper sections
+- Use the `research` sub-agent
 
-**Purpose**: Find and synthesize information.
+**Visual indicator**: Messages have an **amber border**.
 
-The agent will:
-- Search papers via OpenAlex, ArXiv, CrossRef
-- Read full paper sections from ar5iv HTML
-- Crawl citation graphs and find related work
-- Search GitHub for code examples
-- Track all papers/resources in the right panel
-- Respect the per-session search budget (default 25 API calls)
+**When to use**: Start here. Let the agent understand the problem, ask questions, and build a plan before switching to Execute.
 
-### Search budget
+## Execute Mode (E)
 
-Each session has a limited number of paper API calls to prevent endless
-searching. The budget is shown in the right panel. When exhausted, the agent
-must ask the user before continuing.
+**Purpose**: Do the work. Follow the plan built in Plan mode.
 
-## Write mode
+**What the agent can do:**
+- All tools except `ask_user`
+- Research papers, crawl citations, spawn sub-agents
+- Write and edit files
+- Draft paper sections with auto-save
+- Run code in bash or sandboxes (Docker/SSH/Modal)
 
-**Purpose**: Draft academic content.
+**What the agent cannot do:**
+- Use `ask_user` (no structured questions — it should be working, not asking)
 
-The agent will:
-- Write paper sections using the `writing` tool
-- Manage citations and bibliography
-- Reference completion reports from the research phase
-- Export to Markdown or LaTeX
+**Visual indicator**: Messages have a **blue border**.
 
-## Task management
+**When to use**: Once you have a plan and the agent knows what to do.
 
-The right panel shows:
-- **Tasks**: Plan items with status (pending → in progress → completed)
-- **Resources**: Papers, code repos, datasets, and completion reports
+## Switching Modes
 
-When a task is marked completed, a **completion report** is auto-generated
-with a summary and hints for upcoming tasks. Click report titles in the
-resources list to view them in a slide-out drawer.
+| Method | Action |
+|--------|--------|
+| **P/E button** | Click the mode toggle above the input area |
+| **Cmd+B** | Switch to Plan mode |
+| **Cmd+E** | Switch to Execute mode |
 
-### Completion reports
+The mode applies per-message. You can switch freely between messages.
 
-Reports follow a markdown spec:
+## Mode Enforcement
 
-```markdown
-# Task Completion Report: [task title]
-**Completed**: [timestamp]
-## Summary
-[what was accomplished]
-## Next Steps
-[recommendations for upcoming tasks]
+Mode restrictions are enforced at three layers:
+
+1. **System prompt** — The agent is instructed about what it can and cannot do in the current mode
+2. **Tool filtering** — The tool router only presents mode-allowed tools to the LLM
+3. **Runtime blocking** — If a tool call somehow bypasses filtering, the router returns an error message instead of executing
+
+When a blocked tool is called, the agent receives:
+```
+Tool 'bash' is not available in PLAN mode.
+Plan mode is for planning and asking questions only.
 ```
 
-The agent re-reads these reports to maintain context across compactions.
+## PLAN.md
 
-## Context tracking
-
-The right panel shows a token usage gauge. When approaching the model's
-context window limit, the system auto-compacts the conversation by summarizing
-older messages. The gauge color changes: green → yellow → red.
+When the agent creates a plan in Plan mode, it auto-generates a `PLAN.md` file that is pinned in the resources panel. This plan persists across context compactions and serves as the agent's reference during Execute mode.

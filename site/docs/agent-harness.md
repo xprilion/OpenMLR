@@ -1,182 +1,131 @@
 # Agent Harness
 
-The agent harness is the core execution engine that processes user messages, manages tool calls, and maintains conversation context across long research sessions.
+The agent harness is the core execution engine that processes user messages, manages tool calls, and maintains conversation context.
 
 ## Overview
 
-OpenMLR's agent harness is designed for extended, multi-turn research workflows. Unlike simple chatbot loops, it handles:
+The harness is designed for extended, multi-turn research workflows:
 
 - **Long-running sessions** — Up to 300 tool calls per user message
-- **Context management** — Automatic compaction when approaching model limits  
-- **Mode enforcement** — Restricts tools based on Plan/Research/Write mode
+- **Mode enforcement** — Restricts tools based on Plan/Execute mode
+- **Context management** — Automatic compaction when approaching model limits
 - **Doom loop detection** — Breaks out of repetitive tool call patterns
-- **Streaming output** — Real-time text and tool output via SSE
+- **DB-persisted writing** — Paper drafts survive across workers and restarts
+- **Redis interrupt relay** — Actually kills running tasks, not just a flag check
+- **Sub-agent streaming** — Research tool spawns nested agents with visible tool calls
 
-## Architecture
+## Agent Loop
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Session Manager                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │  Session 1  │  │  Session 2  │  │  Session N  │          │
-│  │  (conv_id)  │  │  (conv_id)  │  │  (conv_id)  │          │
-│  └──────┬──────┘  └─────────────┘  └─────────────┘          │
-└─────────┼───────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Agent Loop                              │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐ │
-│  │ Context  │──▶│   LLM    │──▶│  Parse   │──▶│ Execute  │ │
-│  │ Manager  │   │  Stream  │   │  Tools   │   │  Tools   │ │
-│  └──────────┘   └──────────┘   └──────────┘   └────┬─────┘ │
-│       ▲                                            │        │
-│       │         ┌──────────────────────────────────┘        │
-│       │         ▼                                           │
-│  ┌────┴─────────────────┐   ┌────────────────────────────┐ │
-│  │   Doom Detection     │   │     Tool Router            │ │
-│  │   (break loops)      │   │   (mode filtering)         │ │
-│  └──────────────────────┘   └────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    Agent Loop                             │
+│                                                          │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐             │
+│  │ Context  │──▶│   LLM    │──▶│  Parse   │             │
+│  │ Manager  │   │  Stream  │   │ Response │             │
+│  └──────────┘   └──────────┘   └────┬─────┘             │
+│       ▲                             │                    │
+│       │                    ┌────────▼────────┐           │
+│       │                    │   Tool Router   │           │
+│       │                    │ (mode filtering)│           │
+│       │                    └────────┬────────┘           │
+│       │                             │                    │
+│       │                    ┌────────▼────────┐           │
+│       │                    │  Execute Tools  │           │
+│       │                    └────────┬────────┘           │
+│       │                             │                    │
+│  ┌────┴────────────┐      ┌────────▼────────┐           │
+│  │ Doom Detection  │◀─────│  Add Results    │           │
+│  │ (break loops)   │      │  to Context     │           │
+│  └─────────────────┘      └─────────────────┘           │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Key Components
+The loop runs for each user message:
 
-### 1. Agent Loop (`agent/loop.py`)
+1. Check if context needs compaction
+2. Call LLM with streaming (system prompt + history + tools)
+3. Parse response for tool calls
+4. Filter tools through mode restrictions
+5. Execute allowed tools, return errors for blocked ones
+6. Add results to context
+7. Check for doom loops
+8. Repeat until LLM produces no tool calls or max iterations reached
 
-The main execution engine. Processes one user message at a time, iterating through LLM calls and tool executions.
+## Mode Enforcement
 
-```python
-# Simplified flow
-for iteration in range(max_iterations):  # Default: 300
-    if needs_compaction():
-        compact_context()
-    
-    response = await llm.generate_stream(messages, tools)
-    
-    if response.has_tool_calls:
-        for tool_call in response.tool_calls:
-            if doom_loop_detected():
-                inject_correction_prompt()
-                continue
-            
-            result = await tool_router.call(tool_call)
-            messages.append(tool_result)
-    else:
-        # No more tool calls, turn complete
-        break
-```
+Tools are restricted based on the current mode at three layers:
 
-**Key behaviors:**
-- Exits when LLM produces no tool calls (natural completion)
-- Exits on user interrupt (`/stop` command)
-- Auto-compacts context at 90% of model's token limit
-- Injects mode hints for Plan/Research/Write modes
+1. **System prompt** — Instructs the agent about mode constraints
+2. **Tool filtering** — Only mode-allowed tools are sent to the LLM
+3. **Runtime blocking** — Blocked calls return an error instead of executing
 
-### 2. Context Manager (`agent/context.py`)
+See [Modes](/modes) for the full breakdown.
 
-Tracks message history and token usage. Handles compaction to stay within model limits.
+## Context Management
 
-**Token tracking:**
-```python
-def estimate_tokens(text: str) -> int:
-    return max(1, len(text) // 4)  # ~4 chars per token
-```
+**Token tracking** uses a character-based estimate (~4 chars per token).
 
-**Compaction:**
-- Triggered at 90% of model's max tokens (configurable)
+**Compaction** triggers at 90% of the model's context window:
 - Summarizes old messages while preserving recent ones
-- Keeps completion reports and key decisions intact
-- Preserves the last N messages untouched (default: 5)
+- Keeps the last N messages untouched (default: 5)
+- Preserves completion reports, key decisions, and PLAN.md
+- Broadcasts `context_usage` events for the UI gauge
 
-**Usage tracking:**
-```python
-{
-    "used": 45000,      # Current token count
-    "max": 200000,      # Model's context window
-    "ratio": 0.225      # Percentage used
-}
+## Doom Loop Detection
+
+Detects when the agent gets stuck in repetitive patterns:
+
+**Identical consecutive calls** — Same tool + same arguments 3+ times:
+```
+bash(ls) → bash(ls) → bash(ls)  → DETECTED
 ```
 
-### 3. Tool Router (`tools/registry.py`)
-
-Central registry for all tools. Handles mode-based filtering and dispatching.
-
-**Mode restrictions:**
-
-| Mode | Allowed Tools |
-|------|---------------|
-| **plan** | `ask_user`, `plan_tool`, `read_file`, `list_dir`, `glob_files`, `grep_search` |
-| **research** | All plan tools + `web_search`, `papers`, `research`, `github_*` |
-| **write** | All plan tools + `writing`, `web_search` (for citations), `papers` |
-| **general** | All tools (no restrictions) |
-
-**When a blocked tool is called:**
+**Repeating sequences** — A-B-A-B patterns:
 ```
-Tool 'bash' is not available in PLAN mode. 
-Plan mode is for planning and asking questions only.
-Suggest switching to research or write mode using ask_user with suggest_mode.
+read(a) → edit(a) → read(a) → edit(a)  → DETECTED
 ```
 
-### 4. Doom Loop Detection (`agent/doom_loop.py`)
+When detected, a correction prompt is injected telling the agent to try a different approach.
 
-Detects when the agent gets stuck in repetitive patterns.
+## DB-Persisted Writing Projects
 
-**Pattern 1: Identical consecutive calls**
-```
-bash(ls) → bash(ls) → bash(ls)  # 3+ identical = doom loop
-```
+Paper writing uses the `writing_projects` table:
+- Outline, sections, and bibliography are stored as structured data
+- Every write/update auto-saves to the database immediately
+- Writing state survives Celery worker restarts, server redeployments, and browser refreshes
+- The Paper tab in the UI reads directly from the database
+- Client-side export to Markdown or LaTeX
 
-**Pattern 2: Repeating sequences**
-```
-read_file(a) → edit_file(a) → read_file(a) → edit_file(a)  # A-B-A-B pattern
-```
+## Redis Interrupt Relay
 
-**Correction prompt injected:**
-```
-[DOOM LOOP DETECTED] You have called `bash` with identical arguments 3 times 
-in a row. This is not making progress. Try a completely different approach:
-- Use a different tool
-- Change the arguments significantly
-- Re-read the error message carefully
-- Ask the user for help if you're stuck
-```
+When a user clicks Stop:
 
-### 5. Session Manager (`services/session_manager.py`)
+1. Frontend sends `POST /api/interrupt`
+2. Web process publishes interrupt signal to Redis channel
+3. Celery worker receives the signal
+4. Worker kills the running agent task immediately
+5. `interrupted` event is broadcast via SSE
 
-Manages multiple concurrent conversations. Each conversation gets its own isolated session.
+This is a real kill, not a cooperative flag check. The agent stops within seconds regardless of what tool is executing.
 
-**Session lifecycle:**
-1. Created on first message to a conversation
-2. Persists across browser refreshes (messages in DB)
-3. Destroyed when conversation deleted or server restart
+## Sub-Agent Streaming
 
-**Per-session state:**
-- `Session` — Message history, config, event callbacks
-- `ToolRouter` — Registered tools, MCP connections
-- `SandboxManager` — Docker containers, SSH connections
+The `research` tool spawns an independent sub-agent:
 
-## Event Flow
+- Sub-agent has its own context window and tool set
+- Parent agent sees nested tool calls streamed in real-time
+- Frontend displays nested tool calls inline within the research tool output
+- Useful for deep dives that would consume too much of the main context
 
-All events are broadcast via Server-Sent Events (SSE):
+## Per-Conversation Processing
 
-```
-User Message → processing → assistant_chunk (streaming) → tool_call → 
-               tool_output → assistant_chunk → ... → turn_complete
-```
+Each conversation gets isolated state:
 
-| Event | Data | When |
-|-------|------|------|
-| `processing` | `{status: "thinking..."}` | Agent starts |
-| `assistant_chunk` | `{chunk: "text"}` | Streaming tokens |
-| `assistant_stream_end` | `{}` | Stream complete |
-| `tool_call` | `{name, arguments}` | Tool invoked |
-| `tool_output` | `{name, output}` | Tool returned |
-| `questions` | `{questions: [...]}` | `ask_user` called |
-| `plan_update` | `{tasks: [...]}` | Task list changed |
-| `context_usage` | `{used, max, ratio}` | Token gauge |
-| `turn_complete` | `{}` | Processing done |
-| `error` | `{error: "..."}` | Error occurred |
+- Own agent session, tool router, and sandbox manager
+- Processing state tracked independently (`idle` / `processing` / `interrupted`)
+- Multiple conversations can process in parallel
+- Interrupting one does not affect others
 
 ## Configuration
 
@@ -185,7 +134,7 @@ Key settings in `AgentConfig`:
 ```python
 @dataclass
 class AgentConfig:
-    model_name: str = ""                    # LLM to use
+    model_name: str = ""                    # LLM to use (empty = auto-detect)
     max_iterations: int = 300               # Tool calls per turn
     stream: bool = True                     # Stream responses
     compact_threshold_ratio: float = 0.90   # Compact at 90%
@@ -193,60 +142,3 @@ class AgentConfig:
     default_max_tokens: int = 200000        # Fallback context size
     yolo_mode: bool = False                 # Skip confirmations
 ```
-
-## Extending the Harness
-
-### Adding a new tool
-
-```python
-# In tools/my_tool.py
-from ..agent.types import ToolSpec
-
-MY_TOOL_SPEC = ToolSpec(
-    name="my_tool",
-    description="Does something useful",
-    parameters={
-        "type": "object",
-        "properties": {
-            "arg1": {"type": "string", "description": "First argument"},
-        },
-        "required": ["arg1"],
-    },
-)
-
-async def my_tool(arg1: str) -> str:
-    # Implementation
-    return f"Result: {arg1}"
-
-# In tools/registry.py, add to create_tool_router()
-router.register(ToolSpec(...))
-```
-
-### Adding mode restrictions
-
-```python
-# In tools/registry.py
-MODE_TOOL_RESTRICTIONS = {
-    "my_mode": {
-        "allowed": {"tool1", "tool2"},
-        "blocked_message": "Tool '{tool}' not allowed in my_mode.",
-    },
-}
-```
-
-### Custom compaction logic
-
-Override `ContextManager.compact()` to customize how old messages are summarized.
-
-## Debugging
-
-Enable debug logging:
-
-```bash
-LOG_LEVEL=DEBUG uvicorn openmlr.app:app
-```
-
-Key log messages:
-- `[LLM] Model: ...` — Which model is being used
-- `[DOOM LOOP DETECTED]` — Loop detected and corrected
-- `Context nearing limit, compacting...` — Auto-compaction triggered
