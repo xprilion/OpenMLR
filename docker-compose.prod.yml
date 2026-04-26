@@ -1,12 +1,12 @@
-# OpenMLR - Development Docker Compose
+# OpenMLR - Production Docker Compose
 # Docs: https://openmlr.dev/setup
 #
 # Usage:
-#   make dev-up     # Start with live reload
-#   make dev-logs   # Watch logs
-#   make dev-down   # Stop services
+#   make up       # Start production stack
+#   make logs     # Watch logs
+#   make down     # Stop services
 #
-# For production, use: docker compose -f docker-compose.prod.yml up -d
+# Uses pre-built images from Docker Hub (xprilion/openmlr:latest)
 
 services:
   # PostgreSQL database
@@ -25,6 +25,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
 
   # Redis for Celery broker and pub/sub
   redis:
@@ -38,19 +41,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
 
-  # Web with live reload - mounts source code
+  # Main web application
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+    image: xprilion/openmlr:latest
+    build: .
     ports:
       - "3000:3000"
-    command: >
-      uvicorn openmlr.app:app
-      --host 0.0.0.0 --port 3000
-      --reload --reload-dir /app/backend/openmlr
-    working_dir: /app/backend
     env_file:
       - path: .env
         required: false
@@ -59,30 +59,23 @@ services:
       REDIS_URL: redis://redis:6379/0
       USE_BACKGROUND_JOBS: "true"
       USE_REDIS_PUBSUB: "true"
-      PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONUNBUFFERED: "1"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app/backend
-      - backend-venv:/app/backend/.venv
-      - ./frontend/dist:/app/frontend/dist
+      - ./backend/configs:/app/backend/configs
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
 
-  # Worker with auto-restart on code changes
+  # Celery worker for background jobs
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+    image: xprilion/openmlr:latest
+    build: .
     command: >
-      watchmedo auto-restart
-      --directory=/app/backend/openmlr
-      --pattern=*.py
-      --recursive
-      --
-      celery -A openmlr.celery_app worker
+      .venv/bin/celery -A openmlr.celery_app worker
       --loglevel=info
       --concurrency=2
       -Q default,agent
@@ -93,30 +86,31 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openmlr}:${POSTGRES_PASSWORD:-openmlr}@db:5432/${POSTGRES_DB:-openmlr}
       REDIS_URL: redis://redis:6379/0
-      PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONUNBUFFERED: "1"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app/backend
-      - backend-venv:/app/backend/.venv
+      - ./backend/configs:/app/backend/configs
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
 
-  # Docs site with live reload
+  # Documentation site (optional)
   docs:
     image: node:20-slim
     working_dir: /app/site
-    command: sh -c "npm install && npx vitepress dev docs --host 0.0.0.0 --port 4000"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 4000"
     ports:
       - "127.0.0.1:4000:4000"
     volumes:
       - ./site:/app/site
-      - docs-node-modules:/app/site/node_modules
+    profiles:
+      - docs
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   pgdata:
   redisdata:
-  backend-venv:
-  docs-node-modules:

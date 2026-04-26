@@ -26,7 +26,7 @@ features:
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
 cp .env.example .env
-docker compose up -d
+make up
 ```
 
 Open `http://localhost:3000`. Create an account. Configure API keys in **Settings > Providers**.
@@ -50,15 +50,16 @@ See [Quick Start](/quickstart) for all deployment options or [Setup & Installati
 
 OpenMLR uses two modes to keep the agent focused:
 
-- **Plan mode (P)** — The agent asks questions, gathers context, and creates structured plans. No code execution, no file writes. Toggle with `Cmd+B`. Messages have an amber border.
-- **Execute mode (E)** — The agent does the work: researches papers, writes drafts, runs experiments. All tools available. Toggle with `Cmd+E`. Messages have a blue border.
+- **Plan mode (P)** — The agent asks questions, gathers context, and creates structured plans. No code execution, no file writes. Messages have an amber border.
+- **Execute mode (E)** — The agent does the work: researches papers, writes drafts, runs experiments. All tools available. Messages have a blue border.
 
-Switch modes with the P/E button in the input area or keyboard shortcuts.
+Switch modes with the **P/E button** in the input area or press **Cmd+M** (Mac) / **Ctrl+M** (Windows/Linux) to toggle.
 
 ## Key Features
 
-- **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code. Full paper reading, citation graphs.
+- **Paper research** — OpenAlex, Semantic Scholar, arXiv, CrossRef, Papers With Code. Full paper reading, citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Preview + export (Markdown/LaTeX) in the Paper tab.
+- **MCP servers** — Connect external tools via the Model Context Protocol (Settings > MCP Servers).
 - **Sub-agent streaming** — Research tool spawns independent agents with nested tool call visibility.
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
 - **Per-conversation parallelism** — Multiple conversations process simultaneously.

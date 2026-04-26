@@ -32,7 +32,8 @@ Uses pre-built images from [Docker Hub](https://hub.docker.com/r/xprilion/openml
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
 cp .env.example .env
-docker compose up -d
+make up
+# or: docker compose -f docker-compose.prod.yml up -d
 ```
 
 Open `http://localhost:3000`. Create an account and configure API keys in **Settings > Providers**.
@@ -41,9 +42,9 @@ Open `http://localhost:3000`. Create an account and configure API keys in **Sett
 
 | Command | Description |
 |---------|-------------|
-| `make up` | Start all services |
-| `make down` | Stop all services |
-| `make logs` | Tail logs |
+| `make up` | Start production stack |
+| `make down` | Stop production stack |
+| `make logs` | Tail production logs |
 | `make restart` | Rebuild and restart web + worker |
 
 ### Services
@@ -61,7 +62,7 @@ External ports are mapped to non-standard ports to avoid conflicts with local se
 
 ## Docker Development
 
-Same as production, but with live reload. Code changes are reflected immediately.
+Development mode with live reload. Code changes are reflected immediately.
 
 ### Setup
 
@@ -70,9 +71,10 @@ git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
 cp .env.example .env
 make dev-up
+# or: docker compose up -d
 ```
 
-Open `http://localhost:5173` (Vite dev server).
+Open `http://localhost:3000`.
 
 ### Commands
 
@@ -86,10 +88,10 @@ Open `http://localhost:5173` (Vite dev server).
 
 ### How it works
 
-The dev compose file (`docker-compose.dev.yml`) overrides production settings:
+The default `docker-compose.yml` is configured for development:
 - Mounts `backend/` into the container
 - Runs uvicorn with `--reload`
-- Runs Vite dev server instead of built frontend
+- Uses `watchmedo` for worker auto-restart on code changes
 
 ---
 

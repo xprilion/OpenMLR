@@ -89,17 +89,17 @@ describe('InputArea', () => {
     expect(sendBtn).toBeDisabled();
   });
 
-  it('keyboard shortcut Cmd+B switches to plan', () => {
+  it('keyboard shortcut Cmd+M toggles from execute to plan', () => {
     const onModeChange = vi.fn();
     render(<InputArea {...defaultProps({ mode: 'execute', onModeChange })} />);
-    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    fireEvent.keyDown(window, { key: 'm', metaKey: true });
     expect(onModeChange).toHaveBeenCalledWith('plan');
   });
 
-  it('keyboard shortcut Cmd+E switches to execute', () => {
+  it('keyboard shortcut Cmd+M toggles from plan to execute', () => {
     const onModeChange = vi.fn();
     render(<InputArea {...defaultProps({ mode: 'plan', onModeChange })} />);
-    fireEvent.keyDown(window, { key: 'e', metaKey: true });
+    fireEvent.keyDown(window, { key: 'm', metaKey: true });
     expect(onModeChange).toHaveBeenCalledWith('execute');
   });
 });

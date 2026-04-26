@@ -15,6 +15,8 @@ MODE_TOOL_RESTRICTIONS = {
             "read_file", "list_dir", "glob_files", "grep_search",
             "web_search", "papers",
             "github_search", "github_read_file", "github_read_repo",
+            "github_find_examples", "github_search_repos", "github_get_readme",
+            "github_list_repos",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "

@@ -153,7 +153,53 @@ test-coverage-frontend: ## Frontend tests with coverage
 	cd $(FRONTEND) && pnpm test --coverage
 	cd $(FRONTEND) && pnpm test
 
+# ─── Docker (Development) ──────────────────────────────────
+# Default: docker-compose.yml (development with live reload)
+
+.PHONY: dev-up
+dev-up: ## Start development stack with live reload
+	$(DOCKER_COMPOSE) up -d
+
+.PHONY: dev-build
+dev-build: ## Build development images
+	$(DOCKER_COMPOSE) build
+
+.PHONY: dev-down
+dev-down: ## Stop development stack
+	$(DOCKER_COMPOSE) down
+
+.PHONY: dev-logs
+dev-logs: ## Tail development logs
+	$(DOCKER_COMPOSE) logs -f
+
+.PHONY: dev-clean
+dev-clean: ## Stop development stack and remove volumes
+	$(DOCKER_COMPOSE) down -v
+
+.PHONY: infra
+infra: ## Start only db + redis (for local dev without Docker app)
+	$(DOCKER_COMPOSE) up -d db redis
+
 # ─── Docker (Production) ───────────────────────────────────
+# Uses docker-compose.prod.yml with pre-built images
+
+PROD_COMPOSE := $(DOCKER_COMPOSE) -f docker-compose.prod.yml
+
+.PHONY: up
+up: ## Start production stack (pulls xprilion/openmlr)
+	$(PROD_COMPOSE) up -d
+
+.PHONY: down
+down: ## Stop production stack
+	$(PROD_COMPOSE) down
+
+.PHONY: restart
+restart: ## Restart production web + worker
+	$(PROD_COMPOSE) up -d --build web worker
+
+.PHONY: logs
+logs: ## Tail production logs
+	$(PROD_COMPOSE) logs -f
 
 .PHONY: docker-build
 docker-build: ## Build production Docker image
@@ -175,54 +221,6 @@ docker-push: ## Push production tags to Docker Hub
 
 .PHONY: docker-publish
 docker-publish: docker-build docker-tag docker-push ## Build, tag, and push to Docker Hub
-
-.PHONY: up
-up: ## Start production stack (pulls/builds xprilion/openmlr)
-	$(DOCKER_COMPOSE) up -d
-
-.PHONY: down
-down: ## Stop production stack
-	$(DOCKER_COMPOSE) down
-
-.PHONY: restart
-restart: ## Restart production web + worker
-	$(DOCKER_COMPOSE) up -d --build web worker
-
-.PHONY: logs
-logs: ## Tail production logs
-	$(DOCKER_COMPOSE) logs -f
-
-# ─── Docker (Development) ──────────────────────────────────
-
-DEV_COMPOSE := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
-
-.PHONY: dev-docker
-dev-docker: dev-up ## Alias for dev-up
-
-.PHONY: dev-up
-dev-up: ## Start development stack with live reload
-	$(DEV_COMPOSE) up -d
-
-.PHONY: dev-build
-dev-build: ## Build development images
-	$(DEV_COMPOSE) build
-
-.PHONY: dev-down
-dev-down: ## Stop development stack
-	$(DEV_COMPOSE) down
-
-.PHONY: dev-logs
-dev-logs: ## Tail development logs
-	$(DEV_COMPOSE) logs -f
-
-.PHONY: dev-clean
-dev-clean: ## Stop development stack and remove volumes
-	$(DEV_COMPOSE) down -v
-
-
-.PHONY: infra
-infra: ## Start only db + redis (for local dev without Docker app)
-	$(DOCKER_COMPOSE) up -d db redis
 
 # ─── Docs ─────────────────────────────────────────────────
 

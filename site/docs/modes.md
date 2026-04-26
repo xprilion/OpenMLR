@@ -51,8 +51,7 @@ OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focuse
 | Method | Action |
 |--------|--------|
 | **P/E button** | Click the mode toggle above the input area |
-| **Cmd+B** | Switch to Plan mode |
-| **Cmd+E** | Switch to Execute mode |
+| **Cmd+M** (Mac) / **Ctrl+M** (Windows/Linux) | Toggle between Plan and Execute modes |
 
 The mode applies per-message. You can switch freely between messages.
 

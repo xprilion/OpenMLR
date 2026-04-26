@@ -139,10 +139,11 @@ When enabled:
 |----------|---------|-------------|
 | `BRAVE_API_KEY` | Brave Search | Web search capability |
 | `GITHUB_TOKEN` | GitHub | Repository access, code search |
-| `OPENALEX_EMAIL` | OpenAlex | Email for polite pool (faster rate limits) |
+| `OPENALEX_API_KEY` | OpenAlex | Optional API key for higher rate limits |
+| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar | API key for paper search with abstracts |
 
 ::: tip Research tools work without keys
-Paper search (OpenAlex, ArXiv, CrossRef) works without any API keys. `OPENALEX_EMAIL` just gets you faster rate limits.
+Paper search (OpenAlex, arXiv, CrossRef) works without any API keys. API keys just provide higher rate limits.
 :::
 
 ---
@@ -161,6 +162,40 @@ Controls how the agent executes code.
 
 ---
 
+## MCP Servers
+
+OpenMLR supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for connecting external tools. Configure MCP servers in **Settings > MCP Servers**.
+
+### Adding an MCP Server
+
+1. Go to **Settings > MCP Servers**
+2. Click **Add Server**
+3. Enter a unique server name
+4. Configure the transport:
+   - **HTTP**: Enter the server URL (e.g., `http://localhost:8080/mcp`)
+   - **stdio**: Enter the command and arguments (e.g., `npx -y @anthropic/mcp-server-filesystem /path/to/dir`)
+
+### Example Configuration
+
+**HTTP server:**
+```
+Name: my-tools
+Transport: HTTP
+URL: http://localhost:3001/mcp
+```
+
+**stdio server (filesystem access):**
+```
+Name: filesystem
+Transport: stdio
+Command: npx
+Arguments: -y, @anthropic/mcp-server-filesystem, /Users/me/projects
+```
+
+MCP servers are connected when you start a new session. Tools from connected servers appear alongside built-in tools.
+
+---
+
 ## Settings Pages
 
 Settings are accessible from the sidebar after login:
@@ -171,6 +206,7 @@ Settings are accessible from the sidebar after login:
 | `/settings/agent` | Default model, research model, max iterations |
 | `/settings/sandbox` | Execution environment (Docker/SSH/Modal) |
 | `/settings/writing` | Citation style, export format |
+| `/settings/mcp` | MCP server connections |
 
 ---
 

@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 const navItems = [
   { path: '/settings/providers', label: 'Providers' },
   { path: '/settings/agent', label: 'Agent' },
+  { path: '/settings/mcp', label: 'MCP Servers' },
   { path: '/settings/sandbox', label: 'Sandbox' },
   { path: '/settings/writing', label: 'Writing' },
 ];

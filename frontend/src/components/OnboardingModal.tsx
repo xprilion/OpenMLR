@@ -6,6 +6,7 @@ interface Provider {
   name: string;
   key_env: string;
   configured: boolean;
+  categories?: string[];
 }
 
 interface ModelInfo {

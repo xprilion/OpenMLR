@@ -37,21 +37,18 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
     onModeChange(mode === 'plan' ? 'execute' : 'plan');
   }, [mode, onModeChange]);
 
-  // Keyboard shortcuts: Cmd+B = Plan, Cmd+E = Execute
+  // Keyboard shortcut: Cmd+M (or Ctrl+M) toggles between Plan and Execute
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key === 'b' || e.key === 'B') {
+      if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
-        onModeChange('plan');
-      } else if (e.key === 'e' || e.key === 'E') {
-        e.preventDefault();
-        onModeChange('execute');
+        onModeChange(mode === 'plan' ? 'execute' : 'plan');
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onModeChange]);
+  }, [mode, onModeChange]);
 
   const isPlan = mode === 'plan';
 
@@ -61,7 +58,7 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
         <button
           className={`mode-toggle ${isPlan ? 'mode-plan' : 'mode-execute'}`}
           onClick={toggleMode}
-          title={isPlan ? 'Plan mode (Cmd+B) — click or Cmd+E for Execute' : 'Execute mode (Cmd+E) — click or Cmd+B for Plan'}
+          title={`${isPlan ? 'Plan' : 'Execute'} mode — Cmd+M to toggle`}
         >
           {isPlan ? 'P' : 'E'}
         </button>

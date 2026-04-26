@@ -14,7 +14,9 @@ class TestCreateGithubTools:
         assert "github_read_file" in names
         assert "github_list_repos" in names
         assert "github_find_examples" in names
-        assert len(tools) == 3
+        assert "github_search_repos" in names
+        assert "github_get_readme" in names
+        assert len(tools) == 5
 
     async def test_read_file_required_params(self):
         tools = create_github_tools()

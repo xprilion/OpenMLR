@@ -18,6 +18,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { SettingsPage } from './components/SettingsPage';
 import { ProvidersSettings } from './components/settings/ProvidersSettings';
 import { AgentSettings } from './components/settings/AgentSettings';
+import { McpSettings } from './components/settings/McpSettings';
 import { SandboxSettings } from './components/settings/SandboxSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
 
@@ -546,6 +547,7 @@ export default function App() {
             <Route index element={<Navigate to="providers" replace />} />
             <Route path="providers" element={<ProvidersSettings />} />
             <Route path="agent" element={<AgentSettings />} />
+            <Route path="mcp" element={<McpSettings />} />
             <Route path="sandbox" element={<SandboxSettings />} />
             <Route path="writing" element={<WritingSettings />} />
           </Route>

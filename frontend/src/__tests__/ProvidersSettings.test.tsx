@@ -12,8 +12,8 @@ vi.mock('../api', () => ({
 
 describe('ProvidersSettings', () => {
   const mockProviders = [
-    { id: 'openai', name: 'OpenAI', key_env: 'OPENAI_API_KEY', configured: true },
-    { id: 'anthropic', name: 'Anthropic', key_env: 'ANTHROPIC_API_KEY', configured: false },
+    { id: 'openai', name: 'OpenAI', key_env: 'OPENAI_API_KEY', configured: true, categories: ['models'], docs_url: 'https://platform.openai.com/docs' },
+    { id: 'anthropic', name: 'Anthropic', key_env: 'ANTHROPIC_API_KEY', configured: false, categories: ['models'], docs_url: 'https://docs.anthropic.com' },
   ];
 
   beforeEach(() => {

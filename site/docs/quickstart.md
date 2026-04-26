@@ -20,7 +20,8 @@ The fastest way to run OpenMLR. Uses pre-built images from Docker Hub.
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
 cp .env.example .env
-docker compose up -d
+docker compose -f docker-compose.prod.yml up -d
+# or: make up
 ```
 
 Open `http://localhost:3000` and create your account.
@@ -41,10 +42,9 @@ OpenMLR has an onboarding flow that guides you through adding API keys after you
 ### Commands
 
 ```bash
-docker compose up -d      # Start all services
-docker compose logs -f    # Watch logs
-docker compose down       # Stop all services
-docker compose down -v    # Stop and remove data
+make up       # Start production stack
+make logs     # Watch logs
+make down     # Stop all services
 ```
 
 ---

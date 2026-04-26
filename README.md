@@ -13,11 +13,12 @@ A self-hosted ML research agent that plans, researches, writes papers, and execu
 
 ## Features
 
-- **Plan + Execute modes** — Plan mode gathers context; Execute mode does the work. Toggle with `Cmd+B` / `Cmd+E`.
-- **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code. Reads full papers, crawls citation graphs.
+- **Plan + Execute modes** — Plan mode gathers context; Execute mode does the work. Toggle with `Cmd+M`.
+- **Paper research** — OpenAlex, Semantic Scholar, arXiv, CrossRef, Papers With Code. Reads full papers, crawls citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Export to Markdown/LaTeX.
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
 - **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio).
+- **MCP servers** — Connect external tools via the Model Context Protocol.
 - **Onboarding flow** — Guided setup when no LLM provider is configured.
 
 ## Quick Start
@@ -26,7 +27,8 @@ A self-hosted ML research agent that plans, researches, writes papers, and execu
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
 cp .env.example .env
-docker compose up -d
+make up
+# or: docker compose -f docker-compose.prod.yml up -d
 ```
 
 Open `http://localhost:3000`. Create an account. Add your API keys in **Settings > Providers**.
