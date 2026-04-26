@@ -1,6 +1,12 @@
-# OpenMLR
+<p align="center">
+  <img src="assets/logo-200.png" alt="OpenMLR Logo" width="120" />
+</p>
 
-A self-hosted ML research agent that plans, researches, writes papers, and executes code — all in one conversation.
+<h1 align="center">OpenMLR</h1>
+
+<p align="center">
+  A self-hosted ML research agent that plans, researches, writes papers, and executes code — all in one conversation.
+</p>
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR)
 [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)

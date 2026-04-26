@@ -10,9 +10,15 @@ export default defineConfig({
   cleanUrls: true,
 
   head: [
+    // Favicons
+    ["link", { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" }],
+    ["link", { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" }],
+    ["link", { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }],
+    ["link", { rel: "icon", href: "/favicon.ico" }],
+
     // Basic meta
     ["meta", { name: "author", content: "Anubhav Singh" }],
-    ["meta", { name: "theme-color", content: "#3eaf7c" }],
+    ["meta", { name: "theme-color", content: "#3b82f6" }],
     [
       "meta",
       {
@@ -48,6 +54,9 @@ export default defineConfig({
       },
     ],
     ["meta", { property: "og:url", content: "https://openmlr.dev" }],
+    ["meta", { property: "og:image", content: "https://openmlr.dev/og-image.png" }],
+    ["meta", { property: "og:image:width", content: "1200" }],
+    ["meta", { property: "og:image:height", content: "630" }],
 
     // Twitter Card
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
@@ -60,6 +69,7 @@ export default defineConfig({
           "AI-powered ML Research Agent that plans tasks, researches papers, writes drafts, and executes code",
       },
     ],
+    ["meta", { name: "twitter:image", content: "https://openmlr.dev/og-image.png" }],
   ],
 
   // Sitemap generation
@@ -94,6 +104,7 @@ export default defineConfig({
   },
 
   themeConfig: {
+    logo: "/logo-64.png",
     nav: [
       { text: "Home", link: "/" },
       { text: "Setup", link: "/setup" },

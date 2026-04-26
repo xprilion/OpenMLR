@@ -555,6 +555,7 @@ function ChatUI({
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-6 h-14 bg-surface border-b border-border shrink-0 gap-2 sm:gap-4">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <img src="/logo-64.png" alt="OpenMLR" className="w-7 h-7 sm:w-8 sm:h-8" />
           <span className="font-bold text-base sm:text-lg text-primary tracking-tight">OpenMLR</span>
           <span 
             className={`w-2 h-2 rounded-full transition-colors duration-300 ${connected ? 'bg-success' : 'bg-error'}`} 

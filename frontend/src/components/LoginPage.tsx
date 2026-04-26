@@ -53,8 +53,11 @@ export function LoginPage({ onAuth }: Props) {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-6">
       <div className="w-full max-w-sm bg-surface rounded-2xl border border-border p-8 shadow-xl">
-        <h1 className="text-2xl font-bold text-primary text-center mb-1">OpenMLR</h1>
-        <p className="text-text-dim text-center mb-8">ML Research Intern</p>
+        <div className="flex flex-col items-center mb-6">
+          <img src="/logo-192.png" alt="OpenMLR" className="w-20 h-20 mb-3" />
+          <h1 className="text-2xl font-bold text-primary text-center">OpenMLR</h1>
+          <p className="text-text-dim text-center">ML Research Intern</p>
+        </div>
 
         {isFirstUser && (
           <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 mb-6 text-sm text-text text-center">
