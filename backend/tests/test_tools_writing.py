@@ -103,7 +103,8 @@ class TestWriteSection:
 
 class TestGetDraft:
     async def test_no_project(self):
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
+
         from openmlr.tools.writing import _projects
         _projects.clear()
         # Mock _get_author_info to avoid database calls
@@ -112,7 +113,8 @@ class TestGetDraft:
         assert ok is False
 
     async def test_generates_draft(self):
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
+
         from openmlr.tools.writing import _projects
         _projects.clear()
         _create_project(conv_id=1, title="The Paper")
