@@ -22,25 +22,35 @@ A self-hosted ML research agent that plans, researches, writes papers, and execu
 - **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio, vLLM).
 - **Onboarding flow** — Guided setup when no LLM provider is configured.
 
-## Quick Start
+## Quick Start (Docker)
+
+The fastest way to get started is using the pre-built image from Docker Hub:
 
 ```bash
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
-cp .env.example .env   # Add your API keys
+cp .env.example .env   # Add your API keys (OpenAI/Anthropic/OpenRouter)
 docker compose up -d
 ```
 
-Open `http://localhost:3000`. Create an account on first visit.
+Open `http://localhost:3000`. The first user to visit will be prompted to create an account.
 
 ## Local Development
 
+### Option 1: Native (Recommended for fastest iteration)
 ```bash
 make install           # Install deps (backend + frontend)
 cp .env.example .env   # Add DATABASE_URL + at least one LLM key
 make db-fresh          # Create tables
 make dev               # Start dev servers (backend :3000, frontend :5173)
 ```
+
+### Option 2: Docker (Live reload)
+```bash
+make dev-up            # Start all services with live reload
+make dev-logs          # Watch logs
+```
+This mounts your local `backend/` directory into the container and uses `uvicorn --reload`.
 
 ## Configuration
 

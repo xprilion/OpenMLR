@@ -48,38 +48,16 @@ services:
 
   # Main web application
   web:
+    image: xprilion/openmlr:latest
     build: .
     ports:
-      - "3000:3000"
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openmlr}:${POSTGRES_PASSWORD:-openmlr}@db:5432/${POSTGRES_DB:-openmlr}
-      REDIS_URL: redis://redis:6379/0
-      USE_BACKGROUND_JOBS: "true"
-      USE_REDIS_PUBSUB: "true"
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend/configs:/app/backend/configs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    security_opt:
-      - no-new-privileges:true
-
+...
   # Celery worker for background jobs
   worker:
+    image: xprilion/openmlr:latest
     build: .
     command: >
+
       .venv/bin/celery -A openmlr.celery_app worker
       --loglevel=info
       --concurrency=2
