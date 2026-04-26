@@ -1,0 +1,59 @@
+# OpenMLR
+
+> OpenMLR is an AI-powered ML Research Agent that plans tasks, researches papers, writes drafts, and executes code end-to-end in one conversation.
+
+## Documentation
+
+- [Overview](https://openmlr.dev/): Home page with quick start guide
+- [Setup & Installation](https://openmlr.dev/setup): Prerequisites and installation methods
+- [Configuration](https://openmlr.dev/configuration): Environment variables and settings
+- [Modes](https://openmlr.dev/modes): Plan mode and Execute mode explained
+- [Agent Tools](https://openmlr.dev/tools): Available tools for the agent
+- [Architecture](https://openmlr.dev/architecture): System architecture overview
+- [Agent Harness](https://openmlr.dev/agent-harness): Agent execution engine details
+- [REST API](https://openmlr.dev/api): API reference documentation
+- [Changelog](https://openmlr.dev/changelog): Version history
+
+## Raw Markdown
+
+All documentation pages are available as raw markdown by appending `.md`:
+- https://openmlr.dev/index.md
+- https://openmlr.dev/setup.md
+- https://openmlr.dev/configuration.md
+- https://openmlr.dev/modes.md
+- https://openmlr.dev/tools.md
+- https://openmlr.dev/architecture.md
+- https://openmlr.dev/agent-harness.md
+- https://openmlr.dev/api.md
+- https://openmlr.dev/changelog.md
+
+## Quick Start
+
+```bash
+git clone https://github.com/xprilion/OpenMLR.git
+cd OpenMLR
+cp .env.example .env   # Add your API keys
+docker compose up -d
+```
+
+Open http://localhost:3000. Create an account. Start researching.
+
+## Key Features
+
+- **Paper research**: OpenAlex, ArXiv, CrossRef, Papers With Code. Full paper reading, citation graphs.
+- **Paper writing**: Section-by-section drafting with auto-save. Preview + export (Markdown/LaTeX).
+- **Two modes**: Plan (read-only, planning) and Execute (full access, execution).
+- **Sub-agent streaming**: Research tool spawns independent agents with nested tool call visibility.
+- **Background jobs**: Celery + Redis. Close the browser, come back later.
+- **Per-conversation parallelism**: Multiple conversations process simultaneously.
+
+## Modes
+
+- **Plan mode (P)**: The agent asks questions, gathers context, and creates structured plans. No code execution, no file writes. Messages have an amber border.
+- **Execute mode (E)**: The agent does the work: researches papers, writes drafts, runs experiments. All tools available. Messages have a blue border.
+
+## Links
+
+- GitHub: https://github.com/xprilion/OpenMLR
+- Documentation: https://openmlr.dev
+- License: MIT

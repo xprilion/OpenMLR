@@ -1,3 +1,8 @@
+---
+title: Architecture Overview - OpenMLR
+description: OpenMLR system architecture. Python FastAPI backend, React frontend, Celery background jobs, and the complete request flow for ML research workflows.
+---
+
 # Architecture
 
 ## Overview

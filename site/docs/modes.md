@@ -1,3 +1,8 @@
+---
+title: Plan & Execute Modes - OpenMLR
+description: Understand OpenMLR's two-mode system. Plan mode for gathering context and creating plans. Execute mode for researching papers, writing drafts, and running code.
+---
+
 # Modes
 
 OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focused on the right kind of work.

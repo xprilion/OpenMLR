@@ -1,3 +1,8 @@
+---
+title: Agent Harness - OpenMLR
+description: Deep dive into OpenMLR's agent execution engine. Agent loop, tool dispatch, context management, doom loop detection, and sub-agent streaming.
+---
+
 # Agent Harness
 
 The agent harness is the core execution engine that processes user messages, manages tool calls, and maintains conversation context.

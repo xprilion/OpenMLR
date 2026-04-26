@@ -1,4 +1,6 @@
 ---
+title: OpenMLR - AI-Powered ML Research Agent
+description: OpenMLR plans tasks, researches papers, writes drafts, and executes code end-to-end in one conversation. Open source ML research assistant.
 layout: home
 hero:
   name: OpenMLR
