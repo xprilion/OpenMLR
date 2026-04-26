@@ -154,7 +154,25 @@ async def delete_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     conv = await _get_conv_or_404(db, uuid, user.id)
+    
+    # Cancel any running background jobs for this conversation
+    try:
+        from ..services.job_manager import get_job_manager
+        job_manager = get_job_manager()
+        active_jobs = await job_manager.get_active_jobs(db, conv.id)
+        for job_info in active_jobs:
+            await job_manager.cancel_job(db, job_info["job_id"])
+    except Exception:
+        pass
+    
+    # Cancel in-process session (cancels agent loop, pending questions, sandbox)
     await _sm(request).remove_session(conv.id)
+    
+    # Broadcast interrupted so frontend stops any spinners for this conversation
+    await _bus(request).broadcast(
+        AgentEvent(event_type="interrupted", data={"conversation_uuid": conv.uuid})
+    )
+    
     await ops.delete_conversation(db, conv.id)
     return {"ok": True}
 
@@ -343,15 +361,28 @@ async def get_report(
 async def submit_answers(
     request: Request,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Submit answers to structured questions from ask_user tool."""
     body = await request.json()
     answers = body.get("answers", {})  # {question_id: selected_label}
 
+    # Try in-process session first (inline mode)
     active = _sm(request).get_current_session()
     if active and hasattr(active.session, 'pending_answers') and active.session.pending_answers:
         if not active.session.pending_answers.done():
             active.session.pending_answers.set_result(answers)
+            return {"ok": True}
+
+    # Publish to Redis for background job workers
+    try:
+        from ..services.redis_pubsub import publish_answers
+        sm = _sm(request)
+        if sm.current_conversation_id:
+            await publish_answers(sm.current_conversation_id, answers)
+    except Exception as e:
+        logger.warning(f"Failed to relay answers via Redis: {e}")
+
     return {"ok": True}
 
 
@@ -409,6 +440,10 @@ async def switch_model(
     if active:
         active.session.update_model(body.model)
         await ops.update_conversation_model(db, active.conversation_id, body.model)
+    
+    # Persist as the user's sticky default model
+    await ops.set_user_setting(db, user.id, "agent", "default_model", body.model)
+    
     await _bus(request).broadcast(
         AgentEvent(event_type="model_info", data={"model": body.model})
     )

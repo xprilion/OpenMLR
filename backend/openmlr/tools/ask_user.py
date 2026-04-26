@@ -95,18 +95,32 @@ async def _handle_ask_user(
         },
     ))
 
-    # Store the pending questions on the session and wait for answers
-    answer_future = asyncio.get_event_loop().create_future()
-    session.pending_answers = answer_future
+    answers = None
 
+    # Try Redis-based answer relay first (works with background jobs)
     try:
-        # Wait up to 5 minutes for user to answer
-        answers = await asyncio.wait_for(answer_future, timeout=300)
-    except asyncio.TimeoutError:
-        session.pending_answers = None
-        return "User did not answer within 5 minutes.", False
+        from ..services.redis_pubsub import wait_for_answers
+        import os
+        if os.environ.get("USE_BACKGROUND_JOBS", "").lower() in ("true", "1", "yes"):
+            answers = await wait_for_answers(session.conversation_id, timeout=300)
+    except Exception:
+        pass
 
-    session.pending_answers = None
+    # Fallback: in-process future (works with inline processing)
+    if answers is None:
+        answer_future = asyncio.get_event_loop().create_future()
+        session.pending_answers = answer_future
+
+        try:
+            answers = await asyncio.wait_for(answer_future, timeout=300)
+        except asyncio.TimeoutError:
+            session.pending_answers = None
+            return "User did not answer within 5 minutes.", False
+
+        session.pending_answers = None
+
+    if not answers:
+        return "User did not answer within 5 minutes.", False
 
     # Format answers as a readable summary
     lines = ["User's answers:"]
@@ -114,5 +128,8 @@ async def _handle_ask_user(
         qid = q.get("id", "")
         answer = answers.get(qid, "No answer")
         lines.append(f"- {q.get('question', '')}: **{answer}**")
+
+    if suggest_mode:
+        lines.append(f"\n[Agent suggested switching to {suggest_mode} mode after this planning phase.]")
 
     return "\n".join(lines), True

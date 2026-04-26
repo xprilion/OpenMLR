@@ -1,13 +1,15 @@
 # Development Dockerfile - live reload with mounted source code
 # Usage: make dev-docker (uses docker-compose.yml + docker-compose.dev.yml)
 #
-# For production, use Dockerfile instead
+# The host's ./backend is mounted at /app/backend, but the host .venv
+# (built for macOS/Windows) is incompatible with the Linux container.
+# We use an anonymous volume for .venv and always install on first start.
 FROM python:3.12-slim
 
 # System deps
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential libpq-dev libxml2-dev libxslt1-dev && \
+        build-essential libpq-dev libxml2-dev libxslt1-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -20,8 +22,30 @@ ENV PATH="/app/backend/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/backend"
 ENV UV_LINK_MODE=copy
 
-# Create entrypoint script that ensures deps are installed
-RUN echo '#!/bin/sh\nset -e\nif [ ! -x /app/backend/.venv/bin/uvicorn ]; then\n  echo "Installing dependencies..."\n  rm -rf /app/backend/.venv\n  cd /app/backend && uv sync && uv pip install "watchdog[watchmedo]"\nfi\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+# Create entrypoint that always ensures deps are installed for Linux.
+# The host .venv may be macOS-native and won't work here.
+# We check if python in .venv actually runs (not just exists).
+COPY <<'ENTRYPOINT' /entrypoint.sh
+#!/bin/sh
+set -e
+
+# Check if the venv has a working Python (catches cross-platform mismatch)
+if ! /app/backend/.venv/bin/python -c "import sys" 2>/dev/null; then
+    echo "[dev-entrypoint] Installing dependencies (venv missing or incompatible)..."
+    rm -rf /app/backend/.venv
+    cd /app/backend && uv sync && uv pip install "watchdog[watchmedo]"
+    echo "[dev-entrypoint] Dependencies installed."
+else
+    # Venv exists and works, but ensure watchmedo is there too
+    if ! command -v watchmedo >/dev/null 2>&1; then
+        echo "[dev-entrypoint] Installing watchmedo..."
+        cd /app/backend && uv pip install "watchdog[watchmedo]"
+    fi
+fi
+
+exec "$@"
+ENTRYPOINT
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 

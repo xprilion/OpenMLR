@@ -97,9 +97,27 @@ check-backend: ## Verify backend loads without errors
 check-frontend: ## Type-check the frontend (tsc --noEmit)
 	cd $(FRONTEND) && npx tsc --noEmit
 
+# ─── Testing ─────────────────────────────────────────────
+
 .PHONY: test
-test: ## Run backend tests (pytest)
-	cd $(BACKEND) && uv run pytest -q
+test: test-backend test-frontend test-docs ## Run all tests (backend + frontend + docs)
+
+.PHONY: test-backend
+test-backend: ## Run backend pytest suite
+	cd $(BACKEND) && uv run pytest tests/ -q
+
+.PHONY: test-frontend
+test-frontend: ## Run frontend vitest suite
+	cd $(FRONTEND) && pnpm test
+
+.PHONY: test-docs
+test-docs: ## Verify docs site builds cleanly
+	cd site && npx vitepress build docs
+
+.PHONY: test-coverage
+test-coverage: ## Run all tests with coverage reports
+	cd $(BACKEND) && uv run pytest tests/ --tb=short -v
+	cd $(FRONTEND) && pnpm test
 
 # ─── Docker ───────────────────────────────────────────────
 
@@ -154,19 +172,33 @@ shell-web: ## Open shell in web container
 shell-db: ## Open psql in database container
 	$(DOCKER_COMPOSE) exec db psql -U postgres -d openmlr
 
+DEV_COMPOSE := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
+
 # ─── Docker Compose (Development) ────────────────────────
 
 .PHONY: dev-docker
-dev-docker: ## Start with live reload (mounts source code)
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up
+dev-docker: ## Start with live reload (mounts source code + docs)
+	$(DEV_COMPOSE) up
 
 .PHONY: dev-docker-build
 dev-docker-build: ## Build dev images and start with live reload
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
+	$(DEV_COMPOSE) up --build
 
 .PHONY: dev-docker-down
-dev-docker-down: ## Stop dev services
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml down
+dev-docker-down: ## Stop dev services and remove volumes
+	$(DEV_COMPOSE) down
+
+.PHONY: dev-docker-clean
+dev-docker-clean: ## Stop dev services and remove volumes (fresh start)
+	$(DEV_COMPOSE) down -v
+
+.PHONY: dev-docker-logs
+dev-docker-logs: ## Tail dev logs from all services
+	$(DEV_COMPOSE) logs -f
+
+.PHONY: dev-docker-docs
+dev-docker-docs: ## Start only docs in dev Docker (port 4000)
+	$(DEV_COMPOSE) up docs
 
 .PHONY: infra
 infra: ## Start only db + redis (for local dev without Docker app)

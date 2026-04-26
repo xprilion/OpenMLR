@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { setToken } from '../api';
 import type { Conversation, User } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -14,7 +15,6 @@ interface Props {
   onNew: (mode?: string) => void;
   onDelete: (uuid: string) => void;
   onAction: (type: string) => void;
-  onOpenSettings: () => void;
 }
 
 function groupByDate(conversations: Conversation[]) {
@@ -43,7 +43,8 @@ function ConvIcon({ status }: { status: ConvStatus }) {
   return <span className="conv-status-icon conv-status-idle" />;
 }
 
-export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwitch, onNew, onDelete, onAction, onOpenSettings }: Props) {
+export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwitch, onNew, onDelete, onAction }: Props) {
+  const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -109,7 +110,7 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwit
       </div>
 
       <div className="sidebar-footer">
-        <button className="settings-btn" onClick={onOpenSettings} title="Settings">&#x2699;</button>
+        <button className="settings-btn" onClick={() => navigate('/settings')} title="Settings">&#x2699;</button>
         {user && <span className="user-info" title={user.username}>{user.display_name || user.username}</span>}
         <button className="logout-btn" onClick={() => { setToken(null); window.location.reload(); }} title="Sign out">&#x2192;</button>
       </div>

@@ -4,6 +4,7 @@ export type Mode = 'plan' | 'research' | 'write' | 'general';
 
 interface Props {
   disabled: boolean;
+  showStop?: boolean;  // Show the stop button even when input is enabled (e.g., during questions/approval)
   mode: Mode;
   onModeChange: (mode: Mode) => void;
   onSend: (text: string, mode: Mode) => void;
@@ -19,7 +20,7 @@ const MODE_INFO: Record<Mode, { label: string; icon: string; placeholder: string
   general: { label: 'General', icon: 'G', placeholder: 'General conversation, any task...' },
 };
 
-export function InputArea({ disabled, mode, onModeChange, onSend, onStop, text, onTextChange }: Props) {
+export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onStop, text, onTextChange }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -68,11 +69,14 @@ export function InputArea({ disabled, mode, onModeChange, onSend, onStop, text, 
           rows={1}
           disabled={disabled}
         />
-        {disabled ? (
+        {/* Always show stop button when agent turn is active */}
+        {showStop && (
           <button className="stop-btn" onClick={onStop} title="Stop">
             <span className="stop-icon" />
           </button>
-        ) : (
+        )}
+        {/* Show send button when input is enabled */}
+        {!disabled && (
           <button className="send-btn" onClick={submit} disabled={!text.trim()}>
             <span>&#x2191;</span>
           </button>

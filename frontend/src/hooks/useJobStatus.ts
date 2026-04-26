@@ -6,6 +6,7 @@ interface UseJobStatusOptions {
   conversationUuid: string | null;
   pollInterval?: number;  // ms
   enabled?: boolean;
+  onJobComplete?: (uuid: string) => void;  // Called when a job transitions to completed
 }
 
 interface UseJobStatusResult {
@@ -20,15 +21,20 @@ interface UseJobStatusResult {
  * 
  * Polls the API for active jobs when enabled, providing
  * real-time status even when SSE is disconnected.
+ * Calls onJobComplete when a job finishes, enabling message catch-up.
  */
 export function useJobStatus({
   conversationUuid,
   pollInterval = 3000,
   enabled = true,
+  onJobComplete,
 }: UseJobStatusOptions): UseJobStatusResult {
   const [activeJobs, setActiveJobs] = useState<AgentJob[]>([]);
   const [lastJobId, setLastJobId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevProcessingRef = useRef(false);
+  const onJobCompleteRef = useRef(onJobComplete);
+  onJobCompleteRef.current = onJobComplete;
 
   const refresh = useCallback(async () => {
     if (!conversationUuid) {
@@ -38,12 +44,22 @@ export function useJobStatus({
 
     try {
       const data = await api.getConversationJobs(conversationUuid);
-      setActiveJobs(data.jobs || []);
+      const jobs = data.jobs || [];
+      setActiveJobs(jobs);
       
       // Track the most recent job
-      if (data.jobs?.length > 0) {
-        setLastJobId(data.jobs[0].job_id);
+      if (jobs.length > 0) {
+        setLastJobId(jobs[0].job_id);
       }
+
+      // Detect job completion: was processing, now no active jobs
+      const nowProcessing = jobs.some(
+        (job: AgentJob) => job.status === 'queued' || job.status === 'running'
+      );
+      if (prevProcessingRef.current && !nowProcessing && onJobCompleteRef.current) {
+        onJobCompleteRef.current(conversationUuid);
+      }
+      prevProcessingRef.current = nowProcessing;
     } catch (err) {
       // Silently fail - job status is non-critical
       console.debug('Failed to fetch job status:', err);

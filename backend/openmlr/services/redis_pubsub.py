@@ -137,3 +137,42 @@ async def get_redis_bridge() -> RedisEventBridge:
         _redis_bridge = RedisEventBridge()
         await _redis_bridge.start()
     return _redis_bridge
+
+
+# ── Answer relay for background jobs ─────────────────────
+
+ANSWERS_KEY_PREFIX = "openmlr:answers:"
+
+
+async def publish_answers(conversation_id: int, answers: dict) -> None:
+    """Publish user answers to Redis so the background worker can pick them up."""
+    try:
+        client = await get_redis()
+        key = f"{ANSWERS_KEY_PREFIX}{conversation_id}"
+        await client.set(key, json.dumps(answers), ex=600)  # expire in 10 min
+        # Also publish a notification so the worker wakes up immediately
+        await client.publish(f"{ANSWERS_KEY_PREFIX}notify", str(conversation_id))
+    except Exception as e:
+        logger.warning(f"Failed to publish answers to Redis: {e}")
+
+
+async def wait_for_answers(conversation_id: int, timeout: float = 300) -> dict | None:
+    """Wait for user answers from Redis. Used by background worker's ask_user handler."""
+    try:
+        client = await get_redis()
+        key = f"{ANSWERS_KEY_PREFIX}{conversation_id}"
+
+        # Poll every 1 second (simple, reliable)
+        elapsed = 0.0
+        while elapsed < timeout:
+            data = await client.get(key)
+            if data:
+                await client.delete(key)  # consume the answers
+                return json.loads(data)
+            await asyncio.sleep(1.0)
+            elapsed += 1.0
+
+        return None  # timeout
+    except Exception as e:
+        logger.warning(f"Failed to wait for answers from Redis: {e}")
+        return None

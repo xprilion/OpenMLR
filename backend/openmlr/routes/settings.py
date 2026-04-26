@@ -76,6 +76,33 @@ async def delete_setting(
     db: AsyncSession = Depends(get_db),
 ):
     await ops.delete_user_setting(db, user.id, category, key)
+    
+    # If a provider key was deleted, check if the current model still has a valid provider
+    if category == "providers":
+        provider_map = {
+            "openai_api_key": "openai",
+            "anthropic_api_key": "anthropic",
+            "openrouter_api_key": "openrouter",
+            "opencode_go_api_key": "opencode-go",
+        }
+        deleted_provider = provider_map.get(key)
+        if deleted_provider:
+            agent_settings = await ops.get_user_agent_settings(db, user.id)
+            current_model = agent_settings.get("default_model", "")
+            # If the user's selected model uses the deleted provider, clear it
+            if current_model and deleted_provider in current_model:
+                await ops.set_user_setting(db, user.id, "agent", "default_model", "")
+                # Also clear from env
+                env_key_map = {
+                    "openai_api_key": "OPENAI_API_KEY",
+                    "anthropic_api_key": "ANTHROPIC_API_KEY",
+                    "openrouter_api_key": "OPENROUTER_API_KEY",
+                    "opencode_go_api_key": "OPENCODE_GO_API_KEY",
+                }
+                env_key = env_key_map.get(key)
+                if env_key and env_key in os.environ:
+                    del os.environ[env_key]
+    
     return {"ok": True}
 
 
@@ -168,12 +195,31 @@ async def get_status(
     user_settings = await ops.get_all_settings(db, user.id, category="agent")
     agent_settings = user_settings.get("agent", {})
 
-    # User's preferred model > config auto-detected model
-    current_model = agent_settings.get("default_model") or config.model_name
+    # User's explicitly selected model, or fall back to auto-detected
+    user_model = agent_settings.get("default_model") or None
+    effective_model = user_model or config.model_name
+    
+    # Only need onboarding if no providers are configured at all
+    # (i.e., auto-detection also failed to find anything useful)
+    has_any_provider = any([
+        os.environ.get("ANTHROPIC_API_KEY"),
+        os.environ.get("OPENAI_API_KEY"),
+        os.environ.get("OPENROUTER_API_KEY"),
+        os.environ.get("OPENCODE_GO_API_KEY"),
+        os.environ.get("OLLAMA_API_BASE"),
+        os.environ.get("LMSTUDIO_API_BASE"),
+    ])
+    # Check user-configured providers too
+    if not has_any_provider:
+        user_providers = await ops.get_all_settings(db, user.id, category="providers")
+        prov = user_providers.get("providers", {})
+        has_any_provider = any(v for v in prov.values() if v)
+    
     return {
-        "model": current_model,
+        "model": effective_model,
         "research_model": agent_settings.get("research_model") or config.research_model,
         "yolo_mode": agent_settings.get("yolo_mode", config.yolo_mode),
+        "needs_onboarding": not has_any_provider,
     }
 
 

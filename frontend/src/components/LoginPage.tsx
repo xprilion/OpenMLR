@@ -42,7 +42,7 @@ export function LoginPage({ onAuth }: Props) {
       }
       setToken(data.access_token);
       onAuth(data.user);
-      navigate('/app', { replace: true });
+      navigate('/', { replace: true });
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
     } finally {
