@@ -17,8 +17,8 @@ describe('RightPanel', () => {
   ];
 
   const mockResources: Resource[] = [
-    { title: 'Plan', type: 'plan', id: 'plan-1' },
-    { title: 'ArXiv Paper', type: 'paper', id: 'paper-1' },
+    { title: 'Plan', type: 'plan', id: 'plan-1', url: '' },
+    { title: 'ArXiv Paper', type: 'paper', id: 'paper-1', url: '' },
     { title: 'Dataset X', type: 'dataset', url: 'https://example.com' },
   ];
 
@@ -139,7 +139,7 @@ describe('RightPanel', () => {
       <RightPanel
         tasks={[]}
         resources={[
-          { title: 'My Paper', type: 'paper', id: 'paper-1' },
+          { title: 'My Paper', type: 'paper', id: 'paper-1', url: '' },
         ]}
         contextUsage={null}
         searchBudget={null}
