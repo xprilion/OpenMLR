@@ -24,7 +24,7 @@ docker compose up -d
 ```
 
 ## 4. Access
-- **URL**: [http://localhost:3000](http://localhost:3000)
+- **URL**: `http://localhost:3000`
 - **Login**: Create your account on the first visit.
 - **Modes**: Use **Plan Mode** (`Cmd+B`) to research and **Execute Mode** (`Cmd+E`) to write code and papers.
 
