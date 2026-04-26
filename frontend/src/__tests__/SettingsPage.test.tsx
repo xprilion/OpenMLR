@@ -26,7 +26,8 @@ describe('SettingsPage', () => {
     renderSettings();
     expect(screen.getByText('Providers')).toBeInTheDocument();
     expect(screen.getByText('Agent')).toBeInTheDocument();
-    expect(screen.getByText('Sandbox')).toBeInTheDocument();
+    expect(screen.getByText('MCP Servers')).toBeInTheDocument();
+    expect(screen.getByText('Compute')).toBeInTheDocument();
     expect(screen.getByText('Writing')).toBeInTheDocument();
   });
 

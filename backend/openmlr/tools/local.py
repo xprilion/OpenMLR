@@ -29,27 +29,27 @@ WORKSPACE_ROOT = os.environ.get("OPENMLR_WORKSPACE_ROOT", "")
 
 def _running_in_container() -> bool:
     """Detect if we're running inside a Docker container.
-    
+
     This is useful for determining whether to use Docker-in-Docker or direct execution.
     When running in a container, the container already provides isolation.
     """
     # Check for common container indicators
     if os.path.exists("/.dockerenv"):
         return True
-    
+
     # Check cgroup for docker/container runtime
     try:
-        with open("/proc/1/cgroup", "r") as f:
+        with open("/proc/1/cgroup") as f:
             content = f.read()
             if "docker" in content or "containerd" in content or "kubepods" in content:
                 return True
     except (FileNotFoundError, PermissionError):
         pass
-    
+
     # Check for container-related environment variables
     if os.environ.get("KUBERNETES_SERVICE_HOST"):
         return True
-    
+
     return False
 
 
