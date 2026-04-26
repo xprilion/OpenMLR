@@ -8,8 +8,8 @@ hero:
   tagline: Plans tasks, researches papers, writes drafts, and executes code — end to end, in one conversation.
   actions:
     - theme: brand
-      text: Get Started
-      link: /setup
+      text: Quick Start
+      link: /quickstart
     - theme: alt
       text: View on GitHub
       link: https://github.com/xprilion/OpenMLR
@@ -20,18 +20,20 @@ features:
     details: Research papers, write drafts, run code. All tools available. Follows the plan you built in Plan mode.
 ---
 
-## Quick start
+## Quick Start
 
 ```bash
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
-cp .env.example .env   # Add your API keys
+cp .env.example .env
 docker compose up -d
 ```
 
-Open `http://localhost:3000`. Create an account. Start researching.
+Open `http://localhost:3000`. Create an account. Configure API keys in **Settings > Providers**.
 
-### One-click deploy
+> No API keys needed to start — the app guides you through setup after login.
+
+### One-Click Deploy
 
 <div style="display: flex; gap: 10px; margin-top: 10px;">
   <a href="https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR" target="_blank" rel="noopener">
@@ -42,18 +44,18 @@ Open `http://localhost:3000`. Create an account. Start researching.
   </a>
 </div>
 
-See [Setup & Installation](/setup) for local development and more options.
+See [Quick Start](/quickstart) for all deployment options or [Setup & Installation](/setup) for detailed instructions.
 
-## How it works
+## How It Works
 
 OpenMLR uses two modes to keep the agent focused:
 
 - **Plan mode (P)** — The agent asks questions, gathers context, and creates structured plans. No code execution, no file writes. Toggle with `Cmd+B`. Messages have an amber border.
 - **Execute mode (E)** — The agent does the work: researches papers, writes drafts, runs experiments. All tools available. Toggle with `Cmd+E`. Messages have a blue border.
 
-Switch modes with the P/E button in the input area or keyboard shortcuts. The agent follows the plan built during Plan mode.
+Switch modes with the P/E button in the input area or keyboard shortcuts.
 
-## Key features
+## Key Features
 
 - **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code. Full paper reading, citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Preview + export (Markdown/LaTeX) in the Paper tab.

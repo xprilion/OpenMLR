@@ -13,75 +13,61 @@ A self-hosted ML research agent that plans, researches, writes papers, and execu
 
 ## Features
 
-- **Plan + Execute modes** — Plan mode gathers context and creates plans; Execute mode does the work. Toggle with `Cmd+B` / `Cmd+E`.
+- **Plan + Execute modes** — Plan mode gathers context; Execute mode does the work. Toggle with `Cmd+B` / `Cmd+E`.
 - **Paper research** — OpenAlex, ArXiv, CrossRef, Papers With Code. Reads full papers, crawls citation graphs.
-- **Paper writing** — Section-by-section drafting with auto-save to database. Preview and export (Markdown/LaTeX) in the Paper tab.
-- **Sub-agent streaming** — Research tool spawns independent sub-agents with their own context, with nested tool call visibility.
-- **Background jobs** — Celery + Redis processing. Close the browser, come back later.
-- **Per-conversation parallelism** — Multiple conversations process simultaneously with isolated state.
-- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio, vLLM).
+- **Paper writing** — Section-by-section drafting with auto-save. Export to Markdown/LaTeX.
+- **Background jobs** — Celery + Redis. Close the browser, come back later.
+- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio).
 - **Onboarding flow** — Guided setup when no LLM provider is configured.
 
-## Quick Start (Docker)
-
-The fastest way to get started is using the pre-built image from Docker Hub:
+## Quick Start
 
 ```bash
 git clone https://github.com/xprilion/OpenMLR.git
 cd OpenMLR
-cp .env.example .env   # Add your API keys (OpenAI/Anthropic/OpenRouter)
+cp .env.example .env
 docker compose up -d
 ```
 
-Open `http://localhost:3000`. The first user to visit will be prompted to create an account.
+Open `http://localhost:3000`. Create an account. Add your API keys in **Settings > Providers**.
 
-## Local Development
+> No API keys needed to start — the app guides you through configuration after login.
 
-### Option 1: Native (Recommended for fastest iteration)
+## Development
+
+### Docker (recommended)
 ```bash
-make install           # Install deps (backend + frontend)
-cp .env.example .env   # Add DATABASE_URL + at least one LLM key
-make db-fresh          # Create tables
-make dev               # Start dev servers (backend :3000, frontend :5173)
+make dev-up         # Start with live reload
+make dev-logs       # Watch logs
 ```
 
-### Option 2: Docker (Live reload)
+### Native
 ```bash
-make dev-up            # Start all services with live reload
-make dev-logs          # Watch logs
+make install        # Install dependencies
+make infra          # Start Postgres + Redis in Docker
+make db-fresh       # Create tables
+make dev            # Start dev servers (backend :3000, frontend :5173)
 ```
-This mounts your local `backend/` directory into the container and uses `uvicorn --reload`.
 
 ## Configuration
 
-At minimum, set in `.env`:
+All LLM and tool API keys can be configured via the **Settings UI** after login. No environment variables are required to start.
+
+For local development without Docker-managed databases:
 
 ```bash
-DATABASE_URL="postgresql://user:pass@localhost:5432/openmlr"
-
-# At least one LLM provider
-OPENAI_API_KEY=sk-...
-# or ANTHROPIC_API_KEY=sk-ant-...
-# or OPENROUTER_API_KEY=sk-or-...
+DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/openmlr"
 ```
 
-For background jobs, add:
-
-```bash
-REDIS_URL=redis://localhost:6379/0
-USE_BACKGROUND_JOBS=true
-USE_REDIS_PUBSUB=true
-```
-
-See `.env.example` for all options.
+See [Configuration docs](https://openmlr.dev/configuration) for all options.
 
 ## Testing
 
 ```bash
-make test              # Run all tests (591 backend + 182 frontend + docs build)
-make test-backend      # Backend tests only
-make test-frontend     # Frontend tests only
-make test-docs         # Docs build check
+make test           # All tests (backend + frontend + docs)
+make test-backend   # Backend only
+make test-frontend  # Frontend only
+make lint           # Run linters
 ```
 
 ## Architecture
@@ -92,14 +78,14 @@ backend/    Python 3.12 + FastAPI + SQLAlchemy + Celery
 site/       VitePress documentation
 ```
 
-See [Architecture](https://openmlr.dev/architecture) for details.
+See [Architecture docs](https://openmlr.dev/architecture) for details.
 
 ## Contributing
 
 1. Fork the repo
 2. Create a feature branch
 3. Make your changes
-4. Run `make test`
+4. Run `make test && make lint`
 5. Submit a PR
 
 ## License
