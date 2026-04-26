@@ -581,7 +581,10 @@ function ChatUI({
           onDelete={handleDeleteConversation}
         />
         
-        <div className="flex flex-col flex-1 overflow-hidden relative">
+        <div 
+          className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200"
+          style={{ paddingRight: rightPanelOpen ? '288px' : undefined }}
+        >
           {/* Empty state */}
           {messages.length === 0 && !effectiveProcessing && (
             <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
@@ -625,6 +628,7 @@ function ChatUI({
           />
         </div>
         
+        {/* RightPanel is fixed position, doesn't affect flex layout */}
         <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
       </div>
       

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SubAgentChild } from '../types';
@@ -126,29 +126,32 @@ function SubAgentBlock({ msg, expanded, onToggle }: { msg: Message; expanded: bo
 
 export function MessageList({ messages, hasDrawerOpen }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Track message count to detect new messages (not layout changes)
+  const prevMessageCountRef = useRef<number>(0);
 
-  // Debounced scroll to bottom - prevents jittering during rapid message updates
-  const scrollToBottom = useCallback(() => {
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    scrollTimeoutRef.current = setTimeout(() => {
-      // Use 'auto' for instant scroll during rapid updates, prevents animation conflicts
-      bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-    }, 50); // 50ms debounce
-  }, []);
-
+  // Only scroll to bottom when NEW messages are added
+  // This prevents scrolling on layout changes (e.g., RightPanel opening)
+  // Using container.scrollTop instead of scrollIntoView to avoid scrolling parent containers
   useEffect(() => {
-    scrollToBottom();
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, [messages, scrollToBottom]);
+    const currentCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+    
+    // Only scroll if message count increased (new message added)
+    if (currentCount > prevCount && prevCount > 0) {
+      // Small delay to let DOM settle, then scroll
+      const timer = setTimeout(() => {
+        const container = containerRef.current;
+        if (container) {
+          // Scroll the container itself, not using scrollIntoView which can affect parents
+          container.scrollTop = container.scrollHeight;
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+    
+    prevMessageCountRef.current = currentCount;
+  }, [messages.length]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -245,7 +248,6 @@ export function MessageList({ messages, hasDrawerOpen }: Props) {
           )}
         </div>
       ))}
-      <div ref={bottomRef} />
     </div>
   );
 }
