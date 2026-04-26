@@ -7,8 +7,9 @@ BACKEND       := backend
 FRONTEND      := frontend
 PORT          ?= 3000
 DOCKER_USER   ?= xprilion
-VERSION       ?= 0.2.0
+VERSION       ?= 0.3.0
 DOCKER_COMPOSE := docker compose
+LOGO_SRC      := assets/full-logo.png
 
 # ─── Setup ────────────────────────────────────────────────
 
@@ -239,6 +240,40 @@ docs-docker: ## Run docs in Docker (port 4000)
 .PHONY: docs-build
 docs-build: ## Build docs to site/docs/.vitepress/dist
 	cd site && npx vitepress build docs
+
+# ─── Logo Generation ─────────────────────────────────────
+
+.PHONY: logo
+logo: ## Generate all logo sizes from assets/full-logo.png
+	@echo "Generating logo sizes from $(LOGO_SRC)..."
+	@mkdir -p $(FRONTEND)/public site/docs/public
+	@# Favicons for webapp
+	sips -z 16 16 $(LOGO_SRC) --out $(FRONTEND)/public/favicon-16x16.png
+	sips -z 32 32 $(LOGO_SRC) --out $(FRONTEND)/public/favicon-32x32.png
+	sips -z 180 180 $(LOGO_SRC) --out $(FRONTEND)/public/apple-touch-icon.png
+	sips -z 192 192 $(LOGO_SRC) --out $(FRONTEND)/public/logo-192.png
+	sips -z 512 512 $(LOGO_SRC) --out $(FRONTEND)/public/logo-512.png
+	@# Generate .ico from 32x32 (copy as favicon.ico for browsers)
+	cp $(FRONTEND)/public/favicon-32x32.png $(FRONTEND)/public/favicon.ico
+	@# Logo for header/nav
+	sips -z 64 64 $(LOGO_SRC) --out $(FRONTEND)/public/logo-64.png
+	@# OG image (1200x630 for social sharing - pad/crop as needed)
+	sips -z 630 630 $(LOGO_SRC) --out $(FRONTEND)/public/og-image-square.png
+	sips -p 630 1200 $(FRONTEND)/public/og-image-square.png --out $(FRONTEND)/public/og-image.png
+	rm $(FRONTEND)/public/og-image-square.png
+	@# Copy to docs site
+	cp $(FRONTEND)/public/favicon-16x16.png site/docs/public/
+	cp $(FRONTEND)/public/favicon-32x32.png site/docs/public/
+	cp $(FRONTEND)/public/favicon.ico site/docs/public/
+	cp $(FRONTEND)/public/apple-touch-icon.png site/docs/public/
+	cp $(FRONTEND)/public/logo-64.png site/docs/public/
+	cp $(FRONTEND)/public/logo-192.png site/docs/public/
+	cp $(FRONTEND)/public/logo-512.png site/docs/public/
+	cp $(FRONTEND)/public/og-image.png site/docs/public/
+	@# Full logo for README
+	cp $(LOGO_SRC) assets/logo.png
+	sips -z 200 200 $(LOGO_SRC) --out assets/logo-200.png
+	@echo "Done! Logo sizes generated in frontend/public/, site/docs/public/, and assets/"
 
 # ─── Cleanup ─────────────────────────────────────────────
 

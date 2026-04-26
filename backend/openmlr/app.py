@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="OpenMLR",
     description="ML research intern — reads papers, trains models, writes papers",
-    version="2.0.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
