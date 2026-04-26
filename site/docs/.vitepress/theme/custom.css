@@ -1,9 +1,13 @@
 /**
- * Light mode: Soften harsh white backgrounds
+ * Light mode only: Soften harsh white backgrounds
  * Using warm gray tones for a more comfortable reading experience
+ * 
+ * IMPORTANT: Use :root:not(.dark) to avoid affecting dark mode
  */
-:root {
-  /* Main backgrounds */
+
+/* Light mode color overrides */
+:root:not(.dark) {
+  /* Main backgrounds - warm gray instead of pure white */
   --vp-c-bg: #f9fafb;
   --vp-c-bg-soft: #f3f4f6;
   --vp-c-bg-mute: #e5e7eb;
@@ -15,40 +19,24 @@
   /* Borders and dividers */
   --vp-c-gutter: #e5e7eb;
   --vp-c-divider: #e5e7eb;
-}
 
-/* Nav bar background */
-.VPNav {
-  background-color: var(--vp-c-bg) !important;
-}
-
-/* Hero section on home page */
-.VPHero {
-  background-color: var(--vp-c-bg) !important;
-}
-
-/* Feature cards on home page */
-.VPFeature {
-  background-color: var(--vp-c-bg-soft) !important;
-  border-color: var(--vp-c-divider) !important;
-}
-
-/* Content area */
-.VPContent {
-  background-color: var(--vp-c-bg) !important;
-}
-
-/* Sidebar */
-.VPSidebar {
-  background-color: var(--vp-c-bg) !important;
-}
-
-/* Code blocks - slightly darker for contrast */
-:root {
+  /* Code blocks */
   --vp-code-block-bg: #f3f4f6;
+  --vp-c-code-bg: #e5e7eb;
 }
 
-/* Inline code */
-:root {
-  --vp-c-code-bg: #e5e7eb;
+/* 
+ * Custom footer layout: left (name + copyright) | right (sitemap)
+ */
+.VPFooter .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  text-align: left;
 }
