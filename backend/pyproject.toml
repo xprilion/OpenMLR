@@ -63,6 +63,18 @@ openmlr = "openmlr.main:main"
 dev-dependencies = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
     "aiosqlite>=0.20.0",
     "httpx>=0.28.0",
+]
+
+[tool.coverage.run]
+source = ["openmlr"]
+omit = ["openmlr/db/migrations/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
 ]

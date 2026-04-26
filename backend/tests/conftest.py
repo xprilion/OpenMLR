@@ -105,10 +105,14 @@ async def client() -> AsyncGenerator[httpx.AsyncClient, None]:
     from openmlr.app import app
     from openmlr.db.engine import get_db as engine_get_db
     from openmlr.dependencies import get_db as dep_get_db
+    from openmlr.config import AgentConfig
 
     # Override both the canonical get_db *and* the re-export in dependencies
     app.dependency_overrides[engine_get_db] = _override_get_db
     app.dependency_overrides[dep_get_db] = _override_get_db
+
+    # Set minimal app state since lifespan is skipped
+    app.state.config = AgentConfig()
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

@@ -68,7 +68,7 @@ See `.env.example` for all options.
 ## Testing
 
 ```bash
-make test              # Run all tests (149 backend + 29 frontend + docs build)
+make test              # Run all tests (591 backend + 182 frontend + docs build)
 make test-backend      # Backend tests only
 make test-frontend     # Frontend tests only
 make test-docs         # Docs build check

@@ -3,7 +3,7 @@
 ####################################################################################################################
 
 version: "1.0"
-linter: jetbrains/qodana-python-community:2026.1
+linter: jetbrains/qodana-python-community:2025.3
 profile:
   name: qodana.recommended
 include:
