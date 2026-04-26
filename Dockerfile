@@ -64,4 +64,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
-CMD ["backend/.venv/bin/uvicorn", "openmlr.app:app", "--host", "0.0.0.0", "--port", "3000", "--app-dir", "backend"]
+CMD ["sh", "-c", "backend/.venv/bin/uvicorn openmlr.app:app --host 0.0.0.0 --port ${PORT:-3000} --app-dir backend"]
