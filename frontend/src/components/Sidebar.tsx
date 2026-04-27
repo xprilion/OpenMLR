@@ -14,6 +14,7 @@ import {
   FolderOpen,
   ChevronDown,
   Layers,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
@@ -30,6 +31,7 @@ interface Props {
   onDelete: (uuid: string) => void;
   onSelectProject: (project: Project | null) => void;
   onNewProject: () => void;
+  onManageProjects?: () => void;
 }
 
 function groupByDate(conversations: Conversation[]) {
@@ -59,7 +61,7 @@ function ConvIcon({ status }: { status: ConvStatus }) {
   return <span className={`${base} bg-border`} />;
 }
 
-export function Sidebar({ conversations, currentUuid, user, convStatuses, projects, activeProject, onSwitch, onNew, onDelete, onSelectProject, onNewProject }: Props) {
+export function Sidebar({ conversations, currentUuid, user, convStatuses, projects, activeProject, onSwitch, onNew, onDelete, onSelectProject, onNewProject, onManageProjects }: Props) {
   const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
@@ -73,6 +75,9 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
   }, [conversations, search]);
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
+
+  // Non-default projects for the dropdown
+  const userProjects = useMemo(() => projects.filter((p) => !p.is_default), [projects]);
 
   if (collapsed) {
     return (
@@ -128,7 +133,8 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
           <ChevronDown size={14} className={`text-text-dim shrink-0 transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
         {projectDropdownOpen && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl z-20 max-h-60 overflow-auto">
+          <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl z-20 max-h-72 overflow-auto">
+            {/* All Conversations */}
             <button
               className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${!activeProject ? 'text-primary' : 'text-text'}`}
               onClick={() => { onSelectProject(null); setProjectDropdownOpen(false); }}
@@ -136,10 +142,14 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
               <Layers size={14} />
               All Conversations
             </button>
-            {projects.map((p) => (
+
+            {/* User projects */}
+            {userProjects.map((p) => (
               <button
                 key={p.uuid}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${activeProject?.uuid === p.uuid ? 'text-primary bg-primary/5' : 'text-text'}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
+                  activeProject?.uuid === p.uuid ? 'text-primary bg-primary/5' : 'text-text'
+                }`}
                 onClick={() => { onSelectProject(p); setProjectDropdownOpen(false); }}
               >
                 <FolderOpen size={14} />
@@ -149,13 +159,26 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
                 )}
               </button>
             ))}
-            <button
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-surface-hover transition-colors border-t border-border"
-              onClick={() => { onNewProject(); setProjectDropdownOpen(false); }}
-            >
-              <Plus size={14} />
-              New Project
-            </button>
+
+            {/* Actions */}
+            <div className="border-t border-border">
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-surface-hover transition-colors"
+                onClick={() => { onNewProject(); setProjectDropdownOpen(false); }}
+              >
+                <Plus size={14} />
+                New Project
+              </button>
+              {userProjects.length > 0 && (
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+                  onClick={() => { onManageProjects?.(); setProjectDropdownOpen(false); }}
+                >
+                  <SlidersHorizontal size={14} />
+                  Manage Projects
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

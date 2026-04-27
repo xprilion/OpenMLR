@@ -53,6 +53,7 @@ def _node_dict(node) -> dict:
 
 # ── Compute Nodes ────────────────────────────────────────
 
+
 @router.get("/nodes")
 async def list_nodes(
     user: User = Depends(get_current_user),
@@ -97,8 +98,13 @@ async def create_node(
         await ops.set_default_compute_node(db, user.id, None)
 
     node = await ops.create_compute_node(
-        db, user.id, name, node_type, config,
-        is_default=is_default, priority=priority,
+        db,
+        user.id,
+        name,
+        node_type,
+        config,
+        is_default=is_default,
+        priority=priority,
     )
 
     return {"node": _node_dict(node)}
@@ -268,7 +274,9 @@ async def probe_node(
 
         # Update node in database
         await ops.update_compute_node(
-            db, node.id, user.id,
+            db,
+            node.id,
+            user.id,
             capabilities=caps.to_dict(),
             health_status="online",
             last_probed_at=datetime.now(UTC),
@@ -283,7 +291,9 @@ async def probe_node(
 
     except Exception as e:
         await ops.update_compute_node(
-            db, node.id, user.id,
+            db,
+            node.id,
+            user.id,
             health_status="offline",
         )
         return {"ok": False, "error": str(e)}
@@ -303,6 +313,7 @@ async def _test_ssh_node(node):
     password = config.get("password")
 
     try:
+
         def _do_test():
             client = paramiko.SSHClient()
             # Use WarningPolicy to get host key without auto-adding
@@ -353,7 +364,9 @@ async def _test_ssh_node(node):
         return {
             "ok": result["connected"],
             "host_key_fingerprint": result.get("host_key_fingerprint"),
-            "message": "Connected successfully" if result["connected"] else f"Unexpected output: {result['output']}",
+            "message": "Connected successfully"
+            if result["connected"]
+            else f"Unexpected output: {result['output']}",
         }
 
     except Exception as e:
@@ -381,6 +394,7 @@ async def _test_modal_node(node):
     """Test Modal connectivity."""
     try:
         import importlib.util
+
         if importlib.util.find_spec("modal") is not None:
             return {"ok": True, "message": "Modal client available"}
         return {"ok": False, "error": "Modal client not installed"}

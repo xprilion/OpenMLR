@@ -26,6 +26,9 @@ class AgentConfig:
     paper_search_budget: int = 25
     require_plan_approval: bool = True
     mcp_servers: dict = field(default_factory=dict)
+    custom_providers: list = field(
+        default_factory=list
+    )  # [{id, name, sdk_type, api_base, api_key, models}]
 
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "configs" / "agent_config.yaml"

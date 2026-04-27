@@ -13,8 +13,24 @@ class LLMProvider:
     """Handles LLM calls across multiple providers with streaming and retry."""
 
     @staticmethod
-    def _get_api_key(model_name: str) -> str | None:
+    def _find_custom_provider(model_name: str, custom_providers: list | None) -> dict | None:
+        """Find matching custom provider for a model name."""
+        if not custom_providers:
+            return None
         mn = model_name.lower()
+        for cp in custom_providers:
+            pid = cp.get("id", "").lower()
+            if pid and mn.startswith(f"{pid}/"):
+                return cp
+        return None
+
+    @staticmethod
+    def _get_api_key(model_name: str, custom_providers: list | None = None) -> str | None:
+        mn = model_name.lower()
+        # Check custom providers first
+        cp = LLMProvider._find_custom_provider(model_name, custom_providers)
+        if cp:
+            return cp.get("api_key")
         if mn.startswith("openai/"):
             return os.environ.get("OPENAI_API_KEY")
         if mn.startswith("anthropic/"):
@@ -33,16 +49,35 @@ class LLMProvider:
         )
 
     @staticmethod
-    def _normalize_model(model_name: str) -> str:
-        for prefix in ("openai/", "openrouter/", "anthropic/", "litellm/", "local/", "ollama/", "lmstudio/", "opencode-go/"):
+    def _normalize_model(model_name: str, custom_providers: list | None = None) -> str:
+        # Check custom provider prefixes first
+        cp = LLMProvider._find_custom_provider(model_name, custom_providers)
+        if cp:
+            pid = cp.get("id", "")
+            if pid and model_name.lower().startswith(f"{pid.lower()}/"):
+                return model_name[len(pid) + 1 :]
+        for prefix in (
+            "openai/",
+            "openrouter/",
+            "anthropic/",
+            "litellm/",
+            "local/",
+            "ollama/",
+            "lmstudio/",
+            "opencode-go/",
+        ):
             if model_name.startswith(prefix):
-                return model_name[len(prefix):]
+                return model_name[len(prefix) :]
         return model_name
 
     @staticmethod
-    def _get_base_url(model_name: str) -> str | None:
+    def _get_base_url(model_name: str, custom_providers: list | None = None) -> str | None:
         """Get the base URL for local/custom OpenAI-compatible APIs."""
         mn = model_name.lower()
+        # Check custom providers first
+        cp = LLMProvider._find_custom_provider(model_name, custom_providers)
+        if cp:
+            return cp.get("api_base", "").rstrip("/")
         if mn.startswith("local/"):
             # Custom base URL from env
             return os.environ.get("LOCAL_API_BASE", "http://localhost:8000/v1")
@@ -78,11 +113,16 @@ class LLMProvider:
         return model_name.lower().startswith("anthropic/")
 
     @staticmethod
-    def _uses_anthropic_format(model_name: str) -> bool:
-        """Check if model uses Anthropic message format (native Anthropic or OpenCode Go Anthropic models)."""
+    def _uses_anthropic_format(model_name: str, custom_providers: list | None = None) -> bool:
+        """Check if model uses Anthropic message format (native Anthropic, OpenCode Go Anthropic, or custom provider with anthropic-sdk)."""
         if LLMProvider._is_anthropic_model(model_name):
             return True
-        return LLMProvider._is_opencode_go_anthropic_format(model_name)
+        if LLMProvider._is_opencode_go_anthropic_format(model_name):
+            return True
+        cp = LLMProvider._find_custom_provider(model_name, custom_providers)
+        if cp and cp.get("sdk_type") == "anthropic-sdk":
+            return True
+        return False
 
     # ── Public API ────────────────────────────────────────
 
@@ -135,10 +175,20 @@ class LLMProvider:
     @staticmethod
     def _is_retryable(e: Exception) -> bool:
         msg = str(e).lower()
-        return any(x in msg for x in [
-            "429", "rate", "timeout", "server_error", "503", "502",
-            "overloaded", "connection", "capacity",
-        ])
+        return any(
+            x in msg
+            for x in [
+                "429",
+                "rate",
+                "timeout",
+                "server_error",
+                "503",
+                "502",
+                "overloaded",
+                "connection",
+                "capacity",
+            ]
+        )
 
     @staticmethod
     async def _call_with_retry(
@@ -150,7 +200,7 @@ class LLMProvider:
         last_error = None
         for attempt in range(max_retries):
             try:
-                if LLMProvider._uses_anthropic_format(config.model_name):
+                if LLMProvider._uses_anthropic_format(config.model_name, config.custom_providers):
                     return await LLMProvider._call_anthropic(messages, config, tools)
                 else:
                     return await LLMProvider._call_openai(messages, config, tools)
@@ -171,7 +221,7 @@ class LLMProvider:
         last_error = None
         for attempt in range(3):
             try:
-                if LLMProvider._uses_anthropic_format(config.model_name):
+                if LLMProvider._uses_anthropic_format(config.model_name, config.custom_providers):
                     async for chunk in LLMProvider._stream_anthropic(messages, config, tools):
                         yield chunk
                 else:
@@ -193,12 +243,15 @@ class LLMProvider:
         import logging
 
         from openai import AsyncOpenAI
+
         logger = logging.getLogger(__name__)
 
-        api_key = LLMProvider._get_api_key(config.model_name)
-        base_url = LLMProvider._get_base_url(config.model_name)
+        api_key = LLMProvider._get_api_key(config.model_name, config.custom_providers)
+        base_url = LLMProvider._get_base_url(config.model_name, config.custom_providers)
 
-        logger.debug(f"[LLM] Model: {config.model_name}, Base URL: {base_url}, API key set: {bool(api_key)}")
+        logger.debug(
+            f"[LLM] Model: {config.model_name}, Base URL: {base_url}, API key set: {bool(api_key)}"
+        )
 
         kwargs = {"api_key": api_key}
         if base_url:
@@ -227,7 +280,7 @@ class LLMProvider:
         tools: list[dict] | None,
     ) -> LLMResult:
         client = LLMProvider._openai_client(config)
-        model = LLMProvider._normalize_model(config.model_name)
+        model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
 
         params = {"model": model, "messages": messages, "max_tokens": 4096}
         openai_tools = LLMProvider._openai_tool_param(tools)
@@ -268,7 +321,7 @@ class LLMProvider:
         tools: list[dict] | None,
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
         client = LLMProvider._openai_client(config)
-        model = LLMProvider._normalize_model(config.model_name)
+        model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
 
         params = {
             "model": model,
@@ -345,15 +398,17 @@ class LLMProvider:
         for t in tools:
             # Unwrap if in OpenAI format
             func = t.get("function", t)
-            result.append({
-                "name": func["name"],
-                "description": func.get("description", ""),
-                "input_schema": {
-                    "type": "object",
-                    "properties": func.get("parameters", {}).get("properties", {}),
-                    "required": func.get("parameters", {}).get("required", []),
-                },
-            })
+            result.append(
+                {
+                    "name": func["name"],
+                    "description": func.get("description", ""),
+                    "input_schema": {
+                        "type": "object",
+                        "properties": func.get("parameters", {}).get("properties", {}),
+                        "required": func.get("parameters", {}).get("required", []),
+                    },
+                }
+            )
         return result
 
     @staticmethod
@@ -372,30 +427,45 @@ class LLMProvider:
                     content_blocks.append({"type": "text", "text": m["content"]})
                 for tc in m.get("tool_calls", []):
                     func = tc.get("function", tc)
-                    content_blocks.append({
-                        "type": "tool_use",
-                        "id": tc.get("id", ""),
-                        "name": func.get("name", tc.get("name", "")),
-                        "input": func.get("arguments", tc.get("arguments", {})),
-                    })
-                chat.append({"role": "assistant", "content": content_blocks or m.get("content", "")})
+                    content_blocks.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.get("id", ""),
+                            "name": func.get("name", tc.get("name", "")),
+                            "input": func.get("arguments", tc.get("arguments", {})),
+                        }
+                    )
+                chat.append(
+                    {"role": "assistant", "content": content_blocks or m.get("content", "")}
+                )
             elif m["role"] == "tool":
-                chat.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": m.get("tool_call_id", ""),
-                        "content": m["content"],
-                    }],
-                })
+                chat.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": m.get("tool_call_id", ""),
+                                "content": m["content"],
+                            }
+                        ],
+                    }
+                )
         return "\n\n".join(system_parts), chat
 
     @staticmethod
     def _anthropic_client(config: AgentConfig):
-        """Create Anthropic client with appropriate settings for native or OpenCode Go."""
+        """Create Anthropic client with appropriate settings for native, OpenCode Go, or custom provider."""
         from anthropic import AsyncAnthropic
 
         mn = config.model_name.lower()
+        # Check custom providers first
+        cp = LLMProvider._find_custom_provider(config.model_name, config.custom_providers)
+        if cp and cp.get("sdk_type") == "anthropic-sdk":
+            return AsyncAnthropic(
+                api_key=cp.get("api_key"),
+                base_url=cp.get("api_base", "").rstrip("/"),
+            )
         if mn.startswith("opencode-go/"):
             # OpenCode Go uses Anthropic format but different endpoint/key
             return AsyncAnthropic(
@@ -411,7 +481,7 @@ class LLMProvider:
         config: AgentConfig,
         tools: list[dict] | None,
     ) -> LLMResult:
-        model = LLMProvider._normalize_model(config.model_name)
+        model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
         client = LLMProvider._anthropic_client(config)
         system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
 
@@ -453,7 +523,7 @@ class LLMProvider:
         config: AgentConfig,
         tools: list[dict] | None,
     ) -> AsyncGenerator[str | ToolCall | dict, None]:
-        model = LLMProvider._normalize_model(config.model_name)
+        model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
         client = LLMProvider._anthropic_client(config)
         system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
 

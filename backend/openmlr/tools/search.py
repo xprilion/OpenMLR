@@ -22,7 +22,10 @@ def create_search_tools() -> list[ToolSpec]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
-                    "count": {"type": "integer", "description": "Number of results (default 5, max 20)"},
+                    "count": {
+                        "type": "integer",
+                        "description": "Number of results (default 5, max 20)",
+                    },
                 },
                 "required": ["query"],
             },

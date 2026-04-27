@@ -53,6 +53,30 @@ def _get_workspaces_root() -> Path:
 
 WORKSPACES_ROOT = _get_workspaces_root()
 
+DEFAULT_PROJECT_SLUG = "_default"
+DEFAULT_PROJECT_NAME = "All Conversations"
+
+
+async def get_or_create_default_project(db, user_id: int):
+    """Get (or create) the user's default project. Every user has exactly one."""
+    existing = await ops.get_project_by_slug(db, user_id, DEFAULT_PROJECT_SLUG)
+    if existing:
+        return existing
+
+    workspace_path = str(WORKSPACES_ROOT / f"user-{user_id}" / DEFAULT_PROJECT_SLUG)
+    _ensure_workspace(workspace_path)
+
+    project = await ops.create_project(
+        db,
+        user_id,
+        DEFAULT_PROJECT_NAME,
+        DEFAULT_PROJECT_SLUG,
+        description="Default workspace for all conversations",
+        workspace_path=workspace_path,
+        settings={"is_default": True},
+    )
+    return project
+
 
 def _slugify(name: str) -> str:
     """Generate a filesystem-safe slug from a project name."""
@@ -152,12 +176,17 @@ async def list_projects(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all projects for the current user."""
+    """List all projects for the current user. Ensures default project exists."""
+    # Ensure default project exists
+    await get_or_create_default_project(db, user.id)
+
     projects = await ops.get_user_projects(db, user.id, include_archived=include_archived)
     result = []
     for p in projects:
         convs = await ops.get_project_conversations(db, p.id)
-        result.append(_project_dict(p, conv_count=len(convs)))
+        d = _project_dict(p, conv_count=len(convs))
+        d["is_default"] = bool(p.settings and p.settings.get("is_default"))
+        result.append(d)
     return {"projects": result}
 
 
@@ -252,14 +281,22 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    is_default = project.settings and project.settings.get("is_default")
+
     body = await request.json()
     updates = {}
     if "name" in body:
+        if is_default:
+            raise HTTPException(status_code=400, detail="Cannot rename the default project")
         updates["name"] = body["name"].strip()
     if "description" in body:
         updates["description"] = body["description"].strip() or None
     if "settings" in body:
-        updates["settings"] = body["settings"]
+        # Prevent removing the is_default flag
+        new_settings = body["settings"]
+        if is_default and isinstance(new_settings, dict):
+            new_settings["is_default"] = True
+        updates["settings"] = new_settings
 
     updated = await ops.update_project(db, project.id, user.id, **updates)
     return {"project": _project_dict(updated)}

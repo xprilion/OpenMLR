@@ -59,6 +59,9 @@ export interface Provider {
   configured: boolean;
   categories: string[];
   docs_url?: string;
+  is_custom?: boolean;
+  sdk_type?: string;
+  api_base?: string;
 }
 
 // ── Structured Questions ────────────────────────────────
@@ -92,6 +95,7 @@ export interface Project {
   workspace_path: string | null;
   status: 'active' | 'archived';
   settings: Record<string, any>;
+  is_default?: boolean;
   conversation_count?: number;
   created_at: string;
   updated_at: string;

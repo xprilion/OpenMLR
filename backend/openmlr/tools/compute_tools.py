@@ -26,6 +26,7 @@ async def _handle_list(user_id: int = None, db=None, **kwargs):
         return "Database connection required for compute_list", False
 
     from ..db import operations as ops
+
     nodes = await ops.get_compute_nodes(db, user_id)
 
     if not nodes:
@@ -59,6 +60,7 @@ async def _handle_probe(node_name: str, user_id: int = None, db=None, **kwargs):
         return "Database connection required for compute_probe", False
 
     from ..db import operations as ops
+
     node = await ops.get_compute_node_by_name(db, user_id, node_name)
     if not node:
         return f"Node '{node_name}' not found", False
@@ -80,7 +82,9 @@ async def _handle_probe(node_name: str, user_id: int = None, db=None, **kwargs):
 
         # Update node in database
         await ops.update_compute_node(
-            db, node.id, user_id,
+            db,
+            node.id,
+            user_id,
             capabilities=caps.to_dict(),
             health_status="online",
             last_probed_at=datetime.now(UTC),
@@ -92,8 +96,12 @@ async def _handle_probe(node_name: str, user_id: int = None, db=None, **kwargs):
         lines = [f"## {node.name} Capabilities\n"]
         lines.append(f"Platform: {caps.platform}")
         lines.append(f"CPU: {caps.cpu_cores} cores ({caps.cpu_arch})")
-        lines.append(f"RAM: {caps.available_ram_gb:.1f} GB available / {caps.total_ram_gb:.1f} GB total")
-        lines.append(f"Disk: {caps.available_disk_gb:.1f} GB available / {caps.total_disk_gb:.1f} GB total")
+        lines.append(
+            f"RAM: {caps.available_ram_gb:.1f} GB available / {caps.total_ram_gb:.1f} GB total"
+        )
+        lines.append(
+            f"Disk: {caps.available_disk_gb:.1f} GB available / {caps.total_disk_gb:.1f} GB total"
+        )
 
         if caps.gpu_available:
             for gpu in caps.gpu_info:
@@ -121,7 +129,9 @@ async def _handle_probe(node_name: str, user_id: int = None, db=None, **kwargs):
         except Exception:
             pass
         await ops.update_compute_node(
-            db, node.id, user_id,
+            db,
+            node.id,
+            user_id,
             health_status="offline",
         )
         return f"Probe failed for {node_name}: {str(e)}", False
@@ -133,12 +143,13 @@ async def _handle_select(node_name: str, user_id: int = None, db=None, session=N
         return "Database connection required for compute_select", False
 
     from ..db import operations as ops
+
     node = await ops.get_compute_node_by_name(db, user_id, node_name)
     if not node:
         return f"Node '{node_name}' not found", False
 
     # If session is provided, update the active sandbox
-    if session and hasattr(session, 'conversation_id'):
+    if session and hasattr(session, "conversation_id"):
         # Update conversation extra
         conv_id = session.conversation_id
         conv = await ops.get_conversation_by_id(db, conv_id)
@@ -151,13 +162,16 @@ async def _handle_select(node_name: str, user_id: int = None, db=None, session=N
     return f"Active compute switched to: {node.name} ({node.type})", True
 
 
-async def _handle_plan(task: str, requirements: dict = None, user_id: int = None, db=None, **kwargs):
+async def _handle_plan(
+    task: str, requirements: dict = None, user_id: int = None, db=None, **kwargs
+):
     """Recommend the best compute node for a task."""
     if not db:
         return "Database connection required for compute_plan", False
 
     requirements = requirements or {}
     from ..db import operations as ops
+
     nodes = await ops.get_compute_nodes(db, user_id)
 
     if not nodes:
@@ -214,11 +228,13 @@ async def _handle_plan(task: str, requirements: dict = None, user_id: int = None
         elif node.type == "modal":
             reasons.append("modal (cloud)")
 
-        scores.append({
-            "node": node,
-            "score": score,
-            "reasons": reasons,
-        })
+        scores.append(
+            {
+                "node": node,
+                "score": score,
+                "reasons": reasons,
+            }
+        )
 
     if not scores:
         return "No compute nodes meet the requirements.", False
@@ -234,7 +250,9 @@ async def _handle_plan(task: str, requirements: dict = None, user_id: int = None
     if len(scores) > 1:
         lines.append("\n### Alternatives")
         for alt in scores[1:3]:
-            lines.append(f"- {alt['node'].name} (score: {alt['score']:.1f}, {', '.join(alt['reasons'])})")
+            lines.append(
+                f"- {alt['node'].name} (score: {alt['score']:.1f}, {', '.join(alt['reasons'])})"
+            )
 
     return "\n".join(lines), True
 
@@ -242,25 +260,30 @@ async def _handle_plan(task: str, requirements: dict = None, user_id: int = None
 async def _get_sync_context(user_id, db, session):
     """Helper: resolve conversation UUID and workspace path for sync ops."""
     from ..db import operations as ops
+
     conv_uuid = None
-    if session and hasattr(session, 'conversation_id'):
+    if session and hasattr(session, "conversation_id"):
         conv = await ops.get_conversation_by_id(db, session.conversation_id)
         if conv:
             conv_uuid = conv.uuid
     if not conv_uuid:
         return None, None, "No active conversation workspace found"
     from ..compute import WorkspaceManager
+
     wm = WorkspaceManager()
     local_ws = wm.get_workspace_path(conv_uuid)
     return conv_uuid, local_ws, None
 
 
-async def _handle_sync_up(paths: list, node_name: str, user_id: int = None, db=None, session=None, **kwargs):
+async def _handle_sync_up(
+    paths: list, node_name: str, user_id: int = None, db=None, session=None, **kwargs
+):
     """Sync files from local workspace to remote compute node."""
     if not db:
         return "Database connection required", False
 
     from ..db import operations as ops
+
     node = await ops.get_compute_node_by_name(db, user_id, node_name)
     if not node:
         return f"Node '{node_name}' not found", False
@@ -276,6 +299,7 @@ async def _handle_sync_up(paths: list, node_name: str, user_id: int = None, db=N
 
     elif node.type == "ssh":
         from ..sandbox.ssh import SSHSandbox
+
         ssh_sandbox = SSHSandbox()
         try:
             config = dict(node.config)
@@ -329,12 +353,15 @@ async def _handle_sync_up(paths: list, node_name: str, user_id: int = None, db=N
     return "Unsupported node type", False
 
 
-async def _handle_sync_down(paths: list, node_name: str, user_id: int = None, db=None, session=None, **kwargs):
+async def _handle_sync_down(
+    paths: list, node_name: str, user_id: int = None, db=None, session=None, **kwargs
+):
     """Sync files from remote compute node to local workspace."""
     if not db:
         return "Database connection required", False
 
     from ..db import operations as ops
+
     node = await ops.get_compute_node_by_name(db, user_id, node_name)
     if not node:
         return f"Node '{node_name}' not found", False
@@ -349,6 +376,7 @@ async def _handle_sync_down(paths: list, node_name: str, user_id: int = None, db
 
     elif node.type == "ssh":
         from ..sandbox.ssh import SSHSandbox
+
         ssh_sandbox = SSHSandbox()
         try:
             config = dict(node.config)
@@ -389,7 +417,9 @@ async def _handle_sync_down(paths: list, node_name: str, user_id: int = None, db
 
                 elif remote_type == "dir":
                     result = await ssh_sandbox.execute(f"find '{remote_path}' -type f", timeout=10)
-                    remote_files = [ln.strip() for ln in result.output.strip().split("\n") if ln.strip()]
+                    remote_files = [
+                        ln.strip() for ln in result.output.strip().split("\n") if ln.strip()
+                    ]
                     for rf in remote_files:
                         rel = rf.replace(remote_path + "/", "", 1)
                         dst = local_path / rel
@@ -476,9 +506,15 @@ def create_compute_tools() -> list[ToolSpec]:
                         "description": "Hardware requirements",
                         "properties": {
                             "gpu": {"type": "boolean", "description": "GPU required"},
-                            "min_vram_gb": {"type": "number", "description": "Minimum GPU VRAM in GB"},
+                            "min_vram_gb": {
+                                "type": "number",
+                                "description": "Minimum GPU VRAM in GB",
+                            },
                             "min_ram_gb": {"type": "number", "description": "Minimum RAM in GB"},
-                            "min_disk_gb": {"type": "number", "description": "Minimum free disk in GB"},
+                            "min_disk_gb": {
+                                "type": "number",
+                                "description": "Minimum free disk in GB",
+                            },
                         },
                     },
                 },

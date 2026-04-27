@@ -126,14 +126,17 @@ async def _cleanup_process(pid: int, master_fd: int) -> None:
 
 
 @router.websocket("/api/terminal/{project_uuid}")
+@router.websocket("/api/terminal")
 async def terminal_websocket(
     websocket: WebSocket,
-    project_uuid: str,
+    project_uuid: str | None = None,
     token: str = Query(default=None),
 ):
     """WebSocket endpoint for interactive terminal sessions.
 
     Spawns a PTY process in the project workspace directory.
+    If no project_uuid is provided, uses the user's default project workspace.
+
     Messages from the client are written to the PTY stdin.
     Output from the PTY is sent back to the client.
 
@@ -150,7 +153,14 @@ async def terminal_websocket(
 
     # Look up the project to get the workspace path
     async with get_async_session() as db:
-        project = await ops.get_project_by_uuid(db, project_uuid, user.id)
+        if project_uuid:
+            project = await ops.get_project_by_uuid(db, project_uuid, user.id)
+        else:
+            # Use default project
+            from .projects import get_or_create_default_project
+
+            project = await get_or_create_default_project(db, user.id)
+
         if not project or not project.workspace_path:
             await websocket.close(code=4004, reason="Project not found")
             return
@@ -200,9 +210,25 @@ async def terminal_websocket(
     # Close slave fd in parent — only the child uses it
     os.close(slave_fd)
 
-    # Set master fd to non-blocking
-    flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-    fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    # Keep master fd blocking — reads happen in a thread pool executor
+    # so blocking is fine and avoids premature EAGAIN exits.
+
+    def _blocking_read(fd: int) -> bytes:
+        """Read from PTY fd. Blocks in the thread pool until data is available."""
+        import select as _select
+
+        while True:
+            # Wait for data with a 0.5s timeout so the thread can be interrupted
+            ready, _, _ = _select.select([fd], [], [], 0.5)
+            if ready:
+                return os.read(fd, 4096)
+            # Check if the child process is still alive
+            try:
+                pid_result, _ = os.waitpid(proc.pid, os.WNOHANG)
+                if pid_result != 0:
+                    return b""  # Child exited
+            except ChildProcessError:
+                return b""
 
     async def read_pty():
         """Read from PTY and send to WebSocket."""
@@ -210,7 +236,7 @@ async def terminal_websocket(
         try:
             while True:
                 try:
-                    data = await loop.run_in_executor(None, lambda: os.read(master_fd, 4096))
+                    data = await loop.run_in_executor(None, lambda: _blocking_read(master_fd))
                     if not data:
                         break
                     await websocket.send_bytes(data)

@@ -16,7 +16,7 @@ def _setup_db():
 def _make_config(**overrides) -> AgentConfig:
     """Build an AgentConfig with sensible test defaults."""
     defaults = {
-        "model_name": "gpt-4o",          # 128 000 max tokens
+        "model_name": "gpt-4o",  # 128 000 max tokens
         "compact_threshold_ratio": 0.90,
         "untouched_messages": 5,
     }
@@ -25,6 +25,7 @@ def _make_config(**overrides) -> AgentConfig:
 
 
 # ── estimate_tokens ────────────────────────────────────────────────────────
+
 
 class TestEstimateTokens:
     def test_returns_roughly_len_over_4(self):
@@ -43,6 +44,7 @@ class TestEstimateTokens:
 
 
 # ── ContextManager.add_message ─────────────────────────────────────────────
+
 
 class TestAddMessage:
     def test_adds_message_object(self):
@@ -68,19 +70,22 @@ class TestAddMessage:
 
     def test_dict_with_tool_calls(self):
         cm = ContextManager(config=_make_config())
-        cm.add_message({
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [
-                {"id": "tc1", "name": "bash", "arguments": {"cmd": "ls"}},
-            ],
-        })
+        cm.add_message(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "tc1", "name": "bash", "arguments": {"cmd": "ls"}},
+                ],
+            }
+        )
         assert len(cm.messages) == 1
         assert cm.messages[0].tool_calls is not None
         assert cm.messages[0].tool_calls[0].name == "bash"
 
 
 # ── ContextManager.get_messages ────────────────────────────────────────────
+
 
 class TestGetMessages:
     def test_returns_messages_in_order(self):
@@ -125,15 +130,16 @@ class TestGetMessages:
 
     def test_serialises_tool_call_id(self):
         cm = ContextManager(config=_make_config())
-        cm.add_message(Message(
-            role="tool", content="file contents", tool_call_id="tc1", name="read"
-        ))
+        cm.add_message(
+            Message(role="tool", content="file contents", tool_call_id="tc1", name="read")
+        )
         result = cm.get_messages(include_system=False)
         assert result[0]["tool_call_id"] == "tc1"
         assert result[0]["name"] == "read"
 
 
 # ── ContextManager.needs_compaction ────────────────────────────────────────
+
 
 class TestNeedsCompaction:
     def test_returns_false_when_under_threshold(self):
@@ -143,7 +149,7 @@ class TestNeedsCompaction:
 
     def test_returns_true_when_over_threshold(self):
         cfg = _make_config(
-            model_name="gpt-4o",          # 128 000 max tokens
+            model_name="gpt-4o",  # 128 000 max tokens
             compact_threshold_ratio=0.90,  # threshold = 115 200
         )
         cm = ContextManager(config=cfg)
@@ -166,6 +172,7 @@ class TestNeedsCompaction:
 
 
 # ── ContextManager.undo_last_turn ──────────────────────────────────────────
+
 
 class TestUndoLastTurn:
     def test_removes_assistant_and_user_messages(self):
@@ -215,6 +222,7 @@ class TestUndoLastTurn:
 
 
 # ── ContextManager.clear ───────────────────────────────────────────────────
+
 
 class TestClear:
     def test_empties_messages(self):

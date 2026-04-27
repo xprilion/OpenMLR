@@ -5,6 +5,10 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
+import { Terminal as XTerm } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import '@xterm/xterm/css/xterm.css';
 
 interface Props {
   projectUuid: string | null;
@@ -12,78 +16,128 @@ interface Props {
   onToggle: () => void;
 }
 
-/**
- * Interactive terminal connected to the project workspace via WebSocket.
- * Uses a basic approach without xterm.js dependency — renders terminal output
- * in a pre element and captures keyboard input.
- *
- * For a production deployment, install @xterm/xterm and use the attach addon.
- * This implementation provides core functionality without the extra dependency.
- */
 export function Terminal({ projectUuid, visible, onToggle }: Props) {
   const [connected, setConnected] = useState(false);
-  const [output, setOutput] = useState<string[]>([]);
   const [maximized, setMaximized] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const outputRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [inputLine, setInputLine] = useState('');
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const termRef = useRef<XTerm | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const termInitialized = useRef(false);
 
+  // Initialize xterm instance once
+  const initTerm = useCallback(() => {
+    if (termInitialized.current || !containerRef.current) return;
+
+    const term = new XTerm({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, monospace",
+      theme: {
+        background: '#0d0d0d',
+        foreground: '#e0e0e0',
+        cursor: '#3b82f6',
+        selectionBackground: '#3b82f640',
+        black: '#1a1a1a',
+        red: '#ef4444',
+        green: '#22c55e',
+        yellow: '#eab308',
+        blue: '#3b82f6',
+        magenta: '#a855f7',
+        cyan: '#06b6d4',
+        white: '#e0e0e0',
+        brightBlack: '#525252',
+        brightRed: '#f87171',
+        brightGreen: '#4ade80',
+        brightYellow: '#fde047',
+        brightBlue: '#60a5fa',
+        brightMagenta: '#c084fc',
+        brightCyan: '#22d3ee',
+        brightWhite: '#ffffff',
+      },
+      scrollback: 5000,
+      convertEol: true,
+      allowProposedApi: true,
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(new WebLinksAddon());
+
+    term.open(containerRef.current);
+    fitAddon.fit();
+
+    termRef.current = term;
+    fitAddonRef.current = fitAddon;
+    termInitialized.current = true;
+
+    return term;
+  }, []);
+
+  // Connect WebSocket
   const connect = useCallback(() => {
-    if (!projectUuid) return;
-
     const token = localStorage.getItem('openmlr_token');
     if (!token) return;
 
+    const term = termRef.current || initTerm();
+    if (!term) return;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/terminal/${projectUuid}?token=${token}`;
+    const path = projectUuid ? `/api/terminal/${projectUuid}` : '/api/terminal';
+    const wsUrl = `${protocol}//${window.location.host}${path}?token=${token}`;
 
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
+      ws.binaryType = 'arraybuffer';
+
       ws.onopen = () => {
         setConnected(true);
-        setOutput((prev) => [...prev, '\r\n--- Connected ---\r\n']);
-        // Send initial resize
-        ws.send(JSON.stringify({ type: 'resize', cols: 120, rows: 30 }));
+        // Send resize to match current terminal dimensions
+        const dims = fitAddonRef.current?.proposeDimensions();
+        if (dims) {
+          ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+        }
       };
 
       ws.onmessage = (event) => {
-        if (event.data instanceof Blob) {
-          event.data.text().then((text: string) => {
-            setOutput((prev) => [...prev, text]);
-          });
+        if (event.data instanceof ArrayBuffer) {
+          term.write(new Uint8Array(event.data));
         } else {
-          setOutput((prev) => [...prev, event.data]);
+          term.write(event.data);
         }
       };
 
       ws.onclose = () => {
         setConnected(false);
-        setOutput((prev) => [...prev, '\r\n--- Disconnected ---\r\n']);
+        term.writeln('\r\n\x1b[90m--- Disconnected ---\x1b[0m');
         wsRef.current = null;
       };
 
       ws.onerror = () => {
         setConnected(false);
       };
+
+      // Forward terminal input to WebSocket
+      term.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data }));
+        }
+      });
+
     } catch {
       setConnected(false);
     }
-  }, [projectUuid]);
+  }, [projectUuid, initTerm]);
 
-  // Connect when visible and project is set
+  // Connect when visible
   useEffect(() => {
-    if (visible && projectUuid && !wsRef.current) {
-      connect();
+    if (visible && !wsRef.current) {
+      // Small delay to ensure container is rendered
+      const timer = setTimeout(() => connect(), 50);
+      return () => clearTimeout(timer);
     }
-    return () => {
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current);
-      }
-    };
   }, [visible, projectUuid, connect]);
 
   // Disconnect when hidden
@@ -94,35 +148,38 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
     }
   }, [visible]);
 
-  // Auto-scroll to bottom
+  // Fit terminal on resize or maximize toggle
   useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-  }, [output]);
+    if (!visible || !fitAddonRef.current) return;
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const handleResize = () => {
+      fitAddonRef.current?.fit();
+      // Notify backend of new size
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const dims = fitAddonRef.current?.proposeDimensions();
+        if (dims) {
+          wsRef.current.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+        }
+      }
+    };
 
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      wsRef.current.send(JSON.stringify({ type: 'input', data: inputLine + '\n' }));
-      setInputLine('');
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      wsRef.current.send(JSON.stringify({ type: 'input', data: '\t' }));
-    } else if (e.ctrlKey && e.key === 'c') {
-      e.preventDefault();
-      wsRef.current.send(JSON.stringify({ type: 'input', data: '\x03' }));
-    } else if (e.ctrlKey && e.key === 'd') {
-      e.preventDefault();
-      wsRef.current.send(JSON.stringify({ type: 'input', data: '\x04' }));
-    } else if (e.ctrlKey && e.key === 'l') {
-      e.preventDefault();
-      wsRef.current.send(JSON.stringify({ type: 'input', data: '\x0c' }));
-      setOutput([]);
-    }
-  }, [inputLine]);
+    // Fit after layout settles
+    const timer = setTimeout(handleResize, 100);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [visible, maximized]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      wsRef.current?.close();
+      termRef.current?.dispose();
+      termInitialized.current = false;
+    };
+  }, []);
 
   if (!visible) {
     return (
@@ -149,16 +206,13 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
           <TerminalIcon size={14} className="text-primary" />
           <span className="text-xs font-medium text-text">Terminal</span>
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-success' : 'bg-error'}`} />
-          {!connected && projectUuid && (
+          {!connected && (
             <button
               className="text-xs text-primary hover:underline"
               onClick={connect}
             >
               Connect
             </button>
-          )}
-          {!projectUuid && (
-            <span className="text-xs text-text-dim">No project selected</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -179,30 +233,12 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
         </div>
       </div>
 
-      {/* Output area */}
+      {/* xterm.js container */}
       <div
-        ref={outputRef}
-        className="flex-1 overflow-auto px-3 py-2 font-mono text-xs text-green-400 whitespace-pre-wrap"
-        onClick={() => inputRef.current?.focus()}
-      >
-        {output.join('')}
-      </div>
-
-      {/* Input line */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1a1a] border-t border-border shrink-0">
-        <span className="text-xs text-primary font-mono">$</span>
-        <textarea
-          ref={inputRef}
-          className="flex-1 bg-transparent text-xs text-green-400 font-mono outline-none resize-none"
-          rows={1}
-          value={inputLine}
-          onChange={(e) => setInputLine(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={connected ? 'Type command...' : 'Not connected'}
-          disabled={!connected}
-          autoFocus
-        />
-      </div>
+        ref={containerRef}
+        className="flex-1 min-h-0 px-1"
+        onClick={() => termRef.current?.focus()}
+      />
     </div>
   );
 }

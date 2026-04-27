@@ -23,6 +23,7 @@ class TestAppCreation:
 
     async def test_cors_middleware_configured(self):
         from fastapi.middleware.cors import CORSMiddleware
+
         middlewares = [m.cls for m in app.user_middleware]
         assert CORSMiddleware in middlewares
 
@@ -34,11 +35,13 @@ class TestAppCreation:
 class TestMainModule:
     async def test_main_is_callable(self):
         from openmlr.main import main
+
         assert callable(main)
 
     async def test_main_contains_uvicorn_import(self):
         import inspect
 
         from openmlr.main import main
+
         source = inspect.getsource(main)
         assert "uvicorn" in source

@@ -163,14 +163,17 @@ class TestWaitForAnswers:
 class TestModuleConstants:
     def test_channel_name(self):
         from openmlr.services.redis_pubsub import CHANNEL_NAME
+
         assert CHANNEL_NAME == "openmlr:events"
 
     def test_answers_key_prefix(self):
         from openmlr.services.redis_pubsub import ANSWERS_KEY_PREFIX
+
         assert ANSWERS_KEY_PREFIX == "openmlr:answers:"
 
     def test_interrupt_key_prefix(self):
         from openmlr.services.redis_pubsub import INTERRUPT_KEY_PREFIX
+
         assert INTERRUPT_KEY_PREFIX == "openmlr:interrupt:"
 
     def test_redis_url_from_env(self, monkeypatch):
@@ -178,6 +181,7 @@ class TestModuleConstants:
         from importlib import reload
 
         import openmlr.services.redis_pubsub
+
         reload(openmlr.services.redis_pubsub)
         assert openmlr.services.redis_pubsub.REDIS_URL == "redis://custom:6379/1"
         # Restore

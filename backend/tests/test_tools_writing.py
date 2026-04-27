@@ -33,6 +33,7 @@ class TestCreateWritingTool:
 class TestCreateProject:
     async def test_creates_project(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         result, ok = _create_project(conv_id=1, title="My Paper")
         assert ok is True
@@ -51,6 +52,7 @@ class TestCreateProject:
 class TestSetOutline:
     async def test_no_project(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         result, ok = _set_outline(conv_id=999, outline=[])
         assert ok is False
@@ -58,6 +60,7 @@ class TestSetOutline:
 
     async def test_requires_outline(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="Test")
         result, ok = _set_outline(conv_id=1, outline=None)
@@ -66,13 +69,18 @@ class TestSetOutline:
 
     async def test_sets_outline(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="Test")
         outline = [
             {"id": "sec1", "title": "Introduction"},
-            {"id": "sec2", "title": "Methods", "subsections": [
-                {"id": "sec2.1", "title": "Setup"},
-            ]},
+            {
+                "id": "sec2",
+                "title": "Methods",
+                "subsections": [
+                    {"id": "sec2.1", "title": "Setup"},
+                ],
+            },
         ]
         result, ok = _set_outline(conv_id=1, outline=outline)
         assert ok is True
@@ -85,12 +93,14 @@ class TestSetOutline:
 class TestWriteSection:
     async def test_no_project(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         result, ok = _write_section(conv_id=999, section_id="s1", content="text")
         assert ok is False
 
     async def test_writes_section(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="Test")
         _set_outline(conv_id=1, outline=[{"id": "intro", "title": "Introduction"}])
@@ -106,9 +116,12 @@ class TestGetDraft:
         from unittest.mock import AsyncMock, patch
 
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         # Mock _get_author_info to avoid database calls
-        with patch('openmlr.tools.writing._get_author_info', new_callable=AsyncMock, return_value=None):
+        with patch(
+            "openmlr.tools.writing._get_author_info", new_callable=AsyncMock, return_value=None
+        ):
             result, ok = await _get_draft(conv_id=999)
         assert ok is False
 
@@ -116,12 +129,15 @@ class TestGetDraft:
         from unittest.mock import AsyncMock, patch
 
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="The Paper")
         _set_outline(conv_id=1, outline=[{"id": "intro", "title": "Introduction"}])
         _write_section(conv_id=1, section_id="intro", content="This is the intro.")
         # Mock _get_author_info to avoid database calls
-        with patch('openmlr.tools.writing._get_author_info', new_callable=AsyncMock, return_value=None):
+        with patch(
+            "openmlr.tools.writing._get_author_info", new_callable=AsyncMock, return_value=None
+        ):
             result, ok = await _get_draft(conv_id=1)
         assert ok is True
         assert "# The Paper" in result
@@ -136,9 +152,13 @@ class TestGetDraftFromProj:
             "title": "ML Research",
             "outline": [
                 {"id": "abstract", "title": "Abstract"},
-                {"id": "method", "title": "Method", "subsections": [
-                    {"id": "method.experimental", "title": "Experimental Setup"},
-                ]},
+                {
+                    "id": "method",
+                    "title": "Method",
+                    "subsections": [
+                        {"id": "method.experimental", "title": "Experimental Setup"},
+                    ],
+                },
             ],
             "sections": {
                 "abstract": "This is the abstract.",
@@ -162,6 +182,7 @@ class TestGetDraftFromProj:
 class TestListSections:
     async def test_no_project(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         result, ok = _list_sections(conv_id=999)
         assert ok is False
@@ -169,12 +190,16 @@ class TestListSections:
 
     async def test_lists_sections_with_status(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="Test")
-        _set_outline(conv_id=1, outline=[
-            {"id": "s1", "title": "Section 1"},
-            {"id": "s2", "title": "Section 2"},
-        ])
+        _set_outline(
+            conv_id=1,
+            outline=[
+                {"id": "s1", "title": "Section 1"},
+                {"id": "s2", "title": "Section 2"},
+            ],
+        )
         _write_section(conv_id=1, section_id="s1", content="written")
         result, ok = _list_sections(conv_id=1)
         assert ok is True
@@ -186,6 +211,7 @@ class TestListSections:
 class TestAddCitation:
     async def test_adds_citation(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="Test")
         citation = {
@@ -203,13 +229,16 @@ class TestAddCitation:
 class TestRefineSection:
     async def test_returns_feedback_mode(self):
         from openmlr.tools.writing import _projects
+
         _projects.clear()
         _create_project(conv_id=1, title="Test")
         _set_outline(conv_id=1, outline=[{"id": "s1", "title": "Section"}])
         _write_section(conv_id=1, section_id="s1", content="original content")
         result, ok = _refine_section(
-            conv_id=1, section_id="s1",
-            content=None, feedback="make it better",
+            conv_id=1,
+            section_id="s1",
+            content=None,
+            feedback="make it better",
         )
         assert ok is True
         assert "feedback" in result.lower()
@@ -220,10 +249,14 @@ class TestCountSections:
     async def test_counts_with_subsections(self):
         outline = [
             {"id": "a", "title": "A"},
-            {"id": "b", "title": "B", "subsections": [
-                {"id": "b1", "title": "B1"},
-                {"id": "b2", "title": "B2"},
-            ]},
+            {
+                "id": "b",
+                "title": "B",
+                "subsections": [
+                    {"id": "b1", "title": "B1"},
+                    {"id": "b2", "title": "B2"},
+                ],
+            },
         ]
         assert _count_sections(outline) == 4
 

@@ -88,10 +88,7 @@ async def _async_process_message(
 
         # Load existing messages for context
         messages = await ops.get_messages(db, conversation_id)
-        existing_messages = [
-            {"role": m.role, "content": m.content}
-            for m in messages
-        ]
+        existing_messages = [{"role": m.role, "content": m.content} for m in messages]
 
         # Increment user message count
         await ops.increment_user_message_count(db, conversation_id)
@@ -100,10 +97,12 @@ async def _async_process_message(
         await ops.add_message(db, conversation_id, "user", message)
 
     # Broadcast that we're processing
-    await publish_event(AgentEvent(
-        event_type="status",
-        data={"status": "thinking...", "job_id": job_id},
-    ))
+    await publish_event(
+        AgentEvent(
+            event_type="status",
+            data={"status": "thinking...", "job_id": job_id},
+        )
+    )
 
     # Create agent session
     config = load_config()
@@ -140,11 +139,17 @@ async def _async_process_message(
                 await ops.add_message(db, conversation_id, "assistant", event.data["content"])
         elif event.event_type == "tool_output" and event.data:
             async with worker_session() as db:
-                await ops.add_message(db, conversation_id, "tool", event.data.get("output", ""), {
-                    "tool": event.data.get("tool"),
-                    "tool_call_id": event.data.get("tool_call_id"),
-                    "success": event.data.get("success"),
-                })
+                await ops.add_message(
+                    db,
+                    conversation_id,
+                    "tool",
+                    event.data.get("output", ""),
+                    {
+                        "tool": event.data.get("tool"),
+                        "tool_call_id": event.data.get("tool_call_id"),
+                        "success": event.data.get("success"),
+                    },
+                )
 
     session.on_event(_broadcast)
 
@@ -152,11 +157,14 @@ async def _async_process_message(
     # and cancels the session when found.
     async def _poll_interrupt():
         from ..services.redis_pubsub import check_interrupt, clear_interrupt
+
         try:
             while True:
                 await asyncio.sleep(2)
                 if await check_interrupt(conversation_id):
-                    logger.info(f"Interrupt detected via Redis for conversation {conversation_id}, cancelling session")
+                    logger.info(
+                        f"Interrupt detected via Redis for conversation {conversation_id}, cancelling session"
+                    )
                     session.cancel()
                     await clear_interrupt(conversation_id)
                     break
@@ -176,20 +184,29 @@ async def _async_process_message(
             await ops.update_job_status(db, job_id, "completed")
 
         # Broadcast completion
-        await publish_event(AgentEvent(
-            event_type="job_complete",
-            data={"job_id": job_id, "conversation_uuid": uuid, "status": "completed"},
-        ))
+        await publish_event(
+            AgentEvent(
+                event_type="job_complete",
+                data={"job_id": job_id, "conversation_uuid": uuid, "status": "completed"},
+            )
+        )
 
     except Exception as e:
         logger.exception(f"Agent processing failed for job {job_id}: {e}")
         async with worker_session() as db:
             await ops.update_job_status(db, job_id, "failed", error=str(e))
 
-        await publish_event(AgentEvent(
-            event_type="job_complete",
-            data={"job_id": job_id, "conversation_uuid": uuid, "status": "failed", "error": str(e)},
-        ))
+        await publish_event(
+            AgentEvent(
+                event_type="job_complete",
+                data={
+                    "job_id": job_id,
+                    "conversation_uuid": uuid,
+                    "status": "failed",
+                    "error": str(e),
+                },
+            )
+        )
         raise
 
     finally:
@@ -209,15 +226,18 @@ async def _async_process_message(
         # Clear any lingering interrupt key
         try:
             from ..services.redis_pubsub import clear_interrupt
+
             await clear_interrupt(conversation_id)
         except Exception:
             pass
 
         # Broadcast ready status
-        await publish_event(AgentEvent(
-            event_type="status",
-            data={"status": "ready", "job_id": job_id},
-        ))
+        await publish_event(
+            AgentEvent(
+                event_type="status",
+                data={"status": "ready", "job_id": job_id},
+            )
+        )
 
 
 async def _mark_job_failed(job_id: str, error: str):

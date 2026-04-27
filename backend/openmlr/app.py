@@ -50,17 +50,22 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
+_DEV_MODE = os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
+
 app = FastAPI(
     title="OpenMLR",
     description="ML research intern — reads papers, trains models, writes papers",
     version="0.3.0",
     lifespan=lifespan,
+    docs_url="/docs" if _DEV_MODE else None,
+    redoc_url="/redoc" if _DEV_MODE else None,
 )
 
-# CORS configuration - restrict in production
-_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(
-    ","
-)
+# CORS configuration
+# In dev mode, allow the Vite dev server origin explicitly.
+# In production, restrict to the same origin (frontend served from same port).
+_default_cors = "http://localhost:3000,http://localhost:5173"
+_cors_origins = os.environ.get("CORS_ORIGINS", _default_cors).split(",")
 _cors_origins = [origin.strip() for origin in _cors_origins if origin.strip()]
 
 app.add_middleware(
@@ -69,6 +74,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Type"],
 )
 
 # ── API routers ──────────────────────────────────────────
@@ -105,25 +111,34 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ── Static frontend serving ─────────────────────────────
-# Mount only if a production build exists; otherwise Vite dev server handles it.
-if FRONTEND_DIST.is_dir() and (FRONTEND_DIST / "index.html").exists():
-    # Serve hashed asset bundles
-    if (FRONTEND_DIST / "assets").is_dir():
-        app.mount(
-            "/assets",
-            StaticFiles(directory=str(FRONTEND_DIST / "assets")),
-            name="assets",
-        )
+# ── Static frontend serving / Dev mode Swagger ──────────
+if _DEV_MODE:
+    # In dev mode: no static frontend — Vite dev server on :5173 handles the UI.
+    # Redirect root to Swagger docs so :3000 is useful for API exploration.
+    from fastapi.responses import RedirectResponse
 
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        """SPA fallback — serve index.html for all non-API routes."""
-        if full_path.startswith("api/"):
-            return JSONResponse(status_code=404, content={"error": "Not found"})
+    @app.get("/", include_in_schema=False)
+    async def root_redirect():
+        return RedirectResponse(url="/docs")
+else:
+    # Production: serve the built frontend SPA from frontend/dist.
+    if FRONTEND_DIST.is_dir() and (FRONTEND_DIST / "index.html").exists():
+        # Serve hashed asset bundles
+        if (FRONTEND_DIST / "assets").is_dir():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(FRONTEND_DIST / "assets")),
+                name="assets",
+            )
 
-        file_path = FRONTEND_DIST / full_path
-        if file_path.is_file() and file_path.suffix:
-            return FileResponse(str(file_path))
+        @app.get("/{full_path:path}")
+        async def serve_frontend(full_path: str):
+            """SPA fallback — serve index.html for all non-API routes."""
+            if full_path.startswith("api/"):
+                return JSONResponse(status_code=404, content={"error": "Not found"})
 
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
+            file_path = FRONTEND_DIST / full_path
+            if file_path.is_file() and file_path.suffix:
+                return FileResponse(str(file_path))
+
+            return FileResponse(str(FRONTEND_DIST / "index.html"))

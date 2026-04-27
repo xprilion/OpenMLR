@@ -12,7 +12,9 @@ class KeyManager:
     """Manages SSH private keys stored in a dedicated directory."""
 
     def __init__(self, keys_dir: str | Path = None):
-        self.keys_dir = Path(keys_dir) if keys_dir else Path(__file__).parent.parent.parent.parent / ".keys"
+        self.keys_dir = (
+            Path(keys_dir) if keys_dir else Path(__file__).parent.parent.parent.parent / ".keys"
+        )
         self._ensure_dir()
 
     def _ensure_dir(self) -> None:
@@ -28,11 +30,13 @@ class KeyManager:
             if path.suffix == ".pub":
                 continue
             pub_path = path.with_suffix(path.suffix + ".pub")
-            keys.append({
-                "filename": path.name,
-                "has_public": pub_path.exists(),
-                "size_bytes": path.stat().st_size,
-            })
+            keys.append(
+                {
+                    "filename": path.name,
+                    "has_public": pub_path.exists(),
+                    "size_bytes": path.stat().st_size,
+                }
+            )
         return keys
 
     def key_exists(self, filename: str) -> bool:
@@ -74,7 +78,9 @@ class KeyManager:
             deleted = True
         return deleted
 
-    def generate_key_pair(self, filename: str, algorithm: str = "ed25519", comment: str = "") -> tuple[Path, Path]:
+    def generate_key_pair(
+        self, filename: str, algorithm: str = "ed25519", comment: str = ""
+    ) -> tuple[Path, Path]:
         """Generate a new SSH key pair and write to disk."""
         key_path = self.keys_dir / filename
         pub_path = key_path.with_suffix(key_path.suffix + ".pub")

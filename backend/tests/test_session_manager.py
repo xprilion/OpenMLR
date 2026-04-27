@@ -84,7 +84,9 @@ class TestSessionManager:
             {"role": "assistant", "content": "Hi there!"},
         ]
         active = await session_manager.get_or_create_session(
-            1, "u1", existing_messages=messages,
+            1,
+            "u1",
+            existing_messages=messages,
         )
         msgs = active.session.context_manager.get_messages()
         assert len(msgs) >= 2  # includes system prompt + existing messages

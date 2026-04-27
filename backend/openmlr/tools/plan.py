@@ -15,10 +15,12 @@ logger = logging.getLogger("openmlr.tools.plan")
 def _get_session_factory():
     """Get the correct async session factory for the current context (web or worker)."""
     from ..db.engine import _worker_engine, async_session
+
     # If we're in a Celery worker context, use the worker engine
     eng = _worker_engine.get(None)
     if eng is not None:
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
         return async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
     # Otherwise use the main web engine
     return async_session
@@ -54,19 +56,37 @@ def create_plan_tool() -> ToolSpec:
                         "type": "object",
                         "properties": {
                             "title": {"type": "string"},
-                            "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"]},
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "in_progress", "completed", "cancelled"],
+                            },
                         },
                         "required": ["title"],
                     },
                 },
                 "task_index": {"type": "integer", "description": "For 'update': 0-based index"},
-                "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "cancelled"]},
+                "status": {
+                    "type": "string",
+                    "enum": ["pending", "in_progress", "completed", "cancelled"],
+                },
                 "title": {"type": "string", "description": "For 'add'/'add_resource': title"},
-                "summary": {"type": "string", "description": "For 'update' to completed: summary of what was done"},
-                "next_hints": {"type": "string", "description": "For 'update' to completed: hints for next tasks"},
+                "summary": {
+                    "type": "string",
+                    "description": "For 'update' to completed: summary of what was done",
+                },
+                "next_hints": {
+                    "type": "string",
+                    "description": "For 'update' to completed: hints for next tasks",
+                },
                 "url": {"type": "string", "description": "For 'add_resource': URL"},
-                "resource_type": {"type": "string", "enum": ["paper", "code", "dataset", "doc", "report"]},
-                "content": {"type": "string", "description": "For 'add_resource' type=report: markdown report content"},
+                "resource_type": {
+                    "type": "string",
+                    "enum": ["paper", "code", "dataset", "doc", "report"],
+                },
+                "content": {
+                    "type": "string",
+                    "description": "For 'add_resource' type=report: markdown report content",
+                },
             },
             "required": ["operation"],
         },
@@ -100,7 +120,9 @@ async def _handle_plan(
             if not tasks:
                 return "Provide 'tasks' array.", False
 
-            task_list = [{"title": t.get("title", ""), "status": t.get("status", "pending")} for t in tasks]
+            task_list = [
+                {"title": t.get("title", ""), "status": t.get("status", "pending")} for t in tasks
+            ]
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
 
@@ -117,7 +139,9 @@ async def _handle_plan(
 
             # Get existing tasks and append
             existing = await ops.get_conversation_tasks(db, conv_id)
-            task_list = [{"title": t.title, "status": t.status, "priority": t.priority} for t in existing]
+            task_list = [
+                {"title": t.title, "status": t.status, "priority": t.priority} for t in existing
+            ]
             task_list.append({"title": title, "status": "pending"})
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
@@ -149,8 +173,7 @@ async def _handle_plan(
                     # Check if there's a completion report for the in-progress task
                     resources = await ops.get_conversation_resources(db, conv_id)
                     has_report = any(
-                        r.type == "report" and prev_task.title in r.title
-                        for r in resources
+                        r.type == "report" and prev_task.title in r.title for r in resources
                     )
                     if not has_report:
                         return (
@@ -163,7 +186,9 @@ async def _handle_plan(
                         ), False
 
             # Update status
-            task_list = [{"title": t.title, "status": t.status, "priority": t.priority} for t in existing]
+            task_list = [
+                {"title": t.title, "status": t.status, "priority": t.priority} for t in existing
+            ]
             task_list[task_index]["status"] = status
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
             await _emit_plan(session, conv_id, db)
@@ -184,7 +209,8 @@ async def _handle_plan(
                 report_id = f"report-{task_index}-{len(existing)}"
 
                 await ops.add_conversation_resource(
-                    db, conv_id,
+                    db,
+                    conv_id,
                     title=f"Report: {task.title}",
                     resource_type="report",
                     content=report,
@@ -222,11 +248,13 @@ async def _handle_plan(
             resource_content = None
             if resource_type == "report" and content:
                 import uuid
+
                 resource_id = f"report-manual-{str(uuid.uuid4())[:8]}"
                 resource_content = content
 
             await ops.add_conversation_resource(
-                db, conv_id,
+                db,
+                conv_id,
                 title=title,
                 resource_type=resource_type,
                 url=url,
@@ -265,7 +293,9 @@ def _generate_plan_md(tasks: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _generate_completion_report(task_title: str, summary: str = None, next_hints: str = None) -> str:
+def _generate_completion_report(
+    task_title: str, summary: str = None, next_hints: str = None
+) -> str:
     """Generate a structured markdown completion report."""
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
@@ -279,12 +309,14 @@ def _generate_completion_report(task_title: str, summary: str = None, next_hints
         "",
     ]
     if next_hints:
-        lines.extend([
-            "## Next Steps",
-            "",
-            next_hints,
-            "",
-        ])
+        lines.extend(
+            [
+                "## Next Steps",
+                "",
+                next_hints,
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -293,10 +325,12 @@ async def _emit_plan(session, conv_id: int, db):
     if session:
         tasks = await ops.get_conversation_tasks(db, conv_id)
         task_list = [{"title": t.title, "status": t.status} for t in tasks]
-        await session.emit(AgentEvent(
-            event_type="plan_update",
-            data={"tasks": task_list},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="plan_update",
+                data={"tasks": task_list},
+            )
+        )
 
 
 async def _emit_resources(session, conv_id: int, db):
@@ -312,10 +346,12 @@ async def _emit_resources(session, conv_id: int, db):
             }
             for r in resources
         ]
-        await session.emit(AgentEvent(
-            event_type="resources_update",
-            data={"resources": res_list},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="resources_update",
+                data={"resources": res_list},
+            )
+        )
 
 
 async def _format_plan(db, conv_id: int) -> str:

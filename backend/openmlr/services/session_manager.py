@@ -65,7 +65,7 @@ class SessionManager:
         existing_messages: list[dict] = None,
         username: str = "user",
         user_id: int | None = None,
-        db = None,
+        db=None,
     ) -> ActiveSession:
         """Get existing session or create a new one with system prompt."""
         existing = self.sessions.get(conversation_id)
@@ -89,6 +89,21 @@ class SessionManager:
         # Import here (not at module level) to avoid circular imports
         from ..db import operations as ops
 
+        # Load custom providers from user settings
+        if user_id and db:
+            try:
+                from ..routes.settings import _get_custom_providers
+
+                user_settings = await ops.get_all_settings(db, user_id, category="providers")
+                provider_settings = user_settings.get("providers", {})
+                custom_providers = _get_custom_providers(provider_settings)
+                # Filter to only fully configured custom providers
+                config.custom_providers = [
+                    cp for cp in custom_providers if cp.get("api_key") and cp.get("api_base")
+                ]
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to load custom providers - {e}")
+
         # Determine effective compute node
         effective_node = None
         if user_id and db:
@@ -98,19 +113,24 @@ class SessionManager:
                 if conv and conv.extra:
                     override_node_id = conv.extra.get("compute_node_id")
                     if override_node_id:
-                        effective_node = await ops.get_compute_node_by_id(db, override_node_id, user_id)
+                        effective_node = await ops.get_compute_node_by_id(
+                            db, override_node_id, user_id
+                        )
 
                 # Fall back to user default
                 if not effective_node:
                     effective_node = await ops.get_default_compute_node(db, user_id)
 
                 if effective_node:
-                    log.info(f"Session {conversation_id}: using compute node '{effective_node.name}' ({effective_node.type})")
+                    log.info(
+                        f"Session {conversation_id}: using compute node '{effective_node.name}' ({effective_node.type})"
+                    )
             except Exception as e:
                 log.warning(f"Session {conversation_id}: failed to load compute node - {e}")
 
         # Initialize workspace manager and sandbox manager
         from ..compute import WorkspaceManager
+
         workspace_manager = WorkspaceManager()
         sandbox_manager = SandboxManager(
             workspace_manager=workspace_manager,
@@ -122,7 +142,9 @@ class SessionManager:
             try:
                 await sandbox_manager.create(effective_node.type, effective_node.config)
             except Exception as e:
-                log.warning(f"Session {conversation_id}: failed to create sandbox for node '{effective_node.name}' - {e}")
+                log.warning(
+                    f"Session {conversation_id}: failed to create sandbox for node '{effective_node.name}' - {e}"
+                )
 
         tool_router = create_tool_router(sandbox_manager)
         # Inject user/db context for compute tools
@@ -151,17 +173,23 @@ class SessionManager:
         compute_env = ""
         if effective_node:
             caps = effective_node.capabilities or {}
-            lines = [f"\n## Active Compute Environment: {effective_node.name} ({effective_node.type})"]
+            lines = [
+                f"\n## Active Compute Environment: {effective_node.name} ({effective_node.type})"
+            ]
             if caps.get("platform"):
                 lines.append(f"- Platform: {caps['platform']}")
             if caps.get("cpu_cores"):
-                lines.append(f"- CPU: {caps['cpu_cores']} cores ({caps.get('cpu_arch', 'unknown')})")
+                lines.append(
+                    f"- CPU: {caps['cpu_cores']} cores ({caps.get('cpu_arch', 'unknown')})"
+                )
             if caps.get("available_ram_gb"):
                 lines.append(f"- RAM: {caps['available_ram_gb']:.1f} GB available")
             if caps.get("gpu_available"):
                 gpu_info = caps.get("gpu_info", [])
                 for gpu in gpu_info[:1]:
-                    lines.append(f"- GPU: {gpu.get('model', 'unknown')} ({gpu.get('vram_gb', 0):.0f} GB VRAM)")
+                    lines.append(
+                        f"- GPU: {gpu.get('model', 'unknown')} ({gpu.get('vram_gb', 0):.0f} GB VRAM)"
+                    )
                     if gpu.get("cuda_version"):
                         lines.append(f"  - CUDA: {gpu['cuda_version']}")
             if caps.get("python_versions"):
@@ -199,6 +227,7 @@ class SessionManager:
         # Wire event broadcasting
         async def _broadcast(event: AgentEvent):
             await self.event_bus.broadcast(event)
+
         session.on_event(_broadcast)
 
         # Load existing messages (but skip user messages that would be re-added)
@@ -223,7 +252,7 @@ class SessionManager:
             # Cancel any running agent turn
             active.session.cancel()
             # Resolve any pending question/approval futures to unblock the loop
-            if hasattr(active.session, 'pending_answers') and active.session.pending_answers:
+            if hasattr(active.session, "pending_answers") and active.session.pending_answers:
                 try:
                     if not active.session.pending_answers.done():
                         active.session.pending_answers.cancel()

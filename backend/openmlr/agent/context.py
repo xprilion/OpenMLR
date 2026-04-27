@@ -96,8 +96,7 @@ class ContextManager:
             if msg.role == "assistant" and msg.tool_calls:
                 for tc in msg.tool_calls:
                     has_result = any(
-                        m.role == "tool" and m.tool_call_id == tc.id
-                        for m in self.messages[i + 1 :]
+                        m.role == "tool" and m.tool_call_id == tc.id for m in self.messages[i + 1 :]
                     )
                     if not has_result:
                         stub = Message(
@@ -122,13 +121,15 @@ class ContextManager:
         ]
         for msg in middle:
             summary_messages.append({"role": msg.role, "content": msg.content})
-        summary_messages.append({
-            "role": "user",
-            "content": (
-                "Provide a concise summary focusing on: key decisions, problems solved, "
-                "current task progress, files/resources created, and what to do next."
-            ),
-        })
+        summary_messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Provide a concise summary focusing on: key decisions, problems solved, "
+                    "current task progress, files/resources created, and what to do next."
+                ),
+            }
+        )
 
         summary = await llm_call(summary_messages, self.config)
         if summary:

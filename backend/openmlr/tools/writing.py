@@ -17,9 +17,11 @@ logger = logging.getLogger("openmlr.tools.writing")
 def _get_session_factory():
     """Get the correct async session factory for the current context."""
     from ..db.engine import _worker_engine, async_session
+
     eng = _worker_engine.get(None)
     if eng is not None:
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
         return async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
     return async_session
 
@@ -75,7 +77,8 @@ async def _save_project(conv_id: int, proj: dict) -> None:
     async with session_factory() as db:
         # Save project metadata (structure, bibliography, etc.)
         await ops.upsert_resource(
-            db, conv_id,
+            db,
+            conv_id,
             resource_id=f"paper-meta-{conv_id}",
             title=f"Paper Metadata: {proj.get('title', 'Untitled')}",
             resource_type="doc",
@@ -103,8 +106,12 @@ def create_writing_tool() -> ToolSpec:
                 "operation": {
                     "type": "string",
                     "enum": [
-                        "create_project", "set_outline", "write_section",
-                        "refine_section", "add_citation", "get_draft",
+                        "create_project",
+                        "set_outline",
+                        "write_section",
+                        "refine_section",
+                        "add_citation",
+                        "get_draft",
                         "list_sections",
                     ],
                     "description": "Which writing operation to perform",
@@ -345,7 +352,9 @@ def _get_draft_from_proj(proj: dict, author_info: dict | None = None) -> tuple[s
         if author_info.get("email"):
             author_lines.append(f"Email: {author_info['email']}")
         if author_info.get("orcid"):
-            author_lines.append(f"ORCID: [{author_info['orcid']}](https://orcid.org/{author_info['orcid']})")
+            author_lines.append(
+                f"ORCID: [{author_info['orcid']}](https://orcid.org/{author_info['orcid']})"
+            )
 
         if author_lines:
             lines.append("\n".join(author_lines))
@@ -374,7 +383,7 @@ def _get_draft_from_proj(proj: dict, author_info: dict | None = None) -> tuple[s
             author = c.get("author", "Unknown")
             title = c.get("title", "Untitled")
             year = c.get("year", "?")
-            lines.append(f"[{key}] {author}. \"{title}\". {year}.")
+            lines.append(f'[{key}] {author}. "{title}". {year}.')
 
     return "\n".join(lines), True
 
@@ -407,10 +416,12 @@ async def _emit_resources(session, conv_id: int) -> None:
             {"title": r.title, "url": r.url or "", "type": r.type, "id": r.resource_id}
             for r in resources
         ]
-        await session.emit(AgentEvent(
-            event_type="resources_update",
-            data={"resources": res_list},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="resources_update",
+                data={"resources": res_list},
+            )
+        )
 
 
 def _count_sections(outline: list) -> int:

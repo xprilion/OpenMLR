@@ -18,7 +18,9 @@ class TestConversationOperations:
         assert conv.mode == "general"
 
     async def test_create_conversation_with_model(self, db_session: AsyncSession, test_user):
-        conv = await ops.create_conversation(db_session, test_user.id, model="gpt-4o", mode="coding")
+        conv = await ops.create_conversation(
+            db_session, test_user.id, model="gpt-4o", mode="coding"
+        )
         assert conv.model == "gpt-4o"
         assert conv.mode == "coding"
 
@@ -87,6 +89,7 @@ class TestConversationOperations:
         # Create another user
         from openmlr.auth.security import hash_password
         from openmlr.db.models import User
+
         user2 = User(username="user2", password_hash=hash_password("pwd"), is_active=True)
         db_session.add(user2)
         await db_session.flush()
@@ -116,7 +119,10 @@ class TestMessageOperations:
 
     async def test_add_message_with_metadata(self, db_session: AsyncSession):
         msg = await ops.add_message(
-            db_session, self.conv.id, "assistant", "Done",
+            db_session,
+            self.conv.id,
+            "assistant",
+            "Done",
             metadata={"tool": "search", "duration": 1.5},
         )
         assert msg.meta == {"tool": "search", "duration": 1.5}
@@ -214,12 +220,20 @@ class TestTaskOperations:
         assert result[1].order_index == 1
 
     async def test_upsert_tasks_replace(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "Old Task"},
-        ])
-        result = await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "New Task"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "Old Task"},
+            ],
+        )
+        result = await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "New Task"},
+            ],
+        )
         assert len(result) == 1
         assert result[0].title == "New Task"
 
@@ -228,28 +242,40 @@ class TestTaskOperations:
         assert tasks == []
 
     async def test_get_tasks(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "T1", "status": "pending", "priority": "high"},
-            {"title": "T2", "status": "completed"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "T1", "status": "pending", "priority": "high"},
+                {"title": "T2", "status": "completed"},
+            ],
+        )
         tasks = await ops.get_conversation_tasks(db_session, self.conv.id)
         assert len(tasks) == 2
         assert tasks[0].title == "T1"
         assert tasks[0].priority == "high"
 
     async def test_update_task_status(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "Do this", "status": "pending"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "Do this", "status": "pending"},
+            ],
+        )
         ok = await ops.update_task_status(db_session, self.conv.id, 0, "completed")
         assert ok is True
         tasks = await ops.get_conversation_tasks(db_session, self.conv.id)
         assert tasks[0].status == "completed"
 
     async def test_update_task_status_out_of_range(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "Only one"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "Only one"},
+            ],
+        )
         ok = await ops.update_task_status(db_session, self.conv.id, 5, "completed")
         assert ok is False
 
@@ -261,8 +287,11 @@ class TestResourceOperations:
 
     async def test_add_resource(self, db_session: AsyncSession):
         res = await ops.add_conversation_resource(
-            db_session, self.conv.id,
-            title="Paper 1", resource_type="paper", url="https://example.com",
+            db_session,
+            self.conv.id,
+            title="Paper 1",
+            resource_type="paper",
+            url="https://example.com",
         )
         assert res.id is not None
         assert res.title == "Paper 1"
@@ -270,24 +299,37 @@ class TestResourceOperations:
         assert res.url == "https://example.com"
 
     async def test_get_resources(self, db_session: AsyncSession):
-        await ops.add_conversation_resource(db_session, self.conv.id, title="R1", resource_type="doc")
-        await ops.add_conversation_resource(db_session, self.conv.id, title="R2", resource_type="code")
+        await ops.add_conversation_resource(
+            db_session, self.conv.id, title="R1", resource_type="doc"
+        )
+        await ops.add_conversation_resource(
+            db_session, self.conv.id, title="R2", resource_type="code"
+        )
         resources = await ops.get_conversation_resources(db_session, self.conv.id)
         assert len(resources) == 2
 
     async def test_get_resource_by_id(self, db_session: AsyncSession):
         res = await ops.add_conversation_resource(
-            db_session, self.conv.id, title="Test", resource_type="doc",
+            db_session,
+            self.conv.id,
+            title="Test",
+            resource_type="doc",
         )
         found = await ops.get_resource_by_id(db_session, res.resource_id)
         assert found is not None
         assert found.title == "Test"
 
     async def test_upsert_resources_replace(self, db_session: AsyncSession):
-        await ops.add_conversation_resource(db_session, self.conv.id, title="Old", resource_type="doc")
-        result = await ops.upsert_conversation_resources(db_session, self.conv.id, [
-            {"title": "New", "type": "doc"},
-        ])
+        await ops.add_conversation_resource(
+            db_session, self.conv.id, title="Old", resource_type="doc"
+        )
+        result = await ops.upsert_conversation_resources(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "New", "type": "doc"},
+            ],
+        )
         assert len(result) == 1
         assert result[0].title == "New"
 
@@ -304,7 +346,10 @@ class TestResourceOperations:
 
     async def test_upsert_paper_resource(self, db_session: AsyncSession):
         res = await ops.upsert_paper_resource(
-            db_session, self.conv.id, "My Paper", "## Abstract\nContent",
+            db_session,
+            self.conv.id,
+            "My Paper",
+            "## Abstract\nContent",
         )
         assert res.title == "My Paper"
         assert res.type == "paper"
@@ -312,8 +357,11 @@ class TestResourceOperations:
 
     async def test_upsert_resource_create(self, db_session: AsyncSession):
         res = await ops.upsert_resource(
-            db_session, self.conv.id,
-            resource_id="custom-id", title="Custom", resource_type="report",
+            db_session,
+            self.conv.id,
+            resource_id="custom-id",
+            title="Custom",
+            resource_type="report",
             content="Report content",
         )
         assert res.resource_id == "custom-id"
@@ -321,12 +369,20 @@ class TestResourceOperations:
 
     async def test_upsert_resource_update(self, db_session: AsyncSession):
         await ops.upsert_resource(
-            db_session, self.conv.id,
-            resource_id="rid", title="Old Title", resource_type="doc", content="Old",
+            db_session,
+            self.conv.id,
+            resource_id="rid",
+            title="Old Title",
+            resource_type="doc",
+            content="Old",
         )
         res = await ops.upsert_resource(
-            db_session, self.conv.id,
-            resource_id="rid", title="New Title", resource_type="doc", content="New",
+            db_session,
+            self.conv.id,
+            resource_id="rid",
+            title="New Title",
+            resource_type="doc",
+            content="New",
         )
         assert res.title == "New Title"
         assert res.content == "New"
@@ -339,7 +395,10 @@ class TestAgentJobOperations:
 
     async def test_create_agent_job(self, db_session: AsyncSession):
         job = await ops.create_agent_job(
-            db_session, self.conv.id, self.conv.user_id, "Process this",
+            db_session,
+            self.conv.id,
+            self.conv.user_id,
+            "Process this",
         )
         assert job.job_id is not None
         assert job.status == "queued"
@@ -347,7 +406,10 @@ class TestAgentJobOperations:
 
     async def test_get_agent_job(self, db_session: AsyncSession):
         job = await ops.create_agent_job(
-            db_session, self.conv.id, self.conv.user_id, "Test",
+            db_session,
+            self.conv.id,
+            self.conv.user_id,
+            "Test",
         )
         found = await ops.get_agent_job(db_session, job.job_id)
         assert found is not None

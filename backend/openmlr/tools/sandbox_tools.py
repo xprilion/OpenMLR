@@ -42,8 +42,14 @@ def create_sandbox_tools(sandbox_manager) -> list[ToolSpec]:
                             "host": {"type": "string", "description": "SSH hostname"},
                             "port": {"type": "integer", "description": "SSH port (default 22)"},
                             "username": {"type": "string", "description": "SSH username"},
-                            "key_path": {"type": "string", "description": "Path to SSH private key"},
-                            "gpu": {"type": "string", "description": "Modal GPU type (e.g. T4, A100)"},
+                            "key_path": {
+                                "type": "string",
+                                "description": "Path to SSH private key",
+                            },
+                            "gpu": {
+                                "type": "string",
+                                "description": "Modal GPU type (e.g. T4, A100)",
+                            },
                             "image": {"type": "string", "description": "Modal container image"},
                             "workdir": {"type": "string", "description": "Working directory"},
                         },
@@ -64,8 +70,14 @@ def create_sandbox_tools(sandbox_manager) -> list[ToolSpec]:
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Shell command to execute"},
-                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 120, max 3600)"},
-                    "stream": {"type": "boolean", "description": "Stream output in real-time for long-running commands (default false)"},
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default 120, max 3600)",
+                    },
+                    "stream": {
+                        "type": "boolean",
+                        "description": "Stream output in real-time for long-running commands (default false)",
+                    },
                 },
                 "required": ["command"],
             },
@@ -143,8 +155,12 @@ async def _local_probe() -> str:
         lines.append("Python: unknown")
 
     try:
-        gpu = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
-                           capture_output=True, text=True, timeout=5)
+        gpu = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         if gpu.returncode == 0:
             lines.append(f"GPU: {gpu.stdout.strip()}")
         else:
@@ -158,7 +174,9 @@ async def _local_probe() -> str:
     return "\n".join(lines)
 
 
-async def _handle_create(sandbox_manager, provider: str, config: dict = None, session=None, **kwargs) -> tuple[str, bool]:
+async def _handle_create(
+    sandbox_manager, provider: str, config: dict = None, session=None, **kwargs
+) -> tuple[str, bool]:
     try:
         await sandbox_manager.create(provider, config or {})
         return f"Sandbox created: {provider} ({sandbox_manager.active_type})", True
@@ -166,11 +184,14 @@ async def _handle_create(sandbox_manager, provider: str, config: dict = None, se
         return f"Failed to create sandbox: {str(e)}", False
 
 
-async def _handle_exec(sandbox_manager, command: str, timeout: int = 120, stream: bool = False, session=None, **kwargs) -> tuple[str, bool]:
+async def _handle_exec(
+    sandbox_manager, command: str, timeout: int = 120, stream: bool = False, session=None, **kwargs
+) -> tuple[str, bool]:
     sandbox = sandbox_manager.get_active()
     if not sandbox:
         # Fall back to local execution
         from .local import _handle_bash
+
         return await _handle_bash(command=command, timeout=timeout)
 
     try:
@@ -201,6 +222,7 @@ async def _handle_read(sandbox_manager, path: str, session=None, **kwargs) -> tu
     sandbox = sandbox_manager.get_active()
     if not sandbox:
         from .local import _handle_read as local_read
+
         return await local_read(path=path)
 
     try:
@@ -210,10 +232,13 @@ async def _handle_read(sandbox_manager, path: str, session=None, **kwargs) -> tu
         return f"Read error: {str(e)}", False
 
 
-async def _handle_write(sandbox_manager, path: str, content: str, session=None, **kwargs) -> tuple[str, bool]:
+async def _handle_write(
+    sandbox_manager, path: str, content: str, session=None, **kwargs
+) -> tuple[str, bool]:
     sandbox = sandbox_manager.get_active()
     if not sandbox:
         from .local import _handle_write as local_write
+
         return await local_write(path=path, content=content)
 
     try:

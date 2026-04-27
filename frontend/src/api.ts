@@ -107,9 +107,10 @@ export const api = {
 
   // Providers & Models
   getProviders: () => get('/api/providers'),
-  getModels: () => get('/api/models'),
+  getModels: (provider?: string) => get(`/api/models${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
   getStatus: () => get('/api/status'),
   saveConfig: (config: Record<string, string>) => post('/api/config', config),
+  fetchCustomProviderModels: (providerId: string) => post(`/api/providers/${encodeURIComponent(providerId)}/fetch-models`, {}),
 
   // SSH Keys
   getKeys: () => get('/api/keys'),
