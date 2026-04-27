@@ -12,3 +12,10 @@ bootstrap: |
   python3.12 --version 2>/dev/null || python3 --version
 include:
   - name: CheckDependencyLicenses
+exclude:
+  - name: All
+    paths:
+      - frontend
+      - site
+      - assets
+      - node_modules
