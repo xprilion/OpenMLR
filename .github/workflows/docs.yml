@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "CHANGELOG.md"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -30,6 +31,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: site
+
+      - name: Sync changelog into docs
+        run: |
+          printf '%s\n' '---' 'title: Changelog - OpenMLR' 'description: OpenMLR version history and release notes.' '---' '' > site/docs/changelog.md
+          cat CHANGELOG.md >> site/docs/changelog.md
 
       - name: Build docs
         run: npx vitepress build docs

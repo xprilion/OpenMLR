@@ -210,7 +210,7 @@ test-frontend: ## Run frontend vitest suite
 	cd $(FRONTEND) && pnpm test
 
 .PHONY: test-docs
-test-docs: ## Verify docs site builds cleanly
+test-docs: _docs-sync-changelog ## Verify docs site builds cleanly
 	cd site && npx vitepress build docs
 
 .PHONY: test-coverage
@@ -296,20 +296,25 @@ docker-publish: docker-build docker-tag docker-push ## Build, tag, and push to D
 
 # ─── Docs ─────────────────────────────────────────────────
 
+.PHONY: _docs-sync-changelog
+_docs-sync-changelog: # (internal) copy root CHANGELOG.md into docs with frontmatter
+	@printf '%s\n' '---' 'title: Changelog - OpenMLR' 'description: OpenMLR version history and release notes.' '---' '' > site/docs/changelog.md
+	@cat CHANGELOG.md >> site/docs/changelog.md
+
 .PHONY: docs-install
 docs-install: ## Install docs site dependencies
 	cd site && npm install
 
 .PHONY: docs-dev
-docs-dev: ## Preview docs locally (port 4000)
+docs-dev: _docs-sync-changelog ## Preview docs locally (port 4000)
 	cd site && npx vitepress dev docs --port 4000
 
 .PHONY: docs-docker
-docs-docker: ## Run docs in Docker (port 4000)
+docs-docker: _docs-sync-changelog ## Run docs in Docker (port 4000)
 	$(DOCKER_COMPOSE) --profile docs up -d docs
 
 .PHONY: docs-build
-docs-build: ## Build docs to site/docs/.vitepress/dist
+docs-build: _docs-sync-changelog ## Build docs to site/docs/.vitepress/dist
 	cd site && npx vitepress build docs
 
 # ─── Logo Generation ─────────────────────────────────────
