@@ -69,6 +69,7 @@ async def _handle_probe(node_name: str, user_id: int = None, db=None, **kwargs):
 
     try:
         wm = WorkspaceManager()
+        sm: SandboxManager | None = None
         sm = SandboxManager(workspace_manager=wm)
         await sm.create(node.type, node.config)
         sandbox = sm.get_active()
@@ -115,7 +116,8 @@ async def _handle_probe(node_name: str, user_id: int = None, db=None, **kwargs):
 
     except Exception as e:
         try:
-            await sm.destroy()
+            if sm is not None:
+                await sm.destroy()
         except Exception:
             pass
         await ops.update_compute_node(

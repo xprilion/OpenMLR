@@ -10,6 +10,8 @@ Thumbs.db
 *.swo
 *~
 
+.qodana-reports/
+
 # Environment
 .env
 .env.local

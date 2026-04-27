@@ -86,11 +86,11 @@ class SessionManager:
 
         session = Session(config=config, conversation_id=conversation_id)
 
-        # Determine effective compute node
-        effective_node = None
+        ops = None
         if user_id and db:
             try:
-                from ..db import operations as ops
+                from openmlr.db import operations as ops_module
+                ops = ops_module.operations
                 # Check conversation override
                 conv = await ops.get_conversation_by_id(db, conversation_id)
                 if conv and conv.extra:

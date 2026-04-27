@@ -343,8 +343,6 @@ class TestStreamLLMCall:
 
         async def mock_stream(messages, config, tools):
             yield "Hello"
-            if False:
-                yield
 
         with patch("openmlr.agent.loop.LLMProvider.generate_stream") as mock_str:
             mock_str.return_value = mock_stream(None, None, None)
