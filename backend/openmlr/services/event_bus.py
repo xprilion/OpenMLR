@@ -65,6 +65,7 @@ class EventBus:
         if USE_REDIS:
             try:
                 from .redis_pubsub import publish_event
+
                 await publish_event(AgentEvent(event_type=et, data=data.get("data")))
             except Exception as e:
                 logger.warning(f"Failed to publish to Redis: {e}")
@@ -87,6 +88,7 @@ class EventBus:
 
         async def _listen():
             from .redis_pubsub import subscribe_events
+
             logger.info("Redis subscription loop started")
             try:
                 async for event in subscribe_events():

@@ -9,6 +9,7 @@ pytestmark = pytest.mark.asyncio
 class TestGetConfig:
     async def test_get_config_returns_agent_config(self):
         from openmlr.dependencies import get_config
+
         config = get_config()
         assert config is not None
         assert hasattr(config, "model_name")
@@ -16,6 +17,7 @@ class TestGetConfig:
 
     async def test_get_config_is_cached(self):
         from openmlr.dependencies import get_config
+
         config1 = get_config()
         config2 = get_config()
         assert config1 is config2
@@ -41,6 +43,7 @@ class TestGetCurrentUser:
 class TestGetDB:
     async def test_db_session_yielded(self, client: AsyncClient):
         from openmlr.dependencies import get_db
+
         sessions = []
         async for s in get_db():
             sessions.append(s)

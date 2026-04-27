@@ -59,6 +59,9 @@ export interface Provider {
   configured: boolean;
   categories: string[];
   docs_url?: string;
+  is_custom?: boolean;
+  sdk_type?: string;
+  api_base?: string;
 }
 
 // ── Structured Questions ────────────────────────────────
@@ -79,6 +82,31 @@ export interface QuestionsPayload {
   questions: Question[];
   context?: string;
   suggest_mode?: string | null;
+}
+
+// ── Projects ────────────────────────────────────────────
+
+export interface Project {
+  id: number;
+  uuid: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  workspace_path: string | null;
+  status: 'active' | 'archived';
+  settings: Record<string, any>;
+  is_default?: boolean;
+  conversation_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FileNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number | null;
+  modified: number;
 }
 
 // ── Task Plan & Resources ───────────────────────────────

@@ -82,11 +82,17 @@ class TestConversationCreate:
 class TestConversationResponse:
     def test_creation(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
         c = ConversationResponse(
-            id=1, uuid="abc-def", title="Test Conv", model="gpt-4o",
-            mode="general", user_message_count=5,
-            created_at=now, updated_at=now,
+            id=1,
+            uuid="abc-def",
+            title="Test Conv",
+            model="gpt-4o",
+            mode="general",
+            user_message_count=5,
+            created_at=now,
+            updated_at=now,
         )
         assert c.id == 1
         assert c.uuid == "abc-def"
@@ -96,6 +102,7 @@ class TestConversationResponse:
 class TestMessageResponse:
     def test_creation(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
         m = MessageResponse(id=1, role="user", content="Hello", metadata=None, created_at=now)
         assert m.id == 1
@@ -104,18 +111,28 @@ class TestMessageResponse:
 
     def test_with_metadata(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
-        m = MessageResponse(id=2, role="assistant", content="Hi", metadata={"tool": "search"}, created_at=now)
+        m = MessageResponse(
+            id=2, role="assistant", content="Hi", metadata={"tool": "search"}, created_at=now
+        )
         assert m.metadata == {"tool": "search"}
 
 
 class TestConversationDetail:
     def test_creation(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
         conv = ConversationResponse(
-            id=1, uuid="x", title="C", model=None, mode="general",
-            user_message_count=0, created_at=now, updated_at=now,
+            id=1,
+            uuid="x",
+            title="C",
+            model=None,
+            mode="general",
+            user_message_count=0,
+            created_at=now,
+            updated_at=now,
         )
         msgs = [MessageResponse(id=1, role="user", content="Hi", metadata=None, created_at=now)]
         cd = ConversationDetail(conversation=conv, messages=msgs)

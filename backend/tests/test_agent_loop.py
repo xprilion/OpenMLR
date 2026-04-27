@@ -32,9 +32,11 @@ pytestmark = pytest.mark.asyncio
 
 # ── Test fixtures ──────────────────────────────────────────
 
+
 @pytest.fixture
 def config():
     return AgentConfig(model_name="test/model", max_iterations=10, stream=False)
+
 
 @pytest.fixture
 def mock_session(config):
@@ -53,6 +55,7 @@ def mock_session(config):
     session.update_model = MagicMock()
     return session
 
+
 @pytest.fixture
 def mock_router():
     router = MagicMock(spec=ToolRouter)
@@ -65,6 +68,7 @@ def mock_router():
 
 
 # ── Tool Execution ─────────────────────────────────────────
+
 
 class TestExecuteTool:
     async def test_executes_tool_and_returns_output(self, mock_session, mock_router):
@@ -95,13 +99,14 @@ class TestExecuteTool:
         emitted_event_types = []
         for call in mock_session.emit.call_args_list:
             args = call[0]
-            if args and hasattr(args[0], 'event_type'):
+            if args and hasattr(args[0], "event_type"):
                 emitted_event_types.append(args[0].event_type)
         assert len(emitted_event_types) >= 2
         assert "tool_state_change" in emitted_event_types
 
 
 # ── Approval Handling ──────────────────────────────────────
+
 
 class TestHandleApproval:
     async def test_approves_tool_calls(self, mock_session, mock_router):
@@ -136,6 +141,7 @@ class TestHandleApproval:
 
 # ── Undo ───────────────────────────────────────────────────
 
+
 class TestUndo:
     async def test_undo_calls_context_manager(self, mock_session):
         mock_session.context_manager.undo_last_turn.return_value = 3
@@ -147,6 +153,7 @@ class TestUndo:
 
 
 # ── Compaction ─────────────────────────────────────────────
+
 
 class TestCompact:
     async def test_compact_calls_context_manager(self, mock_session):
@@ -160,12 +167,17 @@ class TestCompact:
 
 # ── Run Agent ──────────────────────────────────────────────
 
+
 class TestRunAgent:
     async def test_runs_with_no_tool_calls(self, mock_session, mock_router):
         """Agent processes a message, LLM returns content with no tool calls."""
         mock_session.context_manager.get_messages.return_value = []
         mock_session.context_manager.needs_compaction.return_value = False
-        mock_session.context_manager.get_token_usage.return_value = {"used": 100, "max": 200000, "ratio": 0.0}
+        mock_session.context_manager.get_token_usage.return_value = {
+            "used": 100,
+            "max": 200000,
+            "ratio": 0.0,
+        }
         mock_session.config.stream = False
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
@@ -193,7 +205,11 @@ class TestRunAgent:
         mock_session.is_cancelled.return_value = True
         mock_session.context_manager.get_messages.return_value = []
         mock_session.context_manager.needs_compaction.return_value = False
-        mock_session.context_manager.get_token_usage.return_value = {"used": 0, "max": 200000, "ratio": 0.0}
+        mock_session.context_manager.get_token_usage.return_value = {
+            "used": 0,
+            "max": 200000,
+            "ratio": 0.0,
+        }
 
         await _run_agent(mock_session, mock_router, "test")
 
@@ -209,7 +225,9 @@ class TestRunAgentTurn:
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
             mock_gen.return_value = LLMResult(
-                content="Hello!", tool_calls=[], finish_reason="stop",
+                content="Hello!",
+                tool_calls=[],
+                finish_reason="stop",
             )
 
             await run_agent_turn(mock_session, mock_router, "Hi", mode="plan")
@@ -224,7 +242,9 @@ class TestRunAgentTurn:
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
             mock_gen.return_value = LLMResult(
-                content="Ok", tool_calls=[], finish_reason="stop",
+                content="Ok",
+                tool_calls=[],
+                finish_reason="stop",
             )
             await run_agent_turn(mock_session, mock_router, "test", mode="unknown")
 
@@ -233,12 +253,15 @@ class TestRunAgentTurn:
 
 # ── Submissions ────────────────────────────────────────────
 
+
 class TestSubmissionLoop:
     async def test_processes_user_input(self, mock_session, mock_router):
-        mock_session.submission_queue.get = AsyncMock(side_effect=[
-            Submission(op=OpType.USER_INPUT, data="hello"),
-            Submission(op=OpType.SHUTDOWN),
-        ])
+        mock_session.submission_queue.get = AsyncMock(
+            side_effect=[
+                Submission(op=OpType.USER_INPUT, data="hello"),
+                Submission(op=OpType.SHUTDOWN),
+            ]
+        )
         mock_session.context_manager.get_messages.return_value = []
         mock_session.context_manager.needs_compaction.return_value = False
         mock_session.context_manager.get_token_usage.return_value = {"ratio": 0.0}
@@ -246,17 +269,21 @@ class TestSubmissionLoop:
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
             mock_gen.return_value = LLMResult(
-                content="Hi!", tool_calls=[], finish_reason="stop",
+                content="Hi!",
+                tool_calls=[],
+                finish_reason="stop",
             )
             await submission_loop(mock_session, mock_router)
 
         assert mock_session.emit.called
 
     async def test_processes_compact(self, mock_session, mock_router):
-        mock_session.submission_queue.get = AsyncMock(side_effect=[
-            Submission(op=OpType.COMPACT),
-            Submission(op=OpType.SHUTDOWN),
-        ])
+        mock_session.submission_queue.get = AsyncMock(
+            side_effect=[
+                Submission(op=OpType.COMPACT),
+                Submission(op=OpType.SHUTDOWN),
+            ]
+        )
         mock_session.context_manager.compact = AsyncMock(return_value="Summary")
 
         await submission_loop(mock_session, mock_router)
@@ -264,10 +291,12 @@ class TestSubmissionLoop:
         mock_session.context_manager.compact.assert_called_once()
 
     async def test_processes_undo(self, mock_session, mock_router):
-        mock_session.submission_queue.get = AsyncMock(side_effect=[
-            Submission(op=OpType.UNDO),
-            Submission(op=OpType.SHUTDOWN),
-        ])
+        mock_session.submission_queue.get = AsyncMock(
+            side_effect=[
+                Submission(op=OpType.UNDO),
+                Submission(op=OpType.SHUTDOWN),
+            ]
+        )
         mock_session.context_manager.undo_last_turn.return_value = 3
 
         await submission_loop(mock_session, mock_router)
@@ -275,10 +304,12 @@ class TestSubmissionLoop:
         mock_session.context_manager.undo_last_turn.assert_called_once()
 
     async def test_processes_interrupt(self, mock_session, mock_router):
-        mock_session.submission_queue.get = AsyncMock(side_effect=[
-            Submission(op=OpType.INTERRUPT),
-            Submission(op=OpType.SHUTDOWN),
-        ])
+        mock_session.submission_queue.get = AsyncMock(
+            side_effect=[
+                Submission(op=OpType.INTERRUPT),
+                Submission(op=OpType.SHUTDOWN),
+            ]
+        )
 
         await submission_loop(mock_session, mock_router)
 
@@ -294,6 +325,7 @@ class TestSubmissionLoop:
 
 # ── LLM Call Helpers ───────────────────────────────────────
 
+
 class TestNonStreamLLMCall:
     async def test_returns_llm_result(self, mock_session):
         mock_session.is_cancelled.return_value = False
@@ -302,7 +334,9 @@ class TestNonStreamLLMCall:
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
             mock_gen.return_value = LLMResult(
-                content="Response", tool_calls=[], finish_reason="stop",
+                content="Response",
+                tool_calls=[],
+                finish_reason="stop",
             )
             result = await _non_stream_llm_call(mock_session, messages, tools)
 
@@ -314,7 +348,9 @@ class TestNonStreamLLMCall:
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
             mock_gen.return_value = LLMResult(
-                content="Output", tool_calls=[], finish_reason="stop",
+                content="Output",
+                tool_calls=[],
+                finish_reason="stop",
             )
             await _non_stream_llm_call(mock_session, [], [])
 
@@ -372,6 +408,7 @@ class TestStreamLLMCall:
 
 # ── Compact LLM Call ───────────────────────────────────────
 
+
 class TestCompactLLMCall:
     async def test_returns_content(self):
         messages = [{"role": "user", "content": "summarize"}]
@@ -379,7 +416,9 @@ class TestCompactLLMCall:
 
         with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
             mock_gen.return_value = LLMResult(
-                content="A summary.", tool_calls=[], finish_reason="stop",
+                content="A summary.",
+                tool_calls=[],
+                finish_reason="stop",
             )
             result = await _compact_llm_call(messages, config)
 

@@ -107,14 +107,37 @@ export const api = {
 
   // Providers & Models
   getProviders: () => get('/api/providers'),
-  getModels: () => get('/api/models'),
+  getModels: (provider?: string) => get(`/api/models${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
   getStatus: () => get('/api/status'),
   saveConfig: (config: Record<string, string>) => post('/api/config', config),
+  fetchCustomProviderModels: (providerId: string) => post(`/api/providers/${encodeURIComponent(providerId)}/fetch-models`, {}),
 
   // SSH Keys
   getKeys: () => get('/api/keys'),
   createKey: (body: Record<string, any>) => post('/api/keys', body),
   deleteKey: (filename: string) => del(`/api/keys/${filename}`),
+
+  // Projects
+  listProjects: (includeArchived = false) => get(`/api/projects${includeArchived ? '?include_archived=true' : ''}`),
+  createProject: (name: string, description?: string) => post('/api/projects', { name, description }),
+  getProject: (uuid: string) => get(`/api/projects/${uuid}`),
+  updateProject: (uuid: string, body: Record<string, any>) => put(`/api/projects/${uuid}`, body),
+  deleteProject: (uuid: string) => del(`/api/projects/${uuid}`),
+  listProjectConversations: (uuid: string) => get(`/api/projects/${uuid}/conversations`),
+  attachConversation: (projectUuid: string, convUuid: string) =>
+    post(`/api/projects/${projectUuid}/attach/${convUuid}`, {}),
+  detachConversation: (projectUuid: string, convUuid: string) =>
+    post(`/api/projects/${projectUuid}/detach/${convUuid}`, {}),
+
+  // Project Files
+  listFiles: (projectUuid: string, path = '') =>
+    get(`/api/projects/${projectUuid}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  readFile: (projectUuid: string, filePath: string) =>
+    get(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
+  writeFile: (projectUuid: string, filePath: string, content: string) =>
+    put(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`, { content }),
+  deleteFile: (projectUuid: string, filePath: string) =>
+    del(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
 
   // Compute Nodes
   getComputeNodes: () => get('/api/compute/nodes'),

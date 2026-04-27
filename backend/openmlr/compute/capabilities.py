@@ -7,6 +7,7 @@ from typing import Any
 @dataclass
 class GPUInfo:
     """Information about a GPU."""
+
     model: str = ""
     vram_gb: float = 0.0
     cuda_version: str = ""
@@ -16,6 +17,7 @@ class GPUInfo:
 @dataclass
 class ComputeCapabilities:
     """Comprehensive capabilities of a compute node."""
+
     # Platform
     platform: str = "unknown"
     cpu_cores: int = 0

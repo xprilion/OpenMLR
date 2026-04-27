@@ -25,6 +25,7 @@ class JobManager:
         """Lazy load Celery app to avoid import issues."""
         if self._celery_app is None and USE_BACKGROUND_JOBS:
             from ..celery_app import celery_app
+
             self._celery_app = celery_app
         return self._celery_app
 
@@ -57,6 +58,7 @@ class JobManager:
 
         # Enqueue Celery task
         from ..tasks.agent_tasks import process_agent_message
+
         process_agent_message.delay(
             job_id=job.job_id,
             conversation_id=conversation_id,

@@ -119,7 +119,9 @@ class TestToolDispatch:
             return "ok", True
 
         tool = ToolSpec(
-            name="strict", description="Needs arg", parameters={"type": "object"},
+            name="strict",
+            description="Needs arg",
+            parameters={"type": "object"},
             handler=handler,
         )
         router.register(tool)

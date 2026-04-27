@@ -24,8 +24,7 @@ def create_github_tools() -> list[ToolSpec]:
         ToolSpec(
             name="github_read_file",
             description=(
-                "Read a file from a GitHub repository. "
-                "Provide owner/repo and path within the repo."
+                "Read a file from a GitHub repository. Provide owner/repo and path within the repo."
             ),
             parameters={
                 "type": "object",
@@ -69,8 +68,14 @@ def create_github_tools() -> list[ToolSpec]:
             parameters={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query (e.g. 'LoRA fine-tune llama')"},
-                    "language": {"type": "string", "description": "Filter by language (e.g. 'python')"},
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (e.g. 'LoRA fine-tune llama')",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Filter by language (e.g. 'python')",
+                    },
                     "limit": {"type": "integer", "description": "Max results (default 10)"},
                 },
                 "required": ["query"],
@@ -86,8 +91,14 @@ def create_github_tools() -> list[ToolSpec]:
             parameters={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query (paper title, method name, topic)"},
-                    "topic": {"type": "string", "description": "Filter by topic (e.g. 'machine-learning', 'deep-learning')"},
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (paper title, method name, topic)",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Filter by topic (e.g. 'machine-learning', 'deep-learning')",
+                    },
                     "min_stars": {"type": "integer", "description": "Minimum stars (default 10)"},
                     "sort": {
                         "type": "string",
@@ -153,10 +164,11 @@ async def _handle_read_file(
 
     if data.get("encoding") == "base64":
         import base64
+
         content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
         # Add line numbers
         lines = content.split("\n")
-        numbered = [f"{i+1}: {line}" for i, line in enumerate(lines)]
+        numbered = [f"{i + 1}: {line}" for i, line in enumerate(lines)]
         output = "\n".join(numbered)
         if len(output) > 50000:
             output = output[:50000] + "\n...[truncated]"
@@ -262,7 +274,7 @@ async def _handle_search_repos(
     min_stars: int = 10,
     sort: str = "stars",
     limit: int = 10,
-    **kwargs
+    **kwargs,
 ) -> tuple[str, bool]:
     """Search GitHub repositories with retry logic."""
     url = f"{GITHUB_API}/search/repositories"
@@ -322,9 +334,7 @@ async def _handle_search_repos(
     return "\n".join(lines), True
 
 
-async def _handle_get_readme(
-    owner: str, repo: str, **kwargs
-) -> tuple[str, bool]:
+async def _handle_get_readme(owner: str, repo: str, **kwargs) -> tuple[str, bool]:
     """Get README from a GitHub repository with retry logic."""
     url = f"{GITHUB_API}/repos/{owner}/{repo}/readme"
 
@@ -350,6 +360,7 @@ async def _handle_get_readme(
 
     if data.get("encoding") == "base64":
         import base64
+
         content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
         # Truncate if too long
         if len(content) > 30000:

@@ -13,6 +13,7 @@ from openmlr.config import AgentConfig
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def config() -> AgentConfig:
     return AgentConfig(model_name="test-model")
@@ -26,6 +27,7 @@ def session(config: AgentConfig) -> Session:
 # ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
+
 
 class TestInit:
     def test_session_creates_context_manager(self, session: Session):
@@ -51,6 +53,7 @@ class TestInit:
 # ---------------------------------------------------------------------------
 # emit
 # ---------------------------------------------------------------------------
+
 
 class TestEmit:
     @pytest.mark.asyncio
@@ -120,6 +123,7 @@ class TestEmit:
 # cancel / is_cancelled / clear_cancel
 # ---------------------------------------------------------------------------
 
+
 class TestCancellation:
     def test_not_cancelled_initially(self, session: Session):
         assert session.is_cancelled() is False
@@ -147,6 +151,7 @@ class TestCancellation:
 # on_event
 # ---------------------------------------------------------------------------
 
+
 class TestOnEvent:
     def test_registers_listener(self, session: Session):
         assert len(session._listeners) == 0
@@ -163,6 +168,7 @@ class TestOnEvent:
 # ---------------------------------------------------------------------------
 # update_model
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateModel:
     def test_update_model_changes_config(self, session: Session):

@@ -5,7 +5,7 @@ import { ComputeSelector } from './components/ComputeSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
-import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget } from './types';
+import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
@@ -17,6 +17,9 @@ import { RightPanel } from './components/RightPanel';
 import { ReportDrawer } from './components/ReportDrawer';
 import { AuthGuard } from './components/AuthGuard';
 import { OnboardingModal } from './components/OnboardingModal';
+import { Terminal } from './components/Terminal';
+import { ProjectModal } from './components/ProjectModal';
+import { ProjectManageModal } from './components/ProjectManageModal';
 import { SettingsPage } from './components/SettingsPage';
 import { ProvidersSettings } from './components/settings/ProvidersSettings';
 import { AgentSettings } from './components/settings/AgentSettings';
@@ -103,6 +106,11 @@ function ChatUI({
   const [inputText, setInputText] = useState('');
   const [computeNodes, setComputeNodes] = useState<any[]>([]);
   const [activeCompute, setActiveCompute] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showManageProjects, setShowManageProjects] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
 
   // Ref to always have current conv UUID in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -132,6 +140,15 @@ function ChatUI({
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const data = await api.listProjects();
+      setProjects(data.projects || []);
+    } catch {
+      setProjects([]);
+    }
+  }, []);
+
   const loadActiveCompute = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversationCompute(uuid);
@@ -144,7 +161,7 @@ function ChatUI({
   // Initial load - load conversations and activate the correct one
   useEffect(() => { 
     const init = async () => {
-      await loadComputeNodes();
+      await Promise.all([loadComputeNodes(), loadProjects()]);
       const convs = await loadConversations();
       
       // If URL has a conversation UUID, load it directly
@@ -578,8 +595,13 @@ function ChatUI({
         <Sidebar
           conversations={conversations} currentUuid={currentConvUuid} user={user}
           convStatuses={convStatuses}
+          projects={projects}
+          activeProject={activeProject}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
+          onSelectProject={setActiveProject}
+          onNewProject={() => setShowProjectModal(true)}
+          onManageProjects={() => setShowManageProjects(true)}
         />
         
         <div 
@@ -588,25 +610,26 @@ function ChatUI({
         >
           {/* Empty state */}
           {messages.length === 0 && !effectiveProcessing && (
-            <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
-              {/* Large embossed background text */}
-              <div 
-                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none px-2"
-                aria-hidden="true"
-              >
-                <span 
-                  className="text-[4rem] xs:text-[6rem] sm:text-[10rem] md:text-[14rem] lg:text-[18rem] xl:text-[20rem] font-black tracking-tighter whitespace-nowrap animate-[emboss-pulse_4s_ease-in-out_infinite]"
+            <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
+              <div className="relative mb-8">
+                {/* Glow ring behind logo */}
+                <div
+                  className="absolute inset-0 rounded-full animate-[hero-glow_6s_ease-in-out_infinite]"
                   style={{
-                    color: 'transparent',
-                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.12)',
-                    textShadow: '0 0 60px rgba(59, 130, 246, 0.08), 0 0 120px rgba(59, 130, 246, 0.04)',
+                    background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
+                    transform: 'scale(2.5)',
                   }}
-                >
-                  OpenMLR
-                </span>
+                />
+                {/* Floating logo */}
+                <img
+                  src="/logo-512.png"
+                  alt="OpenMLR"
+                  className="relative w-24 h-24 sm:w-32 sm:h-32 select-none pointer-events-none animate-[hero-float_6s_ease-in-out_infinite]"
+                  style={{ opacity: 0.35 }}
+                  draggable={false}
+                />
               </div>
-              {/* Foreground prompt */}
-              <p className="text-lg sm:text-xl text-text-dim z-10">What would you like to research?</p>
+              <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
             </div>
           )}
           
@@ -630,10 +653,19 @@ function ChatUI({
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
       </div>
+
+      {/* Terminal panel */}
+      <Terminal
+        projectUuid={activeProject?.uuid || null}
+        visible={terminalOpen}
+        onToggle={() => setTerminalOpen((v) => !v)}
+      />
       
       {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
+      {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={(p) => { setProjects((prev) => [p, ...prev]); setActiveProject(p); }} />}
+      {showManageProjects && <ProjectManageModal projects={projects} onClose={() => setShowManageProjects(false)} onChanged={() => { loadProjects(); }} />}
     </div>
   );
 }

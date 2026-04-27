@@ -17,13 +17,12 @@ def _assistant_with_tool(name: str, args: dict | None = None) -> Message:
     return Message(
         role="assistant",
         content="",
-        tool_calls=[
-            ToolCall(id=f"call_{name}", name=name, arguments=args or {})
-        ],
+        tool_calls=[ToolCall(id=f"call_{name}", name=name, arguments=args or {})],
     )
 
 
 # ── Edge cases / no detection ──────────────────────────────────────────────
+
 
 class TestNoDetection:
     def test_returns_none_for_empty_list(self):
@@ -56,6 +55,7 @@ class TestNoDetection:
 
 
 # ── Pattern 1: identical consecutive calls ─────────────────────────────────
+
 
 class TestIdenticalConsecutive:
     def test_detects_3_identical_calls(self):
@@ -92,6 +92,7 @@ class TestIdenticalConsecutive:
 
 
 # ── Pattern 2: repeating sequences ─────────────────────────────────────────
+
 
 class TestRepeatingSequences:
     def test_detects_AB_AB_pattern(self):

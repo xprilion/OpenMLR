@@ -63,7 +63,9 @@ def create_research_tool() -> ToolSpec:
     )
 
 
-async def _handle_research(query: str, focus: str = "general", session=None, **kwargs) -> tuple[str, bool]:
+async def _handle_research(
+    query: str, focus: str = "general", session=None, **kwargs
+) -> tuple[str, bool]:
     """Execute research sub-agent with independent context."""
 
     # Get read-only tool subset for the sub-agent
@@ -79,7 +81,10 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
     # Independent context
     messages = [
         {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
-        {"role": "user", "content": f"Research the following topic thoroughly:\n\n{query}\n\nFocus: {focus}"},
+        {
+            "role": "user",
+            "content": f"Research the following topic thoroughly:\n\n{query}\n\nFocus: {focus}",
+        },
     ]
 
     # Generate a parent ID for grouping sub-agent events
@@ -89,15 +94,17 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
     # Emit sub-agent start
     if session:
-        await session.emit(AgentEvent(
-            event_type="sub_agent_start",
-            data={
-                "agent_type": "research",
-                "description": f"Research: {query[:100]}",
-                "parent_tool_call_id": parent_tc_id,
-                "focus": focus,
-            },
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="sub_agent_start",
+                data={
+                    "agent_type": "research",
+                    "description": f"Research: {query[:100]}",
+                    "parent_tool_call_id": parent_tc_id,
+                    "focus": focus,
+                },
+            )
+        )
 
     accumulated_content = ""
 
@@ -107,7 +114,9 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
             result = await LLMProvider.generate(messages, config, research_tools)
 
             # Check for doom loop
-            doom_messages = [Message(role=m["role"], content=m.get("content", "")) for m in messages]
+            doom_messages = [
+                Message(role=m["role"], content=m.get("content", "")) for m in messages
+            ]
             doom_msg = detect_doom_loop(doom_messages)
             if doom_msg:
                 messages.append({"role": "system", "content": doom_msg})
@@ -119,18 +128,20 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
                 break
 
             # Add assistant message with tool calls
-            messages.append({
-                "role": "assistant",
-                "content": result.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.name, "arguments": tc.arguments},
-                    }
-                    for tc in result.tool_calls
-                ],
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": result.content,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {"name": tc.name, "arguments": tc.arguments},
+                        }
+                        for tc in result.tool_calls
+                    ],
+                }
+            )
 
             # Execute tools and emit granular events
             for tc in result.tool_calls:
@@ -138,49 +149,59 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
                 # Emit sub-agent tool call
                 if session:
-                    await session.emit(AgentEvent(
-                        event_type="sub_agent_tool_call",
-                        data={
-                            "parent_tool_call_id": parent_tc_id,
-                            "tool": tc.name,
-                            "tool_call_id": tc.id,
-                            "args": json.dumps(tc.arguments)[:200] if isinstance(tc.arguments, dict) else str(tc.arguments)[:200],
-                        },
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="sub_agent_tool_call",
+                            data={
+                                "parent_tool_call_id": parent_tc_id,
+                                "tool": tc.name,
+                                "tool_call_id": tc.id,
+                                "args": json.dumps(tc.arguments)[:200]
+                                if isinstance(tc.arguments, dict)
+                                else str(tc.arguments)[:200],
+                            },
+                        )
+                    )
 
                 output, success = await _execute_research_tool(tc)
-                messages.append({
-                    "role": "tool",
-                    "content": output[:10000],
-                    "tool_call_id": tc.id,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": output[:10000],
+                        "tool_call_id": tc.id,
+                    }
+                )
 
                 # Emit sub-agent tool output
                 if session:
-                    await session.emit(AgentEvent(
-                        event_type="sub_agent_tool_output",
-                        data={
-                            "parent_tool_call_id": parent_tc_id,
-                            "tool_call_id": tc.id,
-                            "tool": tc.name,
-                            "output": output[:500],
-                            "success": success,
-                        },
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="sub_agent_tool_output",
+                            data={
+                                "parent_tool_call_id": parent_tc_id,
+                                "tool_call_id": tc.id,
+                                "tool": tc.name,
+                                "output": output[:500],
+                                "success": success,
+                            },
+                        )
+                    )
 
     except Exception as e:
         duration = time.time() - start_time
         if session:
-            await session.emit(AgentEvent(
-                event_type="sub_agent_end",
-                data={
-                    "parent_tool_call_id": parent_tc_id,
-                    "tool_count": tool_count,
-                    "duration_seconds": round(duration, 1),
-                    "summary": f"Error: {str(e)}",
-                    "success": False,
-                },
-            ))
+            await session.emit(
+                AgentEvent(
+                    event_type="sub_agent_end",
+                    data={
+                        "parent_tool_call_id": parent_tc_id,
+                        "tool_count": tool_count,
+                        "duration_seconds": round(duration, 1),
+                        "summary": f"Error: {str(e)}",
+                        "success": False,
+                    },
+                )
+            )
         return f"Research sub-agent error: {str(e)}", False
 
     if not accumulated_content:
@@ -190,16 +211,18 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
     # Emit sub-agent end with stats
     if session:
-        await session.emit(AgentEvent(
-            event_type="sub_agent_end",
-            data={
-                "parent_tool_call_id": parent_tc_id,
-                "tool_count": tool_count,
-                "duration_seconds": round(duration, 1),
-                "summary": accumulated_content[:500],
-                "success": True,
-            },
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="sub_agent_end",
+                data={
+                    "parent_tool_call_id": parent_tc_id,
+                    "tool_count": tool_count,
+                    "duration_seconds": round(duration, 1),
+                    "summary": accumulated_content[:500],
+                    "success": True,
+                },
+            )
+        )
 
     return accumulated_content, True
 
@@ -212,35 +235,41 @@ def _get_research_tool_specs() -> list[dict]:
 
     tools = []
     for spec in create_search_tools():
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": spec.name,
-                "description": spec.description,
-                "parameters": spec.parameters,
-            },
-        })
-
-    papers = create_papers_tool()
-    tools.append({
-        "type": "function",
-        "function": {
-            "name": papers.name,
-            "description": papers.description,
-            "parameters": papers.parameters,
-        },
-    })
-
-    for spec in create_github_tools():
-        if spec.name in ("github_read_file", "github_find_examples"):
-            tools.append({
+        tools.append(
+            {
                 "type": "function",
                 "function": {
                     "name": spec.name,
                     "description": spec.description,
                     "parameters": spec.parameters,
                 },
-            })
+            }
+        )
+
+    papers = create_papers_tool()
+    tools.append(
+        {
+            "type": "function",
+            "function": {
+                "name": papers.name,
+                "description": papers.description,
+                "parameters": papers.parameters,
+            },
+        }
+    )
+
+    for spec in create_github_tools():
+        if spec.name in ("github_read_file", "github_find_examples"):
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": spec.name,
+                        "description": spec.description,
+                        "parameters": spec.parameters,
+                    },
+                }
+            )
 
     return tools
 

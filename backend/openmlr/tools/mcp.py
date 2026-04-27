@@ -9,10 +9,12 @@ log = logging.getLogger(__name__)
 
 def substitute_env_vars(text: str) -> str:
     """Substitute ${VAR_NAME} patterns with environment variable values."""
+
     def _replace(match):
         var_name = match.group(1)
         return os.environ.get(var_name, match.group(0))
-    return re.sub(r'\$\{(\w+)\}', _replace, text)
+
+    return re.sub(r"\$\{(\w+)\}", _replace, text)
 
 
 def process_mcp_config(config: dict) -> dict:
@@ -24,10 +26,7 @@ def process_mcp_config(config: dict) -> dict:
         elif isinstance(value, dict):
             processed[key] = process_mcp_config(value)
         elif isinstance(value, list):
-            processed[key] = [
-                substitute_env_vars(v) if isinstance(v, str) else v
-                for v in value
-            ]
+            processed[key] = [substitute_env_vars(v) if isinstance(v, str) else v for v in value]
         else:
             processed[key] = value
     return processed

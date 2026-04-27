@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setToken } from '../api';
-import type { Conversation, User } from '../types';
+import type { Conversation, User, Project } from '../types';
+import { APP_VERSION } from '../version';
 import { ConfirmDialog } from './ConfirmDialog';
 import { 
   PanelLeftClose, 
@@ -10,7 +11,11 @@ import {
   Search, 
   Settings, 
   LogOut, 
-  Trash2 
+  Trash2,
+  FolderOpen,
+  ChevronDown,
+  Layers,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
@@ -20,9 +25,14 @@ interface Props {
   currentUuid: string | null;
   user: User | null;
   convStatuses: Record<string, ConvStatus>;
+  projects: Project[];
+  activeProject: Project | null;
   onSwitch: (uuid: string) => void;
   onNew: (mode?: string) => void;
   onDelete: (uuid: string) => void;
+  onSelectProject: (project: Project | null) => void;
+  onNewProject: () => void;
+  onManageProjects?: () => void;
 }
 
 function groupByDate(conversations: Conversation[]) {
@@ -52,11 +62,12 @@ function ConvIcon({ status }: { status: ConvStatus }) {
   return <span className={`${base} bg-border`} />;
 }
 
-export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwitch, onNew, onDelete }: Props) {
+export function Sidebar({ conversations, currentUuid, user, convStatuses, projects, activeProject, onSwitch, onNew, onDelete, onSelectProject, onNewProject, onManageProjects }: Props) {
   const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return conversations;
@@ -65,6 +76,9 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwit
   }, [conversations, search]);
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
+
+  // Non-default projects for the dropdown
+  const userProjects = useMemo(() => projects.filter((p) => !p.is_default), [projects]);
 
   if (collapsed) {
     return (
@@ -105,6 +119,69 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwit
           <Plus size={16} />
           <span>New Chat</span>
         </button>
+      </div>
+
+      {/* Project selector */}
+      <div className="relative">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2 bg-bg border border-border rounded-lg text-sm text-text hover:border-primary transition-colors"
+          onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
+        >
+          <FolderOpen size={14} className="text-primary shrink-0" />
+          <span className="flex-1 truncate text-left">
+            {activeProject ? activeProject.name : 'All Conversations'}
+          </span>
+          <ChevronDown size={14} className={`text-text-dim shrink-0 transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {projectDropdownOpen && (
+          <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl z-20 max-h-72 overflow-auto">
+            {/* All Conversations */}
+            <button
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${!activeProject ? 'text-primary' : 'text-text'}`}
+              onClick={() => { onSelectProject(null); setProjectDropdownOpen(false); }}
+            >
+              <Layers size={14} />
+              All Conversations
+            </button>
+
+            {/* User projects */}
+            {userProjects.map((p) => (
+              <button
+                key={p.uuid}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
+                  activeProject?.uuid === p.uuid ? 'text-primary bg-primary/5' : 'text-text'
+                }`}
+                onClick={() => { onSelectProject(p); setProjectDropdownOpen(false); }}
+              >
+                <FolderOpen size={14} />
+                <span className="flex-1 truncate">{p.name}</span>
+                {p.conversation_count !== undefined && (
+                  <span className="text-xs text-text-dim">{p.conversation_count}</span>
+                )}
+              </button>
+            ))}
+
+            {/* Actions */}
+            <div className="border-t border-border">
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-surface-hover transition-colors"
+                onClick={() => { onNewProject(); setProjectDropdownOpen(false); }}
+              >
+                <Plus size={14} />
+                New Project
+              </button>
+              {userProjects.length > 0 && (
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+                  onClick={() => { onManageProjects?.(); setProjectDropdownOpen(false); }}
+                >
+                  <SlidersHorizontal size={14} />
+                  Manage Projects
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -158,26 +235,29 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, onSwit
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-2 pt-3 border-t border-border">
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-          onClick={() => navigate('/settings')} 
-          title="Settings"
-        >
-          <Settings size={18} />
-        </button>
-        {user && (
-          <span className="flex-1 truncate text-sm text-text-dim" title={user.username}>
-            {user.display_name || user.username}
-          </span>
-        )}
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-error transition-colors"
-          onClick={() => { setToken(null); window.location.reload(); }} 
-          title="Sign out"
-        >
-          <LogOut size={18} />
-        </button>
+      <div className="pt-3 border-t border-border flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <button 
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+            onClick={() => navigate('/settings')} 
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
+          {user && (
+            <span className="flex-1 truncate text-sm text-text-dim" title={user.username}>
+              {user.display_name || user.username}
+            </span>
+          )}
+          <button 
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-error transition-colors"
+            onClick={() => { setToken(null); window.location.reload(); }} 
+            title="Sign out"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+        <span className="text-[11px] text-text-dim px-2">v{APP_VERSION}</span>
       </div>
 
       {pendingDelete && (

@@ -19,12 +19,15 @@
 
 ## Features
 
+- **Projects & Workspaces** — Persistent workspaces with knowledge graphs, file trees, and cross-conversation memory. Research accumulates across chats.
+- **Interactive terminal** — Built-in terminal connected to the project workspace. Run commands directly alongside AI-driven research.
 - **Plan + Execute modes** — Plan mode gathers context; Execute mode does the work. Toggle with `Cmd+M`.
 - **Paper research** — OpenAlex, Semantic Scholar, arXiv, CrossRef, Papers With Code. Reads full papers, crawls citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Export to Markdown/LaTeX.
-- **Compute environments** — Execute code on local Docker, SSH remotes, or Modal cloud. Probe GPU/CPU capabilities.
+- **Compute environments** — Execute code on local Docker, SSH remotes, or Modal cloud. Workspace persists independently of compute.
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
-- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio).
+- **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio). Add custom providers with OpenAI SDK, Anthropic SDK, OpenRouter, or LiteLLM compatibility.
+- **Model picker** — Browse models grouped by provider with logos, sorted by release date. Recently used models at the top. Fetches live from [models.dev](https://models.dev).
 - **MCP servers** — Connect external tools via the Model Context Protocol.
 - **Onboarding flow** — Guided setup when no LLM provider is configured.
 
@@ -40,6 +43,8 @@ make up
 
 Open `http://localhost:3000`. Create an account. Add your API keys in **Settings > Providers**.
 
+Project workspaces are stored in a persistent Docker volume (`.workspaces/`), so your research data survives container rebuilds.
+
 > No API keys needed to start — the app guides you through configuration after login.
 
 ## Development
@@ -49,6 +54,9 @@ Open `http://localhost:3000`. Create an account. Add your API keys in **Settings
 make dev-up         # Start with live reload
 make dev-logs       # Watch logs
 ```
+
+Open `http://localhost:5173` for the UI (Vite HMR).
+`http://localhost:3000` serves the API with Swagger docs at `/docs`.
 
 ### Native
 ```bash

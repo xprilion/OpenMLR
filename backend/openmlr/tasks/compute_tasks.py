@@ -31,6 +31,7 @@ def cleanup_old_workspaces():
             from sqlalchemy import select
 
             from ..db.models import Conversation
+
             result = await db.execute(select(Conversation.uuid))
             active_uuids = {row[0] for row in result.all()}
 
@@ -49,6 +50,7 @@ def cleanup_old_workspaces():
 @celery_app.task(bind=True, max_retries=3)
 def check_compute_node_health(self, node_id: int, user_id: int):
     """Check health of a single compute node."""
+
     async def _check():
         session_factory = get_worker_session()
         async with session_factory() as db:
@@ -68,7 +70,9 @@ def check_compute_node_health(self, node_id: int, user_id: int):
                 if sandbox:
                     caps = await probe_sandbox(sandbox)
                     await ops.update_compute_node(
-                        db, node.id, user_id,
+                        db,
+                        node.id,
+                        user_id,
                         capabilities=caps.to_dict(),
                         health_status="online",
                         last_seen_at=datetime.now(UTC),
@@ -76,13 +80,19 @@ def check_compute_node_health(self, node_id: int, user_id: int):
                     logger.info(f"Health check passed for node '{node.name}'")
                 else:
                     await ops.update_compute_node(
-                        db, node.id, user_id,
+                        db,
+                        node.id,
+                        user_id,
                         health_status="offline",
                     )
-                    logger.warning(f"Health check failed for node '{node.name}': sandbox not created")
+                    logger.warning(
+                        f"Health check failed for node '{node.name}': sandbox not created"
+                    )
             except Exception as e:
                 await ops.update_compute_node(
-                    db, node.id, user_id,
+                    db,
+                    node.id,
+                    user_id,
                     health_status="offline",
                 )
                 logger.warning(f"Health check failed for node '{node.name}': {e}")
@@ -95,12 +105,14 @@ def check_compute_node_health(self, node_id: int, user_id: int):
 @celery_app.task
 def health_check_all_nodes():
     """Run health checks on all compute nodes for all users."""
+
     async def _check_all():
         session_factory = get_worker_session()
         async with session_factory() as db:
             from sqlalchemy import select
 
             from ..db.models import User
+
             result = await db.execute(select(User))
             users = result.scalars().all()
 

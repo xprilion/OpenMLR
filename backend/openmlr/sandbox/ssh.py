@@ -20,9 +20,12 @@ class StrictHostKeyPolicy:
 
     def missing_host_key(self, client, hostname, key):
         import paramiko
+
         actual = key.get_fingerprint().hex()
         self.actual_fingerprint = actual
-        if self.expected and actual != self.expected.lower().replace(":", "").replace("sha256:", ""):
+        if self.expected and actual != self.expected.lower().replace(":", "").replace(
+            "sha256:", ""
+        ):
             raise paramiko.SSHException(
                 f"Host key mismatch for {hostname}: expected {self.expected}, got {actual}"
             )
@@ -39,7 +42,7 @@ class SSHConnectionPool:
     _instance: "SSHConnectionPool | None" = None
 
     def __init__(self, ttl_seconds: int = 300):
-        self._connections: dict[str, tuple] = {}   # key -> (client, sftp, fingerprint)
+        self._connections: dict[str, tuple] = {}  # key -> (client, sftp, fingerprint)
         self._last_used: dict[str, float] = {}
         self._ttl = ttl_seconds
 
@@ -135,6 +138,7 @@ class SSHSandbox(SandboxInterface):
 
         if self.key_filename:
             from ..keys import KeyManager
+
             self._key_manager = KeyManager()
 
         if not self.host:
@@ -154,7 +158,9 @@ class SSHSandbox(SandboxInterface):
         self._ensure_connected()
 
         def _do_mkdir():
-            subdirs = " ".join(f"{remote_path}/{d}" for d in ["data", "models", "code", "outputs", ".openmlr-meta"])
+            subdirs = " ".join(
+                f"{remote_path}/{d}" for d in ["data", "models", "code", "outputs", ".openmlr-meta"]
+            )
             cmd = f"mkdir -p {subdirs}"
             stdin, stdout, stderr = self._client.exec_command(cmd, timeout=10)
             exit_code = stdout.channel.recv_exit_status()
@@ -180,6 +186,7 @@ class SSHSandbox(SandboxInterface):
 
         def _do_connect():
             import paramiko
+
             client = paramiko.SSHClient()
 
             if self.host_key_fingerprint:
@@ -223,13 +230,19 @@ class SSHSandbox(SandboxInterface):
         pool.put(self.host, self.port, self.username, self._client, self._sftp, actual_fp)
 
     def _ensure_connected(self):
-        if not self._client or not self._client.get_transport() or not self._client.get_transport().is_active():
+        if (
+            not self._client
+            or not self._client.get_transport()
+            or not self._client.get_transport().is_active()
+        ):
             raise RuntimeError("SSH connection lost. Recreate the sandbox.")
 
     async def execute(self, command: str, timeout: int = 120) -> ExecutionResult:
         return await self.execute_stream(command, timeout)
 
-    async def execute_stream(self, command: str, timeout: int = 120, on_chunk=None) -> ExecutionResult:
+    async def execute_stream(
+        self, command: str, timeout: int = 120, on_chunk=None
+    ) -> ExecutionResult:
         self._ensure_connected()
         start = time.monotonic()
 
@@ -297,6 +310,7 @@ class SSHSandbox(SandboxInterface):
 
         def _do_read():
             import io
+
             buf = io.BytesIO()
             self._sftp.getfo(path, buf)
             buf.seek(0)
@@ -309,6 +323,7 @@ class SSHSandbox(SandboxInterface):
 
         def _do_write():
             import io
+
             buf = io.BytesIO(content.encode("utf-8"))
             self._sftp.putfo(buf, path)
 
@@ -344,6 +359,7 @@ class SSHSandbox(SandboxInterface):
                 result = []
                 for e in sorted(entries, key=lambda x: x.filename):
                     import stat
+
                     suffix = "/" if stat.S_ISDIR(e.st_mode) else ""
                     result.append(f"{e.filename}{suffix}")
                 return result

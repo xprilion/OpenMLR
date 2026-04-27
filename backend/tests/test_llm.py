@@ -6,12 +6,15 @@ from openmlr.agent.llm import LLMProvider
 
 
 class TestGetApiKey:
-    @pytest.mark.parametrize("model_name,env_var", [
-        ("openai/gpt-4o", "OPENAI_API_KEY"),
-        ("anthropic/claude-sonnet-4", "ANTHROPIC_API_KEY"),
-        ("openrouter/openai/gpt-4o", "OPENROUTER_API_KEY"),
-        ("opencode-go/glm-5.1", "OPENCODE_GO_API_KEY"),
-    ])
+    @pytest.mark.parametrize(
+        "model_name,env_var",
+        [
+            ("openai/gpt-4o", "OPENAI_API_KEY"),
+            ("anthropic/claude-sonnet-4", "ANTHROPIC_API_KEY"),
+            ("openrouter/openai/gpt-4o", "OPENROUTER_API_KEY"),
+            ("opencode-go/glm-5.1", "OPENCODE_GO_API_KEY"),
+        ],
+    )
     def test_model_prefix_maps_to_env_var(self, monkeypatch, model_name, env_var):
         monkeypatch.setenv(env_var, f"test-key-{env_var}")
         key = LLMProvider._get_api_key(model_name)
@@ -47,15 +50,18 @@ class TestGetApiKey:
 
 
 class TestNormalizeModel:
-    @pytest.mark.parametrize("full_name,normalized", [
-        ("openai/gpt-4o", "gpt-4o"),
-        ("anthropic/claude-sonnet-4", "claude-sonnet-4"),
-        ("openrouter/anthropic/claude-3-sonnet", "anthropic/claude-3-sonnet"),
-        ("ollama/llama3.1", "llama3.1"),
-        ("lmstudio/default", "default"),
-        ("local/custom-model", "custom-model"),
-        ("opencode-go/glm-5.1", "glm-5.1"),
-    ])
+    @pytest.mark.parametrize(
+        "full_name,normalized",
+        [
+            ("openai/gpt-4o", "gpt-4o"),
+            ("anthropic/claude-sonnet-4", "claude-sonnet-4"),
+            ("openrouter/anthropic/claude-3-sonnet", "anthropic/claude-3-sonnet"),
+            ("ollama/llama3.1", "llama3.1"),
+            ("lmstudio/default", "default"),
+            ("local/custom-model", "custom-model"),
+            ("opencode-go/glm-5.1", "glm-5.1"),
+        ],
+    )
     def test_normalize_strips_prefix(self, full_name, normalized):
         result = LLMProvider._normalize_model(full_name)
         assert result == normalized
@@ -136,7 +142,11 @@ class TestToolParamConversion:
 
     def test_openai_tool_param_raw_format(self):
         tools = [
-            {"name": "search", "description": "Search web", "parameters": {"type": "object", "properties": {}}},
+            {
+                "name": "search",
+                "description": "Search web",
+                "parameters": {"type": "object", "properties": {}},
+            },
         ]
         result = LLMProvider._openai_tool_param(tools)
         assert len(result) == 1
@@ -145,7 +155,10 @@ class TestToolParamConversion:
 
     def test_openai_tool_param_already_formatted(self):
         tools = [
-            {"type": "function", "function": {"name": "bash", "description": "Run cmd", "parameters": {}}},
+            {
+                "type": "function",
+                "function": {"name": "bash", "description": "Run cmd", "parameters": {}},
+            },
         ]
         result = LLMProvider._openai_tool_param(tools)
         assert len(result) == 1
@@ -178,7 +191,11 @@ class TestToolParamConversion:
 
     def test_anthropic_tool_param_unwrapped(self):
         tools = [
-            {"name": "bash", "description": "Run cmd", "parameters": {"type": "object", "properties": {}}},
+            {
+                "name": "bash",
+                "description": "Run cmd",
+                "parameters": {"type": "object", "properties": {}},
+            },
         ]
         result = LLMProvider._anthropic_tool_param(tools)
         assert len(result) == 1

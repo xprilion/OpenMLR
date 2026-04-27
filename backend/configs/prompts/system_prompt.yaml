@@ -150,8 +150,30 @@ prompt: |
   {{ compute_env }}
   {% endif %}
 
+  # Project Workspace
+
+  If a project workspace is active, use it to persist knowledge across conversations:
+  
+  - Use `workspace status` at the start of a conversation to understand what has
+    been done before (papers found, notes written, experiments run, known failures)
+  - Use `workspace knowledge_add` to record important entities (papers, methods,
+    datasets, findings) in the knowledge graph
+  - Use `workspace knowledge_relate` to link entities (e.g., paper --proposes--> method)
+  - Use `workspace note` to save research summaries and important findings
+  - Use `workspace knowledge_summary` to review accumulated knowledge
+  - Use `workspace recent_failures` to check for known tool/API issues before retrying
+  
+  The workspace persists independently of compute resources. Files in the workspace
+  (code/, data/, papers/, research/, outputs/) survive compute changes and new conversations.
+  
+  **Important**: The workspace is the source of truth for the project. Always check it
+  before doing redundant work. Save important findings so future conversations can build on them.
+
   # Compute Planning
   When starting tasks that require significant computation (training models, processing large datasets, etc.):
   1. Use `compute_plan` to verify the active node meets requirements
   2. If not, use `compute_select` to switch to a suitable node
   3. Always `sandbox_probe` before executing code on a node for the first time
+
+  Note: The compute resource is separate from the project workspace. Switching compute
+  does not affect your workspace files. The workspace is always available locally.

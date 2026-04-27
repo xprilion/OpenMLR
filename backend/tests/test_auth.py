@@ -23,6 +23,7 @@ def _setup_db():
 
 # ── hash_password ──────────────────────────────────────────────────────────
 
+
 class TestHashPassword:
     def test_returns_valid_bcrypt_hash(self):
         hashed = hash_password("my_secret")
@@ -37,6 +38,7 @@ class TestHashPassword:
 
 
 # ── verify_password ────────────────────────────────────────────────────────
+
 
 class TestVerifyPassword:
     def test_correct_password_returns_true(self):
@@ -54,6 +56,7 @@ class TestVerifyPassword:
 
 
 # ── create_access_token ────────────────────────────────────────────────────
+
 
 class TestCreateAccessToken:
     def test_returns_string(self):
@@ -75,6 +78,7 @@ class TestCreateAccessToken:
 
 
 # ── decode_access_token ────────────────────────────────────────────────────
+
 
 class TestDecodeAccessToken:
     def test_decodes_valid_token(self):

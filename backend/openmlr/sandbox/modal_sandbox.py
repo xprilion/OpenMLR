@@ -25,9 +25,7 @@ class ModalSandbox(SandboxInterface):
         try:
             import modal
         except ImportError:
-            raise RuntimeError(
-                "Modal is not installed. Install with: pip install modal-client"
-            )
+            raise RuntimeError("Modal is not installed. Install with: pip install modal-client")
 
         def _do_create():
             app = modal.App.lookup("openmlr-sandbox", create_if_missing=True)
@@ -150,8 +148,10 @@ class ModalSandbox(SandboxInterface):
     async def destroy(self) -> None:
         if self._sandbox:
             try:
+
                 def _terminate():
                     self._sandbox.terminate()
+
                 await asyncio.to_thread(_terminate)
             except Exception:
                 pass

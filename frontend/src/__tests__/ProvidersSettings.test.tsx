@@ -7,6 +7,8 @@ vi.mock('../api', () => ({
   api: {
     getProviders: vi.fn(),
     updateSetting: vi.fn(),
+    getSettingsCategory: vi.fn(),
+    fetchCustomProviderModels: vi.fn(),
   },
 }));
 

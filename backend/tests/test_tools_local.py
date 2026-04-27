@@ -221,6 +221,7 @@ class TestModuleConstants:
     def test_allow_direct_exec_default(self, monkeypatch):
         monkeypatch.delenv("OPENMLR_ALLOW_DIRECT_EXEC", raising=False)
         import openmlr.tools.local
+
         allow = openmlr.tools.local.ALLOW_DIRECT_EXEC
         assert allow is False
 

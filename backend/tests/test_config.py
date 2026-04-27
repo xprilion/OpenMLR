@@ -9,6 +9,7 @@ from openmlr.config import AgentConfig, get_model_max_tokens
 # AgentConfig defaults
 # ---------------------------------------------------------------------------
 
+
 class TestAgentConfigDefaults:
     def test_model_name_default_empty(self):
         cfg = AgentConfig()
@@ -67,6 +68,7 @@ class TestAgentConfigDefaults:
 # get_model_max_tokens — known models
 # ---------------------------------------------------------------------------
 
+
 class TestGetModelMaxTokensKnown:
     @pytest.mark.parametrize(
         "model_name, expected",
@@ -104,6 +106,7 @@ class TestGetModelMaxTokensKnown:
 # get_model_max_tokens — unknown models
 # ---------------------------------------------------------------------------
 
+
 class TestGetModelMaxTokensUnknown:
     def test_unknown_model_returns_default(self):
         assert get_model_max_tokens("my-custom-model") == 200_000
@@ -118,6 +121,7 @@ class TestGetModelMaxTokensUnknown:
 # ---------------------------------------------------------------------------
 # estimate_tokens (from context.py)
 # ---------------------------------------------------------------------------
+
 
 class TestEstimateTokens:
     def test_empty_string_returns_one(self):

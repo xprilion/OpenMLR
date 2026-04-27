@@ -20,7 +20,7 @@ repos:
     hooks:
       - id: eslint
         name: eslint (frontend)
-        entry: bash -c 'cd frontend && npx eslint --max-warnings 50 "$@"' --
+        entry: bash -c 'args=(); for f; do args+=("${f#frontend/}"); done; cd frontend && npx eslint --max-warnings 50 "${args[@]}"' --
         language: system
         files: ^frontend/src/.*\.(ts|tsx)$
         types: [file]
