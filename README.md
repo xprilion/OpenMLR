@@ -9,9 +9,9 @@
 </p>
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xprilion/OpenMLR)
-[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/xprilion/OpenMLR)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=xprilion_OpenMLR&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=xprilion_OpenMLR)
 
 **Docs**: [openmlr.dev](https://openmlr.dev)
 
