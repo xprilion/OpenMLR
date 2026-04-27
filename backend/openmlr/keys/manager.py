@@ -12,7 +12,7 @@ class KeyManager:
     """Manages SSH private keys stored in a dedicated directory."""
 
     def __init__(self, keys_dir: str | Path = None):
-        self.keys_dir = Path(keys_dir) if keys_dir else Path(__file__).parent.parent.parent.parent.parent / ".keys"
+        self.keys_dir = Path(keys_dir) if keys_dir else Path(__file__).parent.parent.parent.parent / ".keys"
         self._ensure_dir()
 
     def _ensure_dir(self) -> None:
