@@ -22,6 +22,7 @@ FRONTEND_DIST = Path(__file__).parent.parent.parent / "frontend" / "dist"
 async def lifespan(app: FastAPI):
     """Startup: create tables & shared state.  Shutdown: teardown sessions."""
     import logging
+
     logger = logging.getLogger("openmlr.app")
 
     async with engine.begin() as conn:
@@ -57,7 +58,9 @@ app = FastAPI(
 )
 
 # CORS configuration - restrict in production
-_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(
+    ","
+)
 _cors_origins = [origin.strip() for origin in _cors_origins if origin.strip()]
 
 app.add_middleware(
@@ -74,7 +77,9 @@ from .routes.agent import router as agent_router
 from .routes.compute import router as compute_router
 from .routes.health import router as health_router
 from .routes.keys import router as keys_router
+from .routes.projects import router as projects_router
 from .routes.settings import router as settings_router
+from .routes.terminal import router as terminal_router
 
 app.include_router(auth_router)
 app.include_router(agent_router)
@@ -82,12 +87,15 @@ app.include_router(settings_router)
 app.include_router(health_router)
 app.include_router(keys_router)
 app.include_router(compute_router)
+app.include_router(projects_router)
+app.include_router(terminal_router)
 
 
 # ── Global error handler ────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     import logging
+
     logger = logging.getLogger(__name__)
     logger.exception(f"Unhandled exception: {exc}")
     # Don't leak internal details to client

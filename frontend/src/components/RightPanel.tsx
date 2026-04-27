@@ -15,10 +15,15 @@ import {
   Download,
   ExternalLink,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  ListTodo,
+  Files,
 } from 'lucide-react';
 import { api } from '../api';
+import { FileTree } from './FileTree';
 import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
+
+type TabId = 'tasks' | 'files';
 
 interface Props {
   tasks: PlanTask[];
@@ -26,6 +31,7 @@ interface Props {
   contextUsage: ContextUsage | null;
   searchBudget: SearchBudget | null;
   visible: boolean;
+  projectUuid: string | null;
   onToggle: () => void;
   onViewReport: (resource: Resource) => void;
 }
@@ -91,12 +97,13 @@ function downloadFile(content: string, filename: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-export function RightPanel({ tasks, resources, contextUsage, searchBudget, visible, onToggle, onViewReport }: Props) {
+export function RightPanel({ tasks, resources, contextUsage, searchBudget, visible, projectUuid, onToggle, onViewReport }: Props) {
   const hasContent = tasks.length > 0 || resources.length > 0;
   const [splitY, setSplitY] = useState(50); // percentage for tasks section
   const [exporting, setExporting] = useState(false);
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
   const [resourcesCollapsed, setResourcesCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>('tasks');
   const dragging = useRef(false);
   const panelRef = useRef<HTMLElement>(null);
 
@@ -175,9 +182,31 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <span className="font-semibold text-text">Tasks & Resources</span>
+      {/* Header with tabs */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+        <div className="flex items-center gap-1">
+          <button
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'tasks' ? 'bg-primary/10 text-primary' : 'text-text-dim hover:text-text'}`}
+            onClick={() => setActiveTab('tasks')}
+          >
+            <span className="flex items-center gap-1.5">
+              <ListTodo size={12} />
+              Tasks
+              {tasks.length > 0 && <span className="text-[10px]">({tasks.length})</span>}
+            </span>
+          </button>
+          {projectUuid && (
+            <button
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'files' ? 'bg-primary/10 text-primary' : 'text-text-dim hover:text-text'}`}
+              onClick={() => setActiveTab('files')}
+            >
+              <span className="flex items-center gap-1.5">
+                <Files size={12} />
+                Files
+              </span>
+            </button>
+          )}
+        </div>
         <button 
           className="w-7 h-7 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
           onClick={onToggle}
@@ -212,6 +241,16 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
           </div>
         </div>
       )}
+
+      {/* Files tab */}
+      {activeTab === 'files' && projectUuid && (
+        <div className="flex-1 overflow-hidden">
+          <FileTree projectUuid={projectUuid} />
+        </div>
+      )}
+
+      {/* Tasks tab content */}
+      {activeTab === 'tasks' && <>
 
       {/* Paper section — only shown when a paper resource exists */}
       {paperResource && (
@@ -344,6 +383,9 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
           </div>
         )}
       </div>
+
+      {/* End of tasks tab */}
+      </>}
     </aside>
   );
 }

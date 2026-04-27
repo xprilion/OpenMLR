@@ -55,3 +55,8 @@ async def get_db() -> AsyncSession:
             yield session
         finally:
             await session.close()
+
+
+def get_async_session():
+    """Get an async session as a context manager (for non-dependency use like WebSockets)."""
+    return async_session()

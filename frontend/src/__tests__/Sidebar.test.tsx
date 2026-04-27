@@ -51,9 +51,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -68,9 +72,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -86,9 +94,13 @@ describe('Sidebar', () => {
           currentUuid="conv-1"
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -107,9 +119,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={onSwitch}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -125,9 +141,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -142,9 +162,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -159,9 +183,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -177,9 +205,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={vi.fn()}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );
@@ -198,9 +230,13 @@ describe('Sidebar', () => {
           currentUuid={null}
           user={mockUser}
           convStatuses={{}}
+          projects={[]}
+          activeProject={null}
           onSwitch={vi.fn()}
           onNew={onNew}
           onDelete={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewProject={vi.fn()}
         />
       </MemoryRouter>
     );

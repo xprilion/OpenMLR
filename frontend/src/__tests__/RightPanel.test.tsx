@@ -33,6 +33,7 @@ describe('RightPanel', () => {
         contextUsage={mockContext}
         searchBudget={null}
         visible={false}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -48,6 +49,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -65,6 +67,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -80,6 +83,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -96,6 +100,7 @@ describe('RightPanel', () => {
         contextUsage={mockContext}
         searchBudget={null}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -112,6 +117,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={mockSearchBudget}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -127,6 +133,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -144,6 +151,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={true}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -160,6 +168,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={false}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />
@@ -175,6 +184,7 @@ describe('RightPanel', () => {
         contextUsage={null}
         searchBudget={null}
         visible={false}
+        projectUuid={null}
         onToggle={vi.fn()}
         onViewReport={vi.fn()}
       />

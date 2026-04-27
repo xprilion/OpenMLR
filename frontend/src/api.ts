@@ -116,6 +116,28 @@ export const api = {
   createKey: (body: Record<string, any>) => post('/api/keys', body),
   deleteKey: (filename: string) => del(`/api/keys/${filename}`),
 
+  // Projects
+  listProjects: (includeArchived = false) => get(`/api/projects${includeArchived ? '?include_archived=true' : ''}`),
+  createProject: (name: string, description?: string) => post('/api/projects', { name, description }),
+  getProject: (uuid: string) => get(`/api/projects/${uuid}`),
+  updateProject: (uuid: string, body: Record<string, any>) => put(`/api/projects/${uuid}`, body),
+  deleteProject: (uuid: string) => del(`/api/projects/${uuid}`),
+  listProjectConversations: (uuid: string) => get(`/api/projects/${uuid}/conversations`),
+  attachConversation: (projectUuid: string, convUuid: string) =>
+    post(`/api/projects/${projectUuid}/attach/${convUuid}`, {}),
+  detachConversation: (projectUuid: string, convUuid: string) =>
+    post(`/api/projects/${projectUuid}/detach/${convUuid}`, {}),
+
+  // Project Files
+  listFiles: (projectUuid: string, path = '') =>
+    get(`/api/projects/${projectUuid}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  readFile: (projectUuid: string, filePath: string) =>
+    get(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
+  writeFile: (projectUuid: string, filePath: string, content: string) =>
+    put(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`, { content }),
+  deleteFile: (projectUuid: string, filePath: string) =>
+    del(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
+
   // Compute Nodes
   getComputeNodes: () => get('/api/compute/nodes'),
   createComputeNode: (body: Record<string, any>) => post('/api/compute/nodes', body),

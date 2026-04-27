@@ -1,4 +1,10 @@
-"""SandboxManager — lifecycle management and provider selection."""
+"""SandboxManager — lifecycle management and provider selection.
+
+The sandbox handles code execution on a compute resource.
+The workspace (project-scoped) is decoupled: it persists independently
+of which compute resource is active. The sandbox receives the workspace
+path so it can operate within the project directory.
+"""
 
 from .interface import SandboxInterface
 from .local import LocalSandbox
@@ -7,13 +13,24 @@ from .ssh import SSHSandbox
 
 
 class SandboxManager:
-    """Manages sandbox lifecycle: create, switch, destroy."""
+    """Manages sandbox lifecycle: create, switch, destroy.
 
-    def __init__(self, workspace_manager=None, conversation_uuid: str = None):
+    Workspace and compute are decoupled:
+    - project_workspace_path: persistent project directory (survives compute changes)
+    - provider/config: determines WHERE code executes (local, ssh, modal)
+    """
+
+    def __init__(
+        self,
+        workspace_manager=None,
+        conversation_uuid: str = None,
+        project_workspace_path: str = None,
+    ):
         self._active: SandboxInterface | None = None
         self.active_type: str = "none"
         self._workspace_manager = workspace_manager
         self._conversation_uuid = conversation_uuid
+        self._project_workspace_path = project_workspace_path
 
     def get_active(self) -> SandboxInterface | None:
         return self._active
@@ -28,6 +45,8 @@ class SandboxManager:
 
         # Inject workspace and conversation context
         config["conversation_uuid"] = self._conversation_uuid
+        if self._project_workspace_path:
+            config["project_workspace_path"] = self._project_workspace_path
 
         if provider == "local":
             sandbox = LocalSandbox(workspace_manager=self._workspace_manager)

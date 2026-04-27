@@ -5,7 +5,7 @@ import { ComputeSelector } from './components/ComputeSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
-import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget } from './types';
+import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
@@ -17,6 +17,8 @@ import { RightPanel } from './components/RightPanel';
 import { ReportDrawer } from './components/ReportDrawer';
 import { AuthGuard } from './components/AuthGuard';
 import { OnboardingModal } from './components/OnboardingModal';
+import { Terminal } from './components/Terminal';
+import { ProjectModal } from './components/ProjectModal';
 import { SettingsPage } from './components/SettingsPage';
 import { ProvidersSettings } from './components/settings/ProvidersSettings';
 import { AgentSettings } from './components/settings/AgentSettings';
@@ -103,6 +105,10 @@ function ChatUI({
   const [inputText, setInputText] = useState('');
   const [computeNodes, setComputeNodes] = useState<any[]>([]);
   const [activeCompute, setActiveCompute] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
 
   // Ref to always have current conv UUID in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -132,6 +138,15 @@ function ChatUI({
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const data = await api.listProjects();
+      setProjects(data.projects || []);
+    } catch {
+      setProjects([]);
+    }
+  }, []);
+
   const loadActiveCompute = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversationCompute(uuid);
@@ -144,7 +159,7 @@ function ChatUI({
   // Initial load - load conversations and activate the correct one
   useEffect(() => { 
     const init = async () => {
-      await loadComputeNodes();
+      await Promise.all([loadComputeNodes(), loadProjects()]);
       const convs = await loadConversations();
       
       // If URL has a conversation UUID, load it directly
@@ -578,8 +593,12 @@ function ChatUI({
         <Sidebar
           conversations={conversations} currentUuid={currentConvUuid} user={user}
           convStatuses={convStatuses}
+          projects={projects}
+          activeProject={activeProject}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
+          onSelectProject={setActiveProject}
+          onNewProject={() => setShowProjectModal(true)}
         />
         
         <div 
@@ -630,10 +649,18 @@ function ChatUI({
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
       </div>
+
+      {/* Terminal panel */}
+      <Terminal
+        projectUuid={activeProject?.uuid || null}
+        visible={terminalOpen}
+        onToggle={() => setTerminalOpen((v) => !v)}
+      />
       
       {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
+      {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={(p) => { setProjects((prev) => [p, ...prev]); setActiveProject(p); }} />}
     </div>
   );
 }

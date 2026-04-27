@@ -10,15 +10,28 @@ MODE_TOOL_RESTRICTIONS = {
     "plan": {
         # Plan mode: ask questions, create plans, read context — NO execution tools
         "allowed": {
-            "ask_user", "plan_tool",
+            "ask_user",
+            "plan_tool",
             # Read-only tools for gathering context
-            "read_file", "list_dir", "glob_files", "grep_search",
-            "web_search", "papers",
-            "github_search", "github_read_file", "github_read_repo",
-            "github_find_examples", "github_search_repos", "github_get_readme",
+            "read_file",
+            "list_dir",
+            "glob_files",
+            "grep_search",
+            "web_search",
+            "papers",
+            "github_search",
+            "github_read_file",
+            "github_read_repo",
+            "github_find_examples",
+            "github_search_repos",
+            "github_get_readme",
             "github_list_repos",
             # Compute planning (read-only / advisory)
-            "compute_list", "compute_plan", "compute_probe",
+            "compute_list",
+            "compute_plan",
+            "compute_probe",
+            # Workspace (knowledge graph, notes, search — always accessible)
+            "workspace",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -87,7 +100,9 @@ class ToolRouter:
         blocked_tools = restrictions.get("blocked", set())
         if blocked_tools:
             if name in blocked_tools:
-                error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
+                error_msg = restrictions.get(
+                    "blocked_message", "Tool '{tool}' not allowed in this mode."
+                )
                 return False, error_msg.format(tool=name, mode=self._current_mode)
             return True, ""
 
@@ -116,14 +131,16 @@ class ToolRouter:
                 if not allowed:
                     continue
 
-            specs.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters,
-                },
-            })
+            specs.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters,
+                    },
+                }
+            )
         return specs
 
     def get_raw_specs(self) -> list[ToolSpec]:
@@ -175,7 +192,10 @@ class ToolRouter:
                 return await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
             except TypeError as e:
                 # Handle argument mismatches (model sending wrong param names)
-                return f"Tool argument error: {e}. Expected parameters: {list(sig.parameters.keys())}", False
+                return (
+                    f"Tool argument error: {e}. Expected parameters: {list(sig.parameters.keys())}",
+                    False,
+                )
 
         # MCP tool (no handler — dispatch to MCP client)
         if self._mcp_client:
@@ -253,11 +273,18 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
 
     # Register compute tools
     from .compute_tools import create_compute_tools
+
     router.register_many(create_compute_tools())
+
+    # Register workspace tools
+    from .workspace_tools import create_workspace_tools
+
+    router.register_many(create_workspace_tools())
 
     # Register sandbox tools if manager provided
     if sandbox_manager:
         from .sandbox_tools import create_sandbox_tools
+
         router.register_many(create_sandbox_tools(sandbox_manager))
 
     return router

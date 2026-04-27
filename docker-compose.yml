@@ -71,6 +71,7 @@ services:
       - backend-venv:/app/backend/.venv
       - ./frontend/dist:/app/frontend/dist
       - ./.keys:/app/.keys
+      - workspaces:/app/.workspaces
 
   # Worker with auto-restart on code changes
   worker:
@@ -105,6 +106,7 @@ services:
       - ./backend:/app/backend
       - backend-venv:/app/backend/.venv
       - ./.keys:/app/.keys
+      - workspaces:/app/.workspaces
 
   # Docs site with live reload
   docs:
@@ -122,3 +124,4 @@ volumes:
   redisdata:
   backend-venv:
   docs-node-modules:
+  workspaces:       # Project workspaces — persists across container rebuilds

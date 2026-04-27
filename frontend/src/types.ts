@@ -81,6 +81,30 @@ export interface QuestionsPayload {
   suggest_mode?: string | null;
 }
 
+// ── Projects ────────────────────────────────────────────
+
+export interface Project {
+  id: number;
+  uuid: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  workspace_path: string | null;
+  status: 'active' | 'archived';
+  settings: Record<string, any>;
+  conversation_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FileNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number | null;
+  modified: number;
+}
+
 // ── Task Plan & Resources ───────────────────────────────
 
 export interface PlanTask {
