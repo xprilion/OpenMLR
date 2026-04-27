@@ -47,6 +47,7 @@ backend/openmlr/db/migrations/versions/*.py
 site/node_modules/
 site/docs/.vitepress/dist/
 site/docs/.vitepress/cache/
+site/docs/changelog.md
 
 # Misc
 tmp/
