@@ -24,6 +24,20 @@ install-backend: ## Install Python backend dependencies
 install-frontend: ## Install frontend dependencies
 	cd $(FRONTEND) && pnpm install
 
+# ─── Git Hooks ────────────────────────────────────────────
+
+.PHONY: hooks
+hooks: ## Install pre-commit hooks (ruff + eslint)
+	cd $(BACKEND) && uv run pre-commit install
+
+.PHONY: hooks-run
+hooks-run: ## Run all pre-commit hooks on entire repo
+	cd $(BACKEND) && uv run pre-commit run --all-files
+
+.PHONY: hooks-update
+hooks-update: ## Update pre-commit hook versions
+	cd $(BACKEND) && uv run pre-commit autoupdate
+
 # ─── Development ──────────────────────────────────────────
 
 .PHONY: dev

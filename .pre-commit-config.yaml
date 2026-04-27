@@ -1,0 +1,26 @@
+# Pre-commit hooks for OpenMLR
+# Install: make hooks
+# Run manually: make hooks-run
+
+repos:
+  # ── Backend (Python) ── ruff linter + formatter ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        name: ruff lint (backend)
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        name: ruff format (backend)
+        files: ^backend/
+
+  # ── Frontend (TypeScript/React) ── eslint ──
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint (frontend)
+        entry: bash -c 'cd frontend && npx eslint --max-warnings 50 "$@"' --
+        language: system
+        files: ^frontend/src/.*\.(ts|tsx)$
+        types: [file]

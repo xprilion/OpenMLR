@@ -67,6 +67,7 @@ dev-dependencies = [
     "aiosqlite>=0.20.0",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
+    "pre-commit>=4.0.0",
 ]
 
 [tool.ruff]
