@@ -234,26 +234,29 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-2 pt-3 border-t border-border">
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-          onClick={() => navigate('/settings')} 
-          title="Settings"
-        >
-          <Settings size={18} />
-        </button>
-        {user && (
-          <span className="flex-1 truncate text-sm text-text-dim" title={user.username}>
-            {user.display_name || user.username}
-          </span>
-        )}
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-error transition-colors"
-          onClick={() => { setToken(null); window.location.reload(); }} 
-          title="Sign out"
-        >
-          <LogOut size={18} />
-        </button>
+      <div className="pt-3 border-t border-border flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <button 
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+            onClick={() => navigate('/settings')} 
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
+          {user && (
+            <span className="flex-1 truncate text-sm text-text-dim" title={user.username}>
+              {user.display_name || user.username}
+            </span>
+          )}
+          <button 
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-error transition-colors"
+            onClick={() => { setToken(null); window.location.reload(); }} 
+            title="Sign out"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+        <span className="text-[11px] text-text-dim px-2">v{__APP_VERSION__}</span>
       </div>
 
       {pendingDelete && (

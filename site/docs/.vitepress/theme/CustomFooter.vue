@@ -1,11 +1,13 @@
 <script setup lang="ts">
+declare const __APP_VERSION__: string;
+const version = __APP_VERSION__;
 </script>
 
 <template>
   <footer class="custom-footer">
     <div class="custom-footer-container">
       <div class="footer-left">
-        <div class="footer-name">OpenMLR</div>
+        <div class="footer-name">OpenMLR <span class="footer-version">v{{ version }}</span></div>
         <div class="footer-copyright">Copyright © 2025 Anubhav Singh. Released under the MIT License.</div>
       </div>
       <div class="footer-right">
@@ -42,6 +44,12 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--vp-c-text-1);
+}
+
+.footer-version {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--vp-c-text-3);
 }
 
 .footer-copyright {

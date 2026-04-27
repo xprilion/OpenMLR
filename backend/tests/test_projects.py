@@ -144,7 +144,9 @@ class TestProjectRoutes:
         resp = await auth_client.get("/api/projects")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["projects"]) == 2
+        # The endpoint auto-creates a default project, so filter it out
+        non_default = [p for p in data["projects"] if not p.get("is_default")]
+        assert len(non_default) == 2
 
     async def test_get_project_api(self, auth_client):
         create_resp = await auth_client.post("/api/projects", json={"name": "Get Me"})

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .config import load_config
 from .db.engine import engine
 from .db.models import Base
@@ -55,7 +56,7 @@ _DEV_MODE = os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
 app = FastAPI(
     title="OpenMLR",
     description="ML research intern — reads papers, trains models, writes papers",
-    version="0.3.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url="/docs" if _DEV_MODE else None,
     redoc_url="/redoc" if _DEV_MODE else None,

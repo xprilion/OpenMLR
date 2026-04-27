@@ -7,9 +7,60 @@ BACKEND       := backend
 FRONTEND      := frontend
 PORT          ?= 3000
 DOCKER_USER   ?= xprilion
-VERSION       ?= 0.3.0
+VERSION       := $(shell cat VERSION 2>/dev/null || echo 0.0.0)
 DOCKER_COMPOSE := docker compose
 LOGO_SRC      := assets/full-logo.png
+
+# ─── Versioning ───────────────────────────────────────────
+# Single source of truth: VERSION file at repo root.
+# Bump targets compute the new version, write it, then sync everywhere.
+
+MAJOR := $(word 1,$(subst ., ,$(VERSION)))
+MINOR := $(word 2,$(subst ., ,$(VERSION)))
+PATCH := $(word 3,$(subst ., ,$(VERSION)))
+
+.PHONY: version
+version: ## Print current version
+	@echo $(VERSION)
+
+.PHONY: version-major
+version-major: ## Bump major version (e.g. 0.3.1 -> 1.0.0)
+	@NEW=$$(( $(MAJOR) + 1 )).0.0; \
+	echo "$$NEW" > VERSION; \
+	$(MAKE) _version-sync; \
+	echo "Version bumped: $(VERSION) -> $$NEW"
+
+.PHONY: version-minor
+version-minor: ## Bump minor version (e.g. 0.3.1 -> 0.4.0)
+	@NEW=$(MAJOR).$$(( $(MINOR) + 1 )).0; \
+	echo "$$NEW" > VERSION; \
+	$(MAKE) _version-sync; \
+	echo "Version bumped: $(VERSION) -> $$NEW"
+
+.PHONY: version-patch
+version-patch: ## Bump patch version (e.g. 0.3.0 -> 0.3.1)
+	@NEW=$(MAJOR).$(MINOR).$$(( $(PATCH) + 1 )); \
+	echo "$$NEW" > VERSION; \
+	$(MAKE) _version-sync; \
+	echo "Version bumped: $(VERSION) -> $$NEW"
+
+.PHONY: version-set
+version-set: ## Set explicit version (V=1.2.3)
+	@if [ -z "$(V)" ]; then echo "Usage: make version-set V=1.2.3"; exit 1; fi
+	@echo "$(V)" > VERSION
+	@$(MAKE) _version-sync
+	@echo "Version set: $(VERSION) -> $(V)"
+
+.PHONY: _version-sync
+_version-sync: # (internal) propagate VERSION file to all project files
+	$(eval NEW_VERSION := $(shell cat VERSION))
+	@# backend/pyproject.toml
+	@sed -i '' 's/^version = ".*"/version = "$(NEW_VERSION)"/' $(BACKEND)/pyproject.toml
+	@# package.json (root)
+	@sed -i '' 's/"version": ".*"/"version": "$(NEW_VERSION)"/' package.json
+	@# frontend/package.json
+	@sed -i '' 's/"version": ".*"/"version": "$(NEW_VERSION)"/' $(FRONTEND)/package.json
+	@echo "Synced version $(NEW_VERSION) to all project files"
 
 # ─── Setup ────────────────────────────────────────────────
 

@@ -1,6 +1,8 @@
 import { defineConfig } from "vitepress";
-import { copyFileSync } from "fs";
-import { join } from "path";
+import { copyFileSync, readFileSync } from "fs";
+import { join, resolve } from "path";
+
+const version = readFileSync(resolve(__dirname, "../../..", "VERSION"), "utf-8").trim();
 
 export default defineConfig({
   title: "OpenMLR",
@@ -102,6 +104,12 @@ export default defineConfig({
         console.warn(`Could not copy ${doc}.md:`, e);
       }
     }
+  },
+
+  vite: {
+    define: {
+      __APP_VERSION__: JSON.stringify(version),
+    },
   },
 
   themeConfig: {
