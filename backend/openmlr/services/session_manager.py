@@ -86,11 +86,13 @@ class SessionManager:
 
         session = Session(config=config, conversation_id=conversation_id)
 
+        # Import here (not at module level) to avoid circular imports
+        from ..db import operations as ops
+
         # Determine effective compute node
         effective_node = None
         if user_id and db:
             try:
-                from ..db import operations as ops
                 # Check conversation override
                 conv = await ops.get_conversation_by_id(db, conversation_id)
                 if conv and conv.extra:
@@ -130,7 +132,6 @@ class SessionManager:
         # Load MCP servers from user settings if available
         if user_id and db:
             try:
-                from ..db import operations as ops
                 user_settings = await ops.get_all_settings(db, user_id, category="mcp")
                 mcp_settings = user_settings.get("mcp", {})
                 mcp_servers = mcp_settings.get("servers", {})
