@@ -54,8 +54,14 @@ version-set: ## Set explicit version (V=1.2.3)
 .PHONY: _version-sync
 _version-sync: # (internal) propagate VERSION file to all project files
 	$(eval NEW_VERSION := $(shell cat VERSION))
+	@# backend/openmlr/__init__.py
+	@sed -i '' 's/^__version__ = ".*"/__version__ = "$(NEW_VERSION)"/' $(BACKEND)/openmlr/__init__.py
 	@# backend/pyproject.toml
 	@sed -i '' 's/^version = ".*"/version = "$(NEW_VERSION)"/' $(BACKEND)/pyproject.toml
+	@# frontend/src/version.ts
+	@sed -i '' 's/^export const APP_VERSION = ".*"/export const APP_VERSION = "$(NEW_VERSION)"/' $(FRONTEND)/src/version.ts
+	@# site/docs/.vitepress/version.ts
+	@sed -i '' 's/^export const APP_VERSION = ".*"/export const APP_VERSION = "$(NEW_VERSION)"/' site/docs/.vitepress/version.ts
 	@# package.json (root)
 	@sed -i '' 's/"version": ".*"/"version": "$(NEW_VERSION)"/' package.json
 	@# frontend/package.json

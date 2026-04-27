@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setToken } from '../api';
 import type { Conversation, User, Project } from '../types';
+import { APP_VERSION } from '../version';
 import { ConfirmDialog } from './ConfirmDialog';
 import { 
   PanelLeftClose, 
@@ -256,7 +257,7 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
             <LogOut size={18} />
           </button>
         </div>
-        <span className="text-[11px] text-text-dim px-2">v{__APP_VERSION__}</span>
+        <span className="text-[11px] text-text-dim px-2">v{APP_VERSION}</span>
       </div>
 
       {pendingDelete && (

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-declare const __APP_VERSION__: string;
-const version = __APP_VERSION__;
+import { APP_VERSION } from '../version';
+const version = APP_VERSION;
 </script>
 
 <template>
