@@ -385,7 +385,7 @@ async def upsert_paper_resource(
 async def upsert_resource(
     db: AsyncSession, conv_id: int,
     resource_id: str, title: str, resource_type: str,
-    content: str = None, url: str = None,
+    content: str | None = None, url: str | None = None,
 ) -> ConversationResource:
     """Create or update a resource by resource_id."""
     existing = await get_resource_by_id(db, resource_id)
@@ -478,7 +478,7 @@ async def update_job_status(
 
 # ---- User Settings ----
 
-async def get_user_settings(db: AsyncSession, user_id: int, category: str = None) -> dict:
+async def get_user_settings(db: AsyncSession, user_id: int, category: str | None = None) -> dict:
     """Get user settings as a dict. Optionally filter by category."""
     query = select(UserSetting).where(UserSetting.user_id == user_id)
     if category:
