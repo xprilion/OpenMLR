@@ -116,6 +116,11 @@ function ChatUI({
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
   currentConvUuidRef.current = currentConvUuid;
 
+  // Sequence counter to discard stale switchConv responses after rapid switching
+  const switchSeqRef = useRef(0);
+  // Timer ref so pending reload timeouts can be cleared on conversation switch
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Derived per-conversation processing state ─────────
   const currentStatus = currentConvUuid ? (convStatuses[currentConvUuid] || 'idle') : 'idle';
   const isProcessing = currentStatus === 'processing';
@@ -206,9 +211,15 @@ function ChatUI({
   }, []);
 
   const switchConv = async (uuid: string) => {
+    // Increment sequence counter; any in-flight switch with an older seq is stale
+    const seq = ++switchSeqRef.current;
+    // Cancel any pending reload timer from a previous conversation's job_complete
+    if (reloadTimerRef.current) { clearTimeout(reloadTimerRef.current); reloadTimerRef.current = null; }
     try {
       await api.switchConversation(uuid);
+      if (seq !== switchSeqRef.current) return; // stale — a newer switch started
       const data = await api.getConversation(uuid);
+      if (seq !== switchSeqRef.current) return; // stale — a newer switch started
       setCurrentConvUuid(uuid);
       // Only update model if conversation has one explicitly set; don't overwrite the user's sticky model
       if (data.conversation?.model) setModel(data.conversation.model);
@@ -238,13 +249,14 @@ function ChatUI({
       }) || []);
 
       // Load active compute for this conversation
-      await loadActiveCompute(uuid);
+      if (seq === switchSeqRef.current) await loadActiveCompute(uuid);
     } catch { /* */ }
   };
 
-  const handleSwitchConversation = async (uuid: string) => {
+  const handleSwitchConversation = (uuid: string) => {
+    // Only navigate; the routeUuid useEffect will trigger switchConv,
+    // avoiding the previous double-call race condition
     navigate(`/${uuid}`, { replace: true });
-    await switchConv(uuid);
   };
 
   const handleNewConversation = async () => {
@@ -292,6 +304,8 @@ function ChatUI({
   const reloadConversationMessages = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversation(uuid);
+      // Guard: only apply if this is still the active conversation
+      if (uuid !== currentConvUuidRef.current) return;
       if (data.messages) {
         setMessages(data.messages.map((m: any) => {
           if (m.role === 'tool') {
@@ -509,7 +523,7 @@ function ChatUI({
             setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Job failed: ${error}` }]);
           }
           if (status === 'completed' && uuid) {
-            setTimeout(() => reloadConversationMessages(uuid), 500);
+            reloadTimerRef.current = setTimeout(() => { reloadTimerRef.current = null; reloadConversationMessages(uuid); }, 500);
           }
         }
         loadConversations();
@@ -635,10 +649,11 @@ function ChatUI({
           
           <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
           {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
-          {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary) => { 
+          {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
             setQuestionsPayload(null); 
             setCurrentConvStatus('processing');
-            setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]); 
+            setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]);
+            if (switchToExecute) setInputMode('execute');
           }} onClose={() => setQuestionsPayload(null)} />}
           <InputArea 
             disabled={effectiveProcessing} 
@@ -702,8 +717,7 @@ export default function App() {
 
         {/* Protected routes */}
         <Route element={<AuthGuard onAuth={handleAuth} user={user} />}>
-          <Route path="/" element={<ChatUI user={user!} model={model} setModel={setModel} />} />
-          <Route path="/:uuid" element={<ChatUI user={user!} model={model} setModel={setModel} />} />
+          <Route path="/:uuid?" element={<ChatUI user={user!} model={model} setModel={setModel} />} />
           <Route path="/settings" element={<SettingsPage />}>
             <Route index element={<Navigate to="providers" replace />} />
             <Route path="providers" element={<ProvidersSettings />} />

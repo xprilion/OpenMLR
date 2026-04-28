@@ -25,6 +25,9 @@ class Session:
     # Cancellation
     _cancelled: asyncio.Event = field(default_factory=asyncio.Event)
 
+    # Mode tracking (plan/execute) — persists across approval continuations
+    current_mode: str = "plan"
+
     # Approval flow
     pending_approval: dict | None = None
 

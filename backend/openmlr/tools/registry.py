@@ -8,24 +8,28 @@ from ..agent.types import ToolSpec
 # Tools not listed are allowed in all modes
 MODE_TOOL_RESTRICTIONS = {
     "plan": {
-        # Plan mode: ask questions, create plans, read context — NO execution tools
+        # Plan mode: ask questions, create plans, read context — NO execution tools.
+        # Tool names here must EXACTLY match the registered ToolSpec.name values.
         "allowed": {
             "ask_user",
             "plan_tool",
-            # Read-only tools for gathering context
-            "read_file",
-            "list_dir",
-            "glob_files",
-            "grep_search",
+            # Read-only local filesystem access for gathering context
+            "read",
+            # Web / academic search
             "web_search",
             "papers",
-            "github_search",
+            # GitHub (read-only)
             "github_read_file",
-            "github_read_repo",
             "github_find_examples",
             "github_search_repos",
             "github_get_readme",
             "github_list_repos",
+            # Hugging Face (read-only model/dataset discovery)
+            "hf_search_models",
+            "hf_model_info",
+            "hf_search_datasets",
+            "hf_dataset_info",
+            "hf_read_file",
             # Compute planning (read-only / advisory)
             "compute_list",
             "compute_plan",
@@ -255,6 +259,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     # Import and register all built-in tools
     from .ask_user import create_ask_user_tool
     from .github import create_github_tools
+    from .huggingface import create_huggingface_tools
     from .local import create_local_tools
     from .papers import create_papers_tool
     from .plan import create_plan_tool
@@ -264,6 +269,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
 
     router.register_many(create_local_tools())
     router.register_many(create_github_tools())
+    router.register_many(create_huggingface_tools())
     router.register_many(create_search_tools())
     router.register(create_research_tool())
     router.register(create_plan_tool())

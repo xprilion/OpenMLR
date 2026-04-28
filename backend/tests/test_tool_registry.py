@@ -171,9 +171,9 @@ class TestModeFiltering:
         allowed, msg = router.is_tool_allowed("ask_user")
         assert allowed is True
 
-    async def test_plan_mode_allows_read_file(self, router):
+    async def test_plan_mode_allows_read(self, router):
         router.set_mode("plan")
-        allowed, msg = router.is_tool_allowed("read_file")
+        allowed, msg = router.is_tool_allowed("read")
         assert allowed is True
 
     async def test_execute_mode_blocks_ask_user(self, router):
@@ -229,8 +229,47 @@ class TestModeRestrictionsConfig:
     async def test_plan_allowed_includes_ask_user(self):
         assert "ask_user" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
 
-    async def test_plan_allowed_includes_read_file(self):
-        assert "read_file" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+    async def test_plan_allowed_includes_read_tool(self):
+        assert "read" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
 
     async def test_execute_blocked_includes_ask_user(self):
         assert "ask_user" in MODE_TOOL_RESTRICTIONS["execute"]["blocked"]
+
+    async def test_plan_allowed_includes_hf_tools(self):
+        plan_allowed = MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+        assert "hf_search_models" in plan_allowed
+        assert "hf_model_info" in plan_allowed
+        assert "hf_search_datasets" in plan_allowed
+        assert "hf_dataset_info" in plan_allowed
+        assert "hf_read_file" in plan_allowed
+
+    async def test_plan_allowed_includes_read(self):
+        """The local 'read' tool should be allowed in plan mode for context gathering."""
+        assert "read" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+
+    async def test_plan_blocks_execution_tools(self):
+        """Execution tools must NOT be in the plan allowlist."""
+        plan_allowed = MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+        assert "bash" not in plan_allowed
+        assert "write" not in plan_allowed
+        assert "edit" not in plan_allowed
+        assert "writing" not in plan_allowed
+        assert "research" not in plan_allowed
+        assert "sandbox_exec" not in plan_allowed
+        assert "sandbox_create" not in plan_allowed
+        assert "compute_select" not in plan_allowed
+        assert "compute_sync_up" not in plan_allowed
+        assert "compute_sync_down" not in plan_allowed
+
+    async def test_plan_allowlist_has_no_phantom_entries(self):
+        """Every entry in the plan allowlist must match a real registered tool."""
+        from openmlr.tools.registry import create_tool_router
+
+        router = create_tool_router()
+        plan_allowed = MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+        registered_names = set(router.tools.keys())
+        for tool_name in plan_allowed:
+            assert tool_name in registered_names, (
+                f"Plan allowlist contains phantom tool '{tool_name}' "
+                f"that is not registered in the ToolRouter"
+            )

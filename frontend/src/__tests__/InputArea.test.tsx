@@ -48,8 +48,8 @@ describe('InputArea', () => {
         {...defaultProps({ text: 'hello', onSend, onTextChange })}
       />,
     );
-    // Send button now uses Lucide icon and title attribute
-    const sendBtn = screen.getByTitle('Send message');
+    // Send button has mode-specific title
+    const sendBtn = screen.getByTitle('Send in Plan mode (Enter)');
     fireEvent.click(sendBtn);
     expect(onSend).toHaveBeenCalledWith('hello', 'plan');
     expect(onTextChange).toHaveBeenCalledWith('');
@@ -88,8 +88,34 @@ describe('InputArea', () => {
 
   it('empty text disables send button', () => {
     render(<InputArea {...defaultProps({ text: '' })} />);
-    const sendBtn = screen.getByTitle('Send message');
+    const sendBtn = screen.getByTitle('Send in Plan mode (Enter)');
     expect(sendBtn).toBeDisabled();
+  });
+
+  it('shows Send & Execute button in plan mode', () => {
+    render(<InputArea {...defaultProps({ text: 'test', mode: 'plan' })} />);
+    const execBtn = screen.getByTitle('Send & switch to Execute mode (Cmd+Enter)');
+    expect(execBtn).toBeInTheDocument();
+  });
+
+  it('Send & Execute button not shown in execute mode', () => {
+    render(<InputArea {...defaultProps({ text: 'test', mode: 'execute' })} />);
+    const execBtn = screen.queryByTitle('Send & switch to Execute mode (Cmd+Enter)');
+    expect(execBtn).toBeNull();
+  });
+
+  it('Send & Execute calls onSend with execute mode and switches', () => {
+    const onSend = vi.fn();
+    const onModeChange = vi.fn();
+    const onTextChange = vi.fn();
+    render(
+      <InputArea {...defaultProps({ text: 'do it', mode: 'plan', onSend, onModeChange, onTextChange })} />
+    );
+    const execBtn = screen.getByTitle('Send & switch to Execute mode (Cmd+Enter)');
+    fireEvent.click(execBtn);
+    expect(onModeChange).toHaveBeenCalledWith('execute');
+    expect(onSend).toHaveBeenCalledWith('do it', 'execute');
+    expect(onTextChange).toHaveBeenCalledWith('');
   });
 
   it('keyboard shortcut Cmd+M toggles from execute to plan', () => {

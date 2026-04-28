@@ -116,7 +116,7 @@ async def _async_process_message(
     # Build and set system prompt
     session.context_manager.system_prompt = build_system_prompt(
         tool_specs=tool_router.get_raw_specs(),
-        mode=mode or "general",
+        mode=mode if mode in ("plan", "execute") else "plan",
         username="user",
     )
 

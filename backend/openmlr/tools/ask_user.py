@@ -66,8 +66,8 @@ def create_ask_user_tool() -> ToolSpec:
                 },
                 "suggest_mode": {
                     "type": "string",
-                    "description": "If confident, suggest the user switch to this mode after answering (e.g. 'research', 'write')",
-                    "enum": ["research", "write"],
+                    "description": "If the plan is ready and the user should start executing, set this to 'execute' to suggest switching to Execute mode after answering.",
+                    "enum": ["execute"],
                 },
             },
             "required": ["questions"],
