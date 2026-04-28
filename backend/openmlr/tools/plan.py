@@ -124,6 +124,7 @@ async def _handle_plan(
                 {"title": t.get("title", ""), "status": t.get("status", "pending")} for t in tasks
             ]
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
+            _sync_session_plan(session, task_list)
             await _emit_plan(session, conv_id, db)
 
             # Auto-save plan as PLAN.md resource (pinned)
@@ -144,6 +145,7 @@ async def _handle_plan(
             ]
             task_list.append({"title": title, "status": "pending"})
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
+            _sync_session_plan(session, task_list)
             await _emit_plan(session, conv_id, db)
 
             # Update PLAN.md
@@ -164,7 +166,22 @@ async def _handle_plan(
             task = existing[task_index]
             old_status = task.status
 
-            # ENFORCEMENT: When starting a new task (in_progress), check if previous in_progress task has a report
+            # ── VALIDATION (all checks BEFORE any state changes) ──
+
+            # ENFORCEMENT: Completing a task requires a summary + generates a report
+            if status == "completed" and old_status != "completed":
+                if not summary:
+                    return (
+                        f"COMPLETION REQUIRES SUMMARY: To mark task {task_index} as completed, "
+                        f"you must provide a 'summary' of what was accomplished.\n\n"
+                        f"Example:\n"
+                        f"plan_tool(operation='update', task_index={task_index}, status='completed', "
+                        f"summary='Found 5 relevant papers on X technique...', "
+                        f"next_hints='Review paper Y for implementation details')"
+                    ), False
+
+            # ENFORCEMENT: When starting a new task (in_progress), the previous
+            # in_progress task must be completed/cancelled with a report first.
             if status == "in_progress" and old_status != "in_progress":
                 in_progress_tasks = [i for i, t in enumerate(existing) if t.status == "in_progress"]
                 if in_progress_tasks:
@@ -177,34 +194,31 @@ async def _handle_plan(
                     )
                     if not has_report:
                         return (
-                            f"⚠️ WORKFLOW VIOLATION: Cannot start task {task_index} while task {prev_idx} "
-                            f"('{prev_task.title}') is still in progress.\n\n"
+                            f"WORKFLOW VIOLATION: Cannot start task {task_index} while task {prev_idx} "
+                            f"('{prev_task.title}') is still in progress without a completion report.\n\n"
                             f"You must either:\n"
                             f"1. Complete task {prev_idx} first with status='completed', summary, and next_hints\n"
                             f"2. Cancel task {prev_idx} if it's no longer needed\n\n"
                             f"This ensures a completion report is generated before moving on."
                         ), False
 
-            # Update status
+            # ── STATE UPDATE (validation passed — persist changes) ──
+
             task_list = [
                 {"title": t.title, "status": t.status, "priority": t.priority} for t in existing
             ]
             task_list[task_index]["status"] = status
             await ops.upsert_conversation_tasks(db, conv_id, task_list)
+            _sync_session_plan(session, task_list)
             await _emit_plan(session, conv_id, db)
 
-            # ENFORCEMENT: Completing a task requires a summary
-            if status == "completed" and old_status != "completed":
-                if not summary:
-                    return (
-                        f"⚠️ COMPLETION REQUIRES SUMMARY: To mark task {task_index} as completed, "
-                        f"you must provide a 'summary' of what was accomplished.\n\n"
-                        f"Example:\n"
-                        f"plan_tool(operation='update', task_index={task_index}, status='completed', "
-                        f"summary='Found 5 relevant papers on X technique...', "
-                        f"next_hints='Review paper Y for implementation details')"
-                    ), False
+            # Update PLAN.md to reflect new status
+            plan_md = _generate_plan_md(task_list)
+            await ops.upsert_plan_resource(db, conv_id, plan_md)
 
+            # ── POST-UPDATE: Generate completion report if task was completed ──
+
+            if status == "completed" and old_status != "completed":
                 report = _generate_completion_report(task.title, summary, next_hints)
                 report_id = f"report-{task_index}-{len(existing)}"
 
@@ -224,9 +238,18 @@ async def _handle_plan(
                     result += f"\nHints for next tasks: {next_hints}"
                 return result, True
 
+            await _emit_resources(session, conv_id, db)
             return await _format_plan(db, conv_id), True
 
         elif operation == "get":
+            # Sync session plan state on read (lazy load for enforcement)
+            existing = await ops.get_conversation_tasks(db, conv_id)
+            if existing:
+                task_list = [
+                    {"title": t.title, "status": t.status, "priority": t.priority} for t in existing
+                ]
+                _sync_session_plan(session, task_list)
+
             result = await _format_plan(db, conv_id)
             # Include any next_hints from recent reports for context
             resources = await ops.get_conversation_resources(db, conv_id)
@@ -265,6 +288,13 @@ async def _handle_plan(
             return f"Added resource: {title}", True
 
     return f"Unknown operation: {operation}", False
+
+
+def _sync_session_plan(session, task_list: list[dict]) -> None:
+    """Update the session's cached plan state for tool enforcement."""
+    if session:
+        session.plan_tasks = task_list
+        session._plan_loaded = True
 
 
 async def get_report_content(report_id: str) -> str | None:

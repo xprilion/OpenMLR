@@ -37,6 +37,10 @@ class Session:
     # Sandbox reference
     sandbox: Any | None = None
 
+    # Plan task state (cached for tool enforcement — updated by plan_tool)
+    plan_tasks: list[dict] | None = None  # None = not loaded yet
+    _plan_loaded: bool = False  # True once we've checked DB or plan_tool ran
+
     # Turn counter (for title generation etc.)
     turn_count: int = 0
 
