@@ -113,6 +113,26 @@ async def _async_process_message(
     sandbox_manager = SandboxManager()
     tool_router = create_tool_router(sandbox_manager)
 
+    # Resolve project workspace for workspace tools and local tools
+    async with worker_session() as db:
+        try:
+            conv = await ops.get_conversation_by_id(db, conversation_id)
+            if conv and conv.project_id:
+                from ..db.operations import get_project_by_id
+
+                project = await get_project_by_id(db, conv.project_id)
+                if project and project.workspace_path:
+                    from ..tools.local import set_project_workspace
+                    from ..tools.workspace_tools import set_workspace_context
+
+                    set_workspace_context(project.workspace_path)
+                    set_project_workspace(project.workspace_path)
+                    logger.info(
+                        f"Worker job {job_id}: workspace context set to {project.workspace_path}"
+                    )
+        except Exception as e:
+            logger.warning(f"Worker job {job_id}: failed to resolve project workspace - {e}")
+
     # Build and set system prompt
     session.context_manager.system_prompt = build_system_prompt(
         tool_specs=tool_router.get_raw_specs(),

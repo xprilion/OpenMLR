@@ -124,6 +124,14 @@ export interface Resource {
   content?: string;
 }
 
+// ── TODO Approval ───────────────────────────────────────
+
+export interface TodoApprovalPayload {
+  change_type: 'create' | 'add';
+  proposed_tasks: Array<{ title: string; status: string; priority?: string }>;
+  current_tasks: Array<{ title: string; status: string; priority?: string }>;
+}
+
 // ── Context & Budget ────────────────────────────────────
 
 export interface ContextUsage {

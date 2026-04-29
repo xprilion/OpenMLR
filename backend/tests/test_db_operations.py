@@ -28,9 +28,22 @@ class TestConversationOperations:
         convs = await ops.get_conversations(db_session, test_user.id)
         assert convs == []
 
-    async def test_get_conversations(self, db_session: AsyncSession, test_user):
-        await ops.create_conversation(db_session, test_user.id, title="Conv 1")
-        await ops.create_conversation(db_session, test_user.id, title="Conv 2")
+    async def test_get_conversations_excludes_orphans(self, db_session: AsyncSession, test_user):
+        """Conversations without a project_id should not be returned."""
+        # Create orphan conversation (no project)
+        await ops.create_conversation(db_session, test_user.id, title="Orphan")
+        convs = await ops.get_conversations(db_session, test_user.id)
+        assert len(convs) == 0  # Orphans are filtered out
+
+    async def test_get_conversations_with_project(self, db_session: AsyncSession, test_user):
+        """Conversations with a project_id should be returned."""
+        project = await ops.create_project(db_session, test_user.id, "Test Project", "test-project")
+        await ops.create_conversation(
+            db_session, test_user.id, title="Conv 1", project_id=project.id
+        )
+        await ops.create_conversation(
+            db_session, test_user.id, title="Conv 2", project_id=project.id
+        )
         convs = await ops.get_conversations(db_session, test_user.id)
         assert len(convs) == 2
         assert convs[0].title == "Conv 2"  # most recent first
@@ -94,8 +107,16 @@ class TestConversationOperations:
         db_session.add(user2)
         await db_session.flush()
 
-        await ops.create_conversation(db_session, test_user.id, title="User 1 Conv")
-        await ops.create_conversation(db_session, user2.id, title="User 2 Conv")
+        # Both users need projects for conversations to be visible
+        proj1 = await ops.create_project(db_session, test_user.id, "P1", "p1")
+        proj2 = await ops.create_project(db_session, user2.id, "P2", "p2")
+
+        await ops.create_conversation(
+            db_session, test_user.id, title="User 1 Conv", project_id=proj1.id
+        )
+        await ops.create_conversation(
+            db_session, user2.id, title="User 2 Conv", project_id=proj2.id
+        )
 
         convs_u1 = await ops.get_conversations(db_session, test_user.id)
         convs_u2 = await ops.get_conversations(db_session, user2.id)
@@ -103,6 +124,53 @@ class TestConversationOperations:
         assert len(convs_u2) == 1
         assert convs_u1[0].title == "User 1 Conv"
         assert convs_u2[0].title == "User 2 Conv"
+
+
+class TestDeleteOrphanConversations:
+    async def test_deletes_orphan_conversations(self, db_session: AsyncSession, test_user):
+        """Conversations with project_id=NULL should be deleted."""
+        await ops.create_conversation(db_session, test_user.id, title="Orphan 1")
+        await ops.create_conversation(db_session, test_user.id, title="Orphan 2")
+        count = await ops.delete_orphan_conversations(db_session, test_user.id)
+        assert count == 2
+
+    async def test_preserves_project_conversations(self, db_session: AsyncSession, test_user):
+        """Conversations with a project_id should NOT be deleted."""
+        proj = await ops.create_project(db_session, test_user.id, "P", "p")
+        await ops.create_conversation(
+            db_session, test_user.id, title="Has Project", project_id=proj.id
+        )
+        await ops.create_conversation(db_session, test_user.id, title="No Project")
+        count = await ops.delete_orphan_conversations(db_session, test_user.id)
+        assert count == 1
+        convs = await ops.get_conversations(db_session, test_user.id)
+        assert len(convs) == 1
+        assert convs[0].title == "Has Project"
+
+    async def test_no_orphans_returns_zero(self, db_session: AsyncSession, test_user):
+        count = await ops.delete_orphan_conversations(db_session, test_user.id)
+        assert count == 0
+
+
+class TestGetProjectWorkspaceForConversation:
+    async def test_returns_workspace_path(self, db_session: AsyncSession, test_user):
+        proj = await ops.create_project(
+            db_session, test_user.id, "P", "p", workspace_path="/tmp/test-ws"
+        )
+        conv = await ops.create_conversation(
+            db_session, test_user.id, title="C", project_id=proj.id
+        )
+        path = await ops.get_project_workspace_for_conversation(db_session, conv.id)
+        assert path == "/tmp/test-ws"
+
+    async def test_returns_none_for_orphan(self, db_session: AsyncSession, test_user):
+        conv = await ops.create_conversation(db_session, test_user.id, title="Orphan")
+        path = await ops.get_project_workspace_for_conversation(db_session, conv.id)
+        assert path is None
+
+    async def test_returns_none_for_nonexistent_conv(self, db_session: AsyncSession):
+        path = await ops.get_project_workspace_for_conversation(db_session, 9999)
+        assert path is None
 
 
 class TestMessageOperations:

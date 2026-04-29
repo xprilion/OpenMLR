@@ -217,6 +217,109 @@ class TestRunAgent:
         mock_session.emit.assert_any_call(AgentEvent(event_type="interrupted"))
 
 
+class TestAssistantMessagePersistence:
+    """Tests for Fix 1: assistant_message emitted for text + tool_calls.
+
+    These tests use a real Session object (not mocked) so the full
+    agent loop runs without MagicMock interaction issues.
+    """
+
+    async def test_emits_assistant_message_with_tool_calls(self, config):
+        """When LLM returns text AND tool calls, assistant_message should be emitted
+        so the text is persisted to the DB (not just held in memory)."""
+        session = Session(config=config)
+        session.config.stream = False
+        session.config.yolo_mode = True
+
+        router = MagicMock(spec=ToolRouter)
+        router.set_mode = MagicMock()
+        router.get_tool_specs_for_llm = MagicMock(return_value=[])
+        router.get_tool = MagicMock(return_value=None)
+        router.call_tool = AsyncMock(return_value=("search results", True))
+
+        tool_call = ToolCall(id="tc1", name="web_search", arguments={"query": "test"})
+
+        emitted = []
+        original_emit = session.emit
+
+        async def capture_emit(event):
+            emitted.append(event)
+
+        session.emit = capture_emit
+
+        with (
+            patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen,
+            patch("openmlr.agent.loop.detect_doom_loop", return_value=None),
+        ):
+            mock_gen.side_effect = [
+                LLMResult(
+                    content="Let me search for that.",
+                    tool_calls=[tool_call],
+                    finish_reason="tool_calls",
+                    usage={"total_tokens": 50},
+                ),
+                LLMResult(
+                    content="Here are the results.",
+                    tool_calls=[],
+                    finish_reason="stop",
+                    usage={"total_tokens": 80},
+                ),
+            ]
+            await _run_agent(session, router, "find papers")
+
+        assistant_msgs = [e for e in emitted if e.event_type == "assistant_message"]
+        assert len(assistant_msgs) >= 2
+        contents = [e.data["content"] for e in assistant_msgs]
+        assert "Let me search for that." in contents
+        assert "Here are the results." in contents
+
+    async def test_no_assistant_message_for_empty_text_with_tool_calls(self, config):
+        """When LLM returns empty text + tool calls, no assistant_message should be emitted."""
+        session = Session(config=config)
+        session.config.stream = False
+        session.config.yolo_mode = True
+
+        router = MagicMock(spec=ToolRouter)
+        router.set_mode = MagicMock()
+        router.get_tool_specs_for_llm = MagicMock(return_value=[])
+        router.get_tool = MagicMock(return_value=None)
+        router.call_tool = AsyncMock(return_value=("file contents", True))
+
+        tool_call = ToolCall(id="tc1", name="read", arguments={"path": "f.txt"})
+
+        emitted = []
+
+        async def capture_emit(event):
+            emitted.append(event)
+
+        session.emit = capture_emit
+
+        with (
+            patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen,
+            patch("openmlr.agent.loop.detect_doom_loop", return_value=None),
+        ):
+            mock_gen.side_effect = [
+                LLMResult(
+                    content="",
+                    tool_calls=[tool_call],
+                    finish_reason="tool_calls",
+                    usage={"total_tokens": 30},
+                ),
+                LLMResult(
+                    content="Done.",
+                    tool_calls=[],
+                    finish_reason="stop",
+                    usage={"total_tokens": 50},
+                ),
+            ]
+            await _run_agent(session, router, "read the file")
+
+        assistant_msgs = [e for e in emitted if e.event_type == "assistant_message"]
+        contents = [e.data["content"] for e in assistant_msgs]
+        assert "" not in contents
+        assert "Done." in contents
+
+
 class TestRunAgentTurn:
     async def test_delegates_to_run_agent(self, mock_session, mock_router):
         mock_session.context_manager.get_messages.return_value = []

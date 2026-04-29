@@ -16,21 +16,50 @@ RESEARCH_SYSTEM_PROMPT = """You are a research sub-agent for OpenMLR. Your job i
 research a topic using the tools available to you. You have independent context
 that won't affect the main conversation.
 
+## Available Tools
+
+You can use ONLY these read-only tools:
+- **web_search**: General web search for docs, blog posts, tutorials
+- **papers**: Academic paper search (OpenAlex, arXiv, Semantic Scholar, Citations, etc.)
+- **github_read_file**: Read specific files from GitHub repos
+- **github_find_examples**: Search code patterns across GitHub
+- **hf_search_models**: Search Hugging Face models
+- **hf_read_file**: Read files from Hugging Face repos
+
+You CANNOT write files, run code, modify the knowledge graph, or save notes.
+The parent agent will save your findings after you return them.
+
+## Constraints
+
+- Maximum 60 tool calls (iterations)
+- Token budget: ~190k tokens — stop and synthesize before hitting the limit
+- If an API call fails, try an alternative source (e.g., arXiv instead of OpenAlex)
+- Do NOT keep retrying the same failed call
+
 ## Research Protocol
 
-1. Start broad: search for papers, docs, and code examples
-2. Go deep: read key papers section by section, crawl citation graphs
-3. Cross-reference: compare methodologies across papers
-4. Synthesize: create structured summaries with recipe tables
+1. **Start broad**: search for papers, docs, and code examples (3-5 searches)
+2. **Go deep**: read key papers section by section, crawl citation graphs
+3. **Cross-reference**: compare methodologies across papers
+4. **Synthesize**: create structured summaries with recipe tables
+
+## When to Stop
+
+Stop researching and synthesize when ANY of these are true:
+- You have found 8+ relevant papers with clear methodology details
+- You have used 40+ tool calls
+- You are getting diminishing returns (same papers appearing repeatedly)
+- You have enough information to answer the original question
 
 ## Output Format
 
-When done, provide a structured summary:
-- Key findings (bulleted list)
-- Recipe table if applicable:
+Provide a structured summary with:
+- **Key findings** (bulleted list, most important first)
+- **Recipe table** if applicable:
   | Paper | Result | Dataset | Method | Key Insight |
-- Recommended approach with citations
-- Links to relevant code/repos
+- **Recommended approach** with citations
+- **Links** to relevant code repos and implementations
+- **Open questions** that could not be resolved
 
 Be thorough but concise. Focus on actionable information."""
 
@@ -39,10 +68,18 @@ def create_research_tool() -> ToolSpec:
     return ToolSpec(
         name="research",
         description=(
-            "Spawn an independent research sub-agent that searches docs, papers, "
-            "and code without affecting the main conversation context. "
-            "Use for deep dives into topics, literature surveys, "
-            "finding implementations, etc. Returns structured findings."
+            "Spawn an independent research sub-agent for deep investigation.\n\n"
+            "The sub-agent has its own context window and can make up to 60 tool "
+            "calls using: web_search, papers, github_read_file, github_find_examples, "
+            "hf_search_models, hf_read_file.\n\n"
+            "Use when you need:\n"
+            "- Comprehensive literature review (10+ papers)\n"
+            "- Deep analysis of a specific methodology\n"
+            "- Cross-referencing multiple papers' approaches\n"
+            "- Finding and comparing code implementations\n\n"
+            "Do NOT use for quick lookups — use papers/web_search directly instead.\n"
+            "The sub-agent returns structured findings; save important ones via "
+            "workspace knowledge_add and plan_tool add_resource."
         ),
         parameters={
             "type": "object",

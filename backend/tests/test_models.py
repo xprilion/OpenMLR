@@ -71,12 +71,21 @@ class TestConversationCreate:
         assert c.title == "New conversation"
         assert c.model is None
         assert c.mode == "general"
+        assert c.project_uuid is None
 
     def test_custom(self):
         c = ConversationCreate(title="Research Q1", model="gpt-4o", mode="research")
         assert c.title == "Research Q1"
         assert c.model == "gpt-4o"
         assert c.mode == "research"
+
+    def test_with_project_uuid(self):
+        c = ConversationCreate(title="Test", project_uuid="abc-123-def")
+        assert c.project_uuid == "abc-123-def"
+
+    def test_project_uuid_defaults_to_none(self):
+        c = ConversationCreate()
+        assert c.project_uuid is None
 
 
 class TestConversationResponse:

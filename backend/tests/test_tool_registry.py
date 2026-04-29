@@ -1,8 +1,13 @@
-"""Tests for ToolRouter — registration, dispatch, mode filtering."""
+"""Tests for ToolRouter — registration, dispatch, mode filtering, research budget."""
 
 import pytest
 
-from openmlr.tools.registry import MODE_TOOL_RESTRICTIONS, ToolRouter
+from openmlr.tools.registry import (
+    _PLAN_RESEARCH_LIMIT,
+    _RESEARCH_TOOLS,
+    MODE_TOOL_RESTRICTIONS,
+    ToolRouter,
+)
 
 pytestmark = pytest.mark.asyncio
 from openmlr.agent.types import ToolSpec
@@ -273,3 +278,107 @@ class TestModeRestrictionsConfig:
                 f"Plan allowlist contains phantom tool '{tool_name}' "
                 f"that is not registered in the ToolRouter"
             )
+
+
+class TestPlanModeResearchBudget:
+    """Tests for the plan-mode research call budget and warning system."""
+
+    async def test_research_tools_constant_not_empty(self):
+        assert len(_RESEARCH_TOOLS) > 0
+        assert "web_search" in _RESEARCH_TOOLS
+        assert "papers" in _RESEARCH_TOOLS
+
+    async def test_budget_limit_positive(self):
+        assert _PLAN_RESEARCH_LIMIT > 0
+
+    async def test_counter_resets_on_mode_switch(self, router):
+        router.set_mode("plan")
+        router._plan_research_calls = 10
+        router.set_mode("execute")
+        assert router._plan_research_calls == 0
+
+    async def test_counter_not_reset_on_same_mode(self, router):
+        router.set_mode("plan")
+        router._plan_research_calls = 5
+        router.set_mode("plan")
+        assert router._plan_research_calls == 5
+
+    async def test_research_call_increments_counter(self, router):
+        """Calling a research tool in plan mode increments the counter."""
+
+        async def research_handler(**kwargs):
+            return "results", True
+
+        research_tool = ToolSpec(
+            name="web_search",
+            description="Search",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("plan")
+        assert router._plan_research_calls == 0
+
+        await router.call_tool("web_search", {})
+        assert router._plan_research_calls == 1
+
+    async def test_budget_warning_appended_after_limit(self, router):
+        """After exceeding the limit, a warning should be appended to tool output."""
+
+        async def research_handler(**kwargs):
+            return "search results here", True
+
+        research_tool = ToolSpec(
+            name="papers",
+            description="Papers",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("plan")
+        router._plan_research_calls = _PLAN_RESEARCH_LIMIT  # at limit
+
+        output, success = await router.call_tool("papers", {})
+        assert success is True
+        assert "PLAN MODE RESEARCH BUDGET" in output
+        assert "search results here" in output
+
+    async def test_no_warning_under_limit(self, router):
+        """Under the limit, no warning should be appended."""
+
+        async def research_handler(**kwargs):
+            return "search results here", True
+
+        research_tool = ToolSpec(
+            name="papers",
+            description="Papers",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("plan")
+        router._plan_research_calls = 0
+
+        output, success = await router.call_tool("papers", {})
+        assert success is True
+        assert "PLAN MODE RESEARCH BUDGET" not in output
+
+    async def test_no_budget_tracking_in_execute_mode(self, router):
+        """Research budget should not apply in execute mode."""
+
+        async def research_handler(**kwargs):
+            return "results", True
+
+        research_tool = ToolSpec(
+            name="web_search",
+            description="Search",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("execute")
+        router._plan_research_calls = 100  # way over limit
+
+        output, success = await router.call_tool("web_search", {})
+        assert success is True
+        assert "PLAN MODE RESEARCH BUDGET" not in output

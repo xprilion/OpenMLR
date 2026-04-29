@@ -34,6 +34,9 @@ class Session:
     # Question/answer flow (ask_user tool)
     pending_answers: Any | None = None
 
+    # TODO approval flow (plan_tool in execute mode)
+    pending_todo_approval: Any | None = None
+
     # Sandbox reference
     sandbox: Any | None = None
 

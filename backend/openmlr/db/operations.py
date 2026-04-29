@@ -172,12 +172,33 @@ async def create_conversation(
 
 
 async def get_conversations(db: AsyncSession, user_id: int) -> list[Conversation]:
+    """Return all conversations for a user that belong to a project."""
     result = await db.execute(
         select(Conversation)
-        .where(Conversation.user_id == user_id)
+        .where(Conversation.user_id == user_id, Conversation.project_id.isnot(None))
         .order_by(Conversation.updated_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def delete_orphan_conversations(db: AsyncSession, user_id: int) -> int:
+    """Delete conversations with no project (project_id IS NULL).
+
+    Returns the count of deleted conversations. Messages, tasks, resources,
+    and jobs cascade-delete via the FK constraints.
+    """
+    result = await db.execute(
+        select(Conversation).where(
+            Conversation.user_id == user_id, Conversation.project_id.is_(None)
+        )
+    )
+    orphans = list(result.scalars().all())
+    count = len(orphans)
+    for conv in orphans:
+        await db.delete(conv)
+    if count > 0:
+        await db.commit()
+    return count
 
 
 async def get_conversation_by_id(db: AsyncSession, conv_id: int) -> Conversation | None:
@@ -392,6 +413,20 @@ async def update_task_status(
         await db.commit()
         return True
     return False
+
+
+# ---- Workspace Path Helpers ----
+
+
+async def get_project_workspace_for_conversation(db: AsyncSession, conv_id: int) -> str | None:
+    """Resolve the project workspace path for a conversation (conv -> project -> workspace_path)."""
+    conv = await get_conversation_by_id(db, conv_id)
+    if not conv or not conv.project_id:
+        return None
+    project = await get_project_by_id(db, conv.project_id)
+    if not project:
+        return None
+    return project.workspace_path
 
 
 # ---- Conversation Resources ----

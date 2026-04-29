@@ -57,6 +57,24 @@ MODE_TOOL_RESTRICTIONS = {
 }
 
 
+# Tools that count as "research" for plan-mode budget tracking
+_RESEARCH_TOOLS = {
+    "web_search",
+    "papers",
+    "github_search_repos",
+    "github_find_examples",
+    "github_get_readme",
+    "github_read_file",
+    "github_list_repos",
+    "hf_search_models",
+    "hf_model_info",
+    "hf_search_datasets",
+    "hf_dataset_info",
+    "hf_read_file",
+}
+_PLAN_RESEARCH_LIMIT = 5  # warn after this many research calls in plan mode
+
+
 class ToolRouter:
     """Central tool registry and dispatcher."""
 
@@ -67,6 +85,7 @@ class ToolRouter:
         self._current_mode: str = "general"
         self._user_id: int | None = None
         self._db = None
+        self._plan_research_calls: int = 0
 
     def set_context(self, user_id: int | None = None, db=None) -> None:
         """Set per-request context (user_id, db) for tools that need them."""
@@ -86,6 +105,8 @@ class ToolRouter:
 
     def set_mode(self, mode: str) -> None:
         """Set the current operating mode for tool filtering."""
+        if mode != self._current_mode:
+            self._plan_research_calls = 0
         self._current_mode = mode
 
     def get_mode(self) -> str:
@@ -240,12 +261,36 @@ class ToolRouter:
                 )
                 return warning, False
 
+        # ENFORCEMENT: In plan mode, track research tool usage and warn if excessive.
+        if enforce_mode and self._current_mode == "plan" and name in _RESEARCH_TOOLS:
+            self._plan_research_calls += 1
+            if self._plan_research_calls > _PLAN_RESEARCH_LIMIT:
+                logger.info(
+                    f"Plan-mode research budget exceeded ({self._plan_research_calls} calls)"
+                )
+
         # ENFORCEMENT: In execute mode, work tools require an in_progress task.
         # "Work tools" = anything NOT in the plan-mode allowed set (read-only tools).
         if enforce_mode and session and self._current_mode == "execute":
             violation = await self._check_task_enforcement(name, session)
             if violation:
                 return violation, False
+
+        # Prepare the plan-mode research budget warning (appended to output below)
+        _research_warning = ""
+        if (
+            enforce_mode
+            and self._current_mode == "plan"
+            and name in _RESEARCH_TOOLS
+            and self._plan_research_calls > _PLAN_RESEARCH_LIMIT
+        ):
+            _research_warning = (
+                f"\n\n[PLAN MODE RESEARCH BUDGET: You have made "
+                f"{self._plan_research_calls} research tool calls in Plan mode. "
+                f"This is getting excessive. Plan mode is for quick feasibility checks, "
+                f"not comprehensive research. Please add remaining research as tasks in "
+                f"the plan for Execute mode and finalize the plan now.]"
+            )
 
         tool = self.tools.get(name)
         if not tool:
@@ -267,7 +312,12 @@ class ToolRouter:
             if "db" in sig.parameters and "db" not in kwargs:
                 kwargs["db"] = self._db
             try:
-                return await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
+                output, success = (
+                    await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
+                )
+                if _research_warning:
+                    output += _research_warning
+                return output, success
             except TypeError as e:
                 # Handle argument mismatches (model sending wrong param names)
                 return (
@@ -279,7 +329,10 @@ class ToolRouter:
         if self._mcp_client:
             try:
                 result = await self._mcp_client.call_tool(name, arguments)
-                return _convert_mcp_content(result), True
+                output = _convert_mcp_content(result)
+                if _research_warning:
+                    output += _research_warning
+                return output, True
             except Exception as e:
                 return f"MCP tool error: {str(e)}", False
 

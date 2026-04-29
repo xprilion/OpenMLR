@@ -137,6 +137,31 @@ class SessionManager:
             conversation_uuid=uuid,
         )
 
+        # Resolve the project workspace path for workspace tools and local tools.
+        # If the conversation belongs to a project with a workspace_path, bind it.
+        project_workspace_path: str | None = None
+        if user_id and db:
+            try:
+                conv = await ops.get_conversation_by_id(db, conversation_id)
+                if conv and conv.project_id:
+                    project = await ops.get_project_by_id(db, conv.project_id)
+                    if project and project.workspace_path:
+                        project_workspace_path = project.workspace_path
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to resolve project workspace - {e}")
+
+        # Activate workspace tools (knowledge graph, notes, persistence)
+        # and local tools (read/write/edit/bash target the project directory)
+        if project_workspace_path:
+            from ..tools.local import set_project_workspace
+            from ..tools.workspace_tools import set_workspace_context
+
+            set_workspace_context(project_workspace_path)
+            set_project_workspace(project_workspace_path)
+            log.info(
+                f"Session {conversation_id}: workspace context set to {project_workspace_path}"
+            )
+
         # If a compute node is configured, activate it
         if effective_node:
             try:
@@ -224,8 +249,12 @@ class SessionManager:
             compute_env=compute_env,
         )
 
-        # Wire event broadcasting
+        # Wire event broadcasting — inject conversation_uuid so the frontend
+        # can filter events per conversation (mirrors the Celery path).
         async def _broadcast(event: AgentEvent):
+            if event.data is None:
+                event.data = {}
+            event.data["conversation_uuid"] = uuid
             await self.event_bus.broadcast(event)
 
         session.on_event(_broadcast)
@@ -256,6 +285,15 @@ class SessionManager:
                 try:
                     if not active.session.pending_answers.done():
                         active.session.pending_answers.cancel()
+                except Exception:
+                    pass
+            if (
+                hasattr(active.session, "pending_todo_approval")
+                and active.session.pending_todo_approval
+            ):
+                try:
+                    if not active.session.pending_todo_approval.done():
+                        active.session.pending_todo_approval.cancel()
                 except Exception:
                     pass
             try:

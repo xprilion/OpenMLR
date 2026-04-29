@@ -2,10 +2,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Copy, Check } from 'lucide-react';
 import { ComputeSelector } from './components/ComputeSelector';
+import { ProjectSelector } from './components/ProjectSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
-import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project } from './types';
+import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project, TodoApprovalPayload } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
@@ -15,6 +16,7 @@ import { LoginPage } from './components/LoginPage';
 import { QuestionDrawer } from './components/QuestionDrawer';
 import { RightPanel } from './components/RightPanel';
 import { ReportDrawer } from './components/ReportDrawer';
+import { TodoReviewDrawer } from './components/TodoReviewDrawer';
 import { AuthGuard } from './components/AuthGuard';
 import { OnboardingModal } from './components/OnboardingModal';
 import { Terminal } from './components/Terminal';
@@ -111,10 +113,15 @@ function ChatUI({
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showManageProjects, setShowManageProjects] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalConnected, setTerminalConnected] = useState(false);
+  const [todoApprovalPayload, setTodoApprovalPayload] = useState<TodoApprovalPayload | null>(null);
+  const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
 
-  // Ref to always have current conv UUID in SSE callback (avoids stale closure)
+  // Refs to always have current values in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
   currentConvUuidRef.current = currentConvUuid;
+  const activeProjectRef = useRef<Project | null>(activeProject);
+  activeProjectRef.current = activeProject;
 
   // Sequence counter to discard stale switchConv responses after rapid switching
   const switchSeqRef = useRef(0);
@@ -126,9 +133,17 @@ function ChatUI({
   const isProcessing = currentStatus === 'processing';
   const agentTurnActive = currentStatus !== 'idle';
 
-  const loadConversations = useCallback(async () => {
-    try { 
-      const data = await api.listConversations();
+  const loadConversations = useCallback(async (project?: Project | null) => {
+    // Use the ref value when called without args (from SSE callbacks etc.)
+    const proj = project !== undefined ? project : activeProjectRef.current;
+    try {
+      let data;
+      if (proj?.uuid) {
+        data = await api.listProjectConversations(proj.uuid);
+      } else {
+        // No project selected — return empty. All conversations must belong to a project.
+        return [];
+      }
       setConversations(data.conversations || []); 
       return data.conversations || [];
     } catch { 
@@ -163,11 +178,29 @@ function ChatUI({
     }
   }, []);
 
-  // Initial load - load conversations and activate the correct one
+  // Initial load - load projects first, then conversations for the active project
   useEffect(() => { 
     const init = async () => {
-      await Promise.all([loadComputeNodes(), loadProjects()]);
-      const convs = await loadConversations();
+      const [, projData] = await Promise.all([
+        loadComputeNodes(),
+        api.listProjects().catch(() => ({ projects: [] })),
+      ]);
+      const allProjects: Project[] = projData.projects || [];
+      setProjects(allProjects);
+
+      // If no projects exist, the user needs to create one.
+      // The OnboardingModal or ProjectModal will handle this — don't proceed.
+      if (allProjects.length === 0) {
+        setShowProjectModal(true);
+        return;
+      }
+
+      // Auto-select the first project if none is active
+      const proj = allProjects[0];
+      setActiveProject(proj);
+
+      // Load conversations for this project
+      const convs = await loadConversations(proj);
       
       // If URL has a conversation UUID, load it directly
       if (routeUuid) {
@@ -175,10 +208,10 @@ function ChatUI({
         return;
       }
       
-      // If no conversations exist, create one automatically
+      // If no conversations exist for this project, create one
       if (convs.length === 0) {
         try {
-          const data = await api.createConversation();
+          const data = await api.createConversation(undefined, undefined, undefined, proj.uuid);
           const conv = data.conversation;
           setConversations([conv]);
           setCurrentConvUuid(conv.uuid);
@@ -195,6 +228,25 @@ function ChatUI({
     };
     init();
   }, []);
+
+  // Reload conversations when activeProject changes and auto-select the first
+  useEffect(() => {
+    if (!activeProject) return;
+    loadConversations(activeProject).then((convs) => {
+      if (convs.length > 0) {
+        const first = convs[0];
+        setCurrentConvUuid(first.uuid);
+        navigate(`/${first.uuid}`, { replace: true });
+        switchConv(first.uuid);
+      } else {
+        // No conversations in this project — clear state
+        setCurrentConvUuid(null);
+        setMessages([]);
+        setTasks([]);
+        setResources([]);
+      }
+    });
+  }, [activeProject, loadConversations]);
 
   // Handle navigation to a different conversation via URL change
   useEffect(() => {
@@ -224,7 +276,7 @@ function ChatUI({
       // Only update model if conversation has one explicitly set; don't overwrite the user's sticky model
       if (data.conversation?.model) setModel(data.conversation.model);
       setContextUsage(null); setSearchBudget(null);
-      setApprovalEvent(null); setQuestionsPayload(null);
+      setApprovalEvent(null); setQuestionsPayload(null); setTodoApprovalPayload(null);
       
       // Load persisted tasks and resources from database
       setTasks(data.tasks?.map((t: any) => ({ title: t.title, status: t.status })) || []);
@@ -260,13 +312,17 @@ function ChatUI({
   };
 
   const handleNewConversation = async () => {
+    if (!activeProject) {
+      setShowProjectModal(true);
+      return;
+    }
     try {
-      const data = await api.createConversation();
+      const data = await api.createConversation(undefined, undefined, undefined, activeProject.uuid);
       const conv = data.conversation;
       setConversations((prev) => [conv, ...prev]);
       setCurrentConvUuid(conv.uuid);
       setMessages([]); setTasks([]); setResources([]); setContextUsage(null); setSearchBudget(null);
-      setApprovalEvent(null); setQuestionsPayload(null);
+      setApprovalEvent(null); setQuestionsPayload(null); setTodoApprovalPayload(null);
       if (conv.model) setModel(conv.model);
       // Load default compute for new conversation
       await loadActiveCompute(conv.uuid);
@@ -281,7 +337,7 @@ function ChatUI({
       setConvStatuses((prev) => { const n = { ...prev }; delete n[uuid]; return n; });
       if (currentConvUuid === uuid) {
         setCurrentConvUuid(null); setMessages([]); setTasks([]); setResources([]);
-        setApprovalEvent(null); setQuestionsPayload(null);
+        setApprovalEvent(null); setQuestionsPayload(null); setTodoApprovalPayload(null);
         setActiveCompute(null);
         navigate('/', { replace: true });
       }
@@ -483,11 +539,13 @@ function ChatUI({
         break;
       }
       case 'resources_update': setResources(data?.resources || []); setRightPanelOpen(true); break;
+      case 'workspace_files_changed': setFileTreeRefreshKey((k) => k + 1); break;
       case 'context_usage': if (data) setContextUsage(data as ContextUsage); break;
       case 'search_budget': if (data) setSearchBudget(data as SearchBudget); break;
       case 'approval_required': setApprovalEvent(event); setCurrentConvStatus('waiting_approval'); break;
+      case 'todo_approval_required': setTodoApprovalPayload(data as TodoApprovalPayload); setCurrentConvStatus('waiting_approval'); break;
       case 'turn_complete':
-        setApprovalEvent(null);
+        setApprovalEvent(null); setTodoApprovalPayload(null);
         setMessages((prev) => {
           const c = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
           const last = c[c.length - 1];
@@ -594,6 +652,13 @@ function ChatUI({
           />
         </div>
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+          <ProjectSelector
+            projects={projects}
+            activeProject={activeProject}
+            onSelectProject={setActiveProject}
+            onNewProject={() => setShowProjectModal(true)}
+            onManageProjects={() => setShowManageProjects(true)}
+          />
           <ComputeSelector
             currentNode={activeCompute}
             nodes={computeNodes}
@@ -609,18 +674,17 @@ function ChatUI({
         <Sidebar
           conversations={conversations} currentUuid={currentConvUuid} user={user}
           convStatuses={convStatuses}
-          projects={projects}
-          activeProject={activeProject}
+          terminalOpen={terminalOpen}
+          terminalConnected={terminalConnected}
+          terminalSessionCount={terminalOpen && terminalConnected ? 1 : 0}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
-          onSelectProject={setActiveProject}
-          onNewProject={() => setShowProjectModal(true)}
-          onManageProjects={() => setShowManageProjects(true)}
+          onTerminalToggle={() => setTerminalOpen((v) => !v)}
         />
         
         <div 
           className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200"
-          style={{ paddingRight: rightPanelOpen ? '288px' : undefined }}
+          style={{ paddingRight: rightPanelOpen ? '288px' : '48px' }}
         >
           {/* Empty state */}
           {messages.length === 0 && !effectiveProcessing && (
@@ -649,6 +713,10 @@ function ChatUI({
           
           <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
           {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
+          {todoApprovalPayload && <TodoReviewDrawer payload={todoApprovalPayload} onDone={() => { 
+            setTodoApprovalPayload(null); 
+            setCurrentConvStatus('processing');
+          }} onClose={() => { setTodoApprovalPayload(null); setCurrentConvStatus('idle'); }} />}
           {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
             setQuestionsPayload(null); 
             setCurrentConvStatus('processing');
@@ -668,7 +736,7 @@ function ChatUI({
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
       </div>
 
       {/* Terminal panel */}
@@ -676,10 +744,23 @@ function ChatUI({
         projectUuid={activeProject?.uuid || null}
         visible={terminalOpen}
         onToggle={() => setTerminalOpen((v) => !v)}
+        onConnectionChange={setTerminalConnected}
+        rightOffset={rightPanelOpen ? 288 : 48}
       />
       
       {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
-      {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={(p) => { setProjects((prev) => [p, ...prev]); setActiveProject(p); }} />}
+      {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={async (p) => { 
+        setProjects((prev) => [p, ...prev]); 
+        setActiveProject(p);
+        // Auto-create a first conversation in the new project
+        try {
+          const data = await api.createConversation(undefined, undefined, undefined, p.uuid);
+          const conv = data.conversation;
+          setConversations([conv]);
+          setCurrentConvUuid(conv.uuid);
+          navigate(`/${conv.uuid}`, { replace: true });
+        } catch { /* */ }
+      }} />}
       {showManageProjects && <ProjectManageModal projects={projects} onClose={() => setShowManageProjects(false)} onChanged={() => { loadProjects(); }} />}
     </div>
   );
@@ -703,9 +784,14 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  const handleOnboardingComplete = useCallback((selectedModel: string) => {
+  const handleOnboardingComplete = useCallback((selectedModel: string, project?: Project) => {
     setModel(selectedModel);
     setNeedsOnboarding(false);
+    // If onboarding created a project, reload to pick it up
+    if (project) {
+      // Force a full page reload to reinitialize with the new project
+      window.location.reload();
+    }
   }, []);
 
   return (

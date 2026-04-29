@@ -10,12 +10,16 @@ import {
   ChevronDown,
   RefreshCw,
   AlertCircle,
+  Pin,
+  ClipboardList,
+  BookOpen,
 } from 'lucide-react';
 import { api } from '../api';
 import type { FileNode } from '../types';
 
 interface Props {
   projectUuid: string;
+  refreshKey?: number;
   onFileSelect?: (path: string, content: string) => void;
 }
 
@@ -39,6 +43,16 @@ const FILE_ICONS: Record<string, React.ReactNode> = {
   '.jpg': <Image size={14} className="text-purple-400" />,
   '.svg': <Image size={14} className="text-purple-400" />,
 };
+
+/** Get a special badge/icon for generated resource files. */
+function getSpecialBadge(path: string, name: string): React.ReactNode | null {
+  if (name === 'PLAN.md') return <Pin size={10} className="text-primary" />;
+  if (path.includes('.project-meta/reports/') && name.endsWith('.md'))
+    return <ClipboardList size={10} className="text-success" />;
+  if (path.startsWith('papers/') && name.endsWith('.md') && !name.startsWith('.'))
+    return <BookOpen size={10} className="text-warning" />;
+  return null;
+}
 
 function getFileIcon(name: string, isDir: boolean): React.ReactNode {
   if (isDir) return null; // handled by folder icons
@@ -64,6 +78,8 @@ function TreeItem({
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
 }) {
+  const badge = getSpecialBadge(node.path, node.name);
+
   return (
     <div>
       <button
@@ -100,6 +116,9 @@ function TreeItem({
         {/* Name */}
         <span className="truncate flex-1">{node.name}</span>
 
+        {/* Special badge for generated resource files */}
+        {badge && <span className="shrink-0">{badge}</span>}
+
         {/* Size (for files) */}
         {!node.is_dir && node.size !== null && (
           <span className="text-xs text-text-dim shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -134,7 +153,7 @@ function TreeItem({
   );
 }
 
-export function FileTree({ projectUuid, onFileSelect }: Props) {
+export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +184,25 @@ export function FileTree({ projectUuid, onFileSelect }: Props) {
       setLoading(false);
     });
   }, [projectUuid, loadDirectory]);
+
+  // Auto-refresh when refreshKey changes (triggered by workspace_files_changed SSE event)
+  useEffect(() => {
+    if (refreshKey === undefined || refreshKey === 0) return;
+    // Refresh the root directory listing without showing full loading state
+    loadDirectory('').then((entries) => {
+      setNodes((prev) => {
+        // Merge: preserve expanded state of existing nodes
+        const prevMap = new Map(prev.map((n) => [n.path, n]));
+        return entries.map((entry) => {
+          const existing = prevMap.get(entry.path);
+          if (existing && existing.expanded && existing.children) {
+            return { ...entry, expanded: true, children: existing.children };
+          }
+          return entry;
+        });
+      });
+    });
+  }, [refreshKey, loadDirectory]);
 
   const handleToggle = useCallback(async (path: string) => {
     setNodes((prev) => {
@@ -284,7 +322,7 @@ export function FileTree({ projectUuid, onFileSelect }: Props) {
               onClick={() => { setSelectedFile(null); setFileContent(null); }}
               title="Close"
             >
-              ×
+              x
             </button>
           </div>
           {fileLoading ? (

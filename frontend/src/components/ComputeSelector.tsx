@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Cpu, ChevronDown, Monitor } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Cpu, ChevronDown, Monitor, Settings } from 'lucide-react';
 
 interface ComputeNode {
   id: number;
@@ -17,6 +18,7 @@ interface ComputeSelectorProps {
 export function ComputeSelector({ currentNode, nodes, onChange }: ComputeSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -98,6 +100,17 @@ export function ComputeSelector({ currentNode, nodes, onChange }: ComputeSelecto
               No compute nodes configured
             </div>
           )}
+
+          {/* Manage Compute link */}
+          <div className="border-t border-border mt-1">
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+              onClick={() => { navigate('/settings/compute'); setOpen(false); }}
+            >
+              <Settings size={14} />
+              Manage Compute
+            </button>
+          </div>
         </div>
       )}
     </div>

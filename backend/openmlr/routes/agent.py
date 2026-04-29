@@ -102,6 +102,9 @@ async def list_conversations(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Clean up orphan conversations (no project) on every list call.
+    # This handles the migration from pre-project-required era.
+    await ops.delete_orphan_conversations(db, user.id)
     convs = await ops.get_conversations(db, user.id)
     return {"conversations": [_conv_dict(c) for c in convs]}
 
@@ -113,12 +116,21 @@ async def create_conversation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Conversations must belong to a project
+    project_id = None
+    if body.project_uuid:
+        project = await ops.get_project_by_uuid(db, body.project_uuid, user.id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project_id = project.id
+
     conv = await ops.create_conversation(
         db,
         user.id,
         title=body.title,
         model=body.model,
         mode=body.mode,
+        project_id=project_id,
     )
     _sm(request).current_conversation_id = conv.id
     return {"conversation": _conv_dict(conv)}
@@ -365,12 +377,12 @@ async def send_message(
     user_default_model = user_agent_settings.get("default_model")
 
     if not sm.current_conversation_id:
-        # Create conversation with user's default model
-        conv = await ops.create_conversation(db, user.id, model=user_default_model)
-        sm.current_conversation_id = conv.id
-    else:
-        conv = await ops.get_conversation_by_id(db, sm.current_conversation_id)
+        raise HTTPException(
+            status_code=400,
+            detail="No active conversation. Create a conversation first.",
+        )
 
+    conv = await ops.get_conversation_by_id(db, sm.current_conversation_id)
     if not conv:
         raise HTTPException(status_code=400, detail="No active conversation")
 
@@ -592,6 +604,42 @@ async def submit_approval(
     return {"ok": True}
 
 
+@router.post("/todo-approval")
+async def submit_todo_approval(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Submit approval/rejection for proposed TODO list changes."""
+    body = await request.json()
+    approved = body.get("approved", False)
+    tasks = body.get("tasks")  # optional modified task list
+
+    result = {"approved": approved, "tasks": tasks}
+
+    # Try in-process session first (inline mode)
+    active = _sm(request).get_current_session()
+    if (
+        active
+        and hasattr(active.session, "pending_todo_approval")
+        and active.session.pending_todo_approval
+    ):
+        if not active.session.pending_todo_approval.done():
+            active.session.pending_todo_approval.set_result(result)
+            return {"ok": True}
+
+    # Publish to Redis for background job workers
+    try:
+        from ..services.redis_pubsub import publish_todo_approval
+
+        sm = _sm(request)
+        if sm.current_conversation_id:
+            await publish_todo_approval(sm.current_conversation_id, result)
+    except Exception as e:
+        logger.warning(f"Failed to relay todo approval via Redis: {e}")
+
+    return {"ok": True}
+
+
 @router.post("/undo")
 async def undo(request: Request, user: User = Depends(get_current_user)):
     active = _sm(request).get_current_session()
@@ -698,7 +746,7 @@ def _wire_persistence(active, db, conv_id: int):
                     },
                 )
         except Exception:
-            pass
+            logger.exception("Failed to persist message to DB (event_type=%s)", event.event_type)
 
     active.session.on_event(_persist)
 

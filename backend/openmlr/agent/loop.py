@@ -60,7 +60,9 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
 
     # Inject per-message mode hint (short reinforcement of system prompt rules)
     mode_hint = f"[Mode: {effective_mode.upper()}] " + (
-        "Plan only — ask questions, gather context, create plan. No execution."
+        "Plan only — ask questions, create plan. "
+        "Use search/papers only for quick feasibility checks. "
+        "Do NOT do comprehensive research here — add research as Execute mode tasks."
         if effective_mode == "plan"
         else "Execute the plan — do the work, no questions. All tools except ask_user."
     )
@@ -166,6 +168,17 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
                     tool_calls=result.tool_calls,
                 )
             )
+
+            # Persist assistant text that accompanies tool calls (otherwise
+            # it only lives in the in-memory ContextManager and is lost on
+            # page refresh).
+            if result.content:
+                await session.emit(
+                    AgentEvent(
+                        event_type="assistant_message",
+                        data={"content": result.content},
+                    )
+                )
 
             # Check for approval-required tools
             needs_approval = []

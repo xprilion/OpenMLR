@@ -74,14 +74,16 @@ export const api = {
   submitAnswers: (answers: Record<string, string>) => post('/api/answers', { answers }),
   interrupt: () => post('/api/interrupt', {}),
   sendApproval: (approvals: Record<string, boolean>) => post('/api/approval', { approvals }),
+  submitTodoApproval: (approved: boolean, tasks?: any[]) =>
+    post('/api/todo-approval', { approved, tasks }),
   undo: () => post('/api/undo', {}),
   compact: () => post('/api/compact', {}),
   setModel: (model: string) => post('/api/model', { model }),
 
   // Conversations
   listConversations: () => get('/api/conversations'),
-  createConversation: (title?: string, model?: string, mode?: string) =>
-    post('/api/conversations', { title, model, mode }),
+  createConversation: (title?: string, model?: string, mode?: string, projectUuid?: string) =>
+    post('/api/conversations', { title, model, mode, project_uuid: projectUuid }),
   getConversation: (uuid: string) => get(`/api/conversations/${uuid}`),
   deleteConversation: (uuid: string) => del(`/api/conversations/${uuid}`),
   switchConversation: (uuid: string) => post(`/api/conversations/${uuid}/switch`, {}),

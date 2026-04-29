@@ -42,23 +42,25 @@ const mockConversations: Conversation[] = [
   },
 ];
 
+const defaultProps = {
+  conversations: mockConversations,
+  currentUuid: null as string | null,
+  user: mockUser,
+  convStatuses: {} as Record<string, any>,
+  terminalOpen: false,
+  terminalConnected: false,
+  terminalSessionCount: 0,
+  onSwitch: vi.fn(),
+  onNew: vi.fn(),
+  onDelete: vi.fn(),
+  onTerminalToggle: vi.fn(),
+};
+
 describe('Sidebar', () => {
   it('renders new chat button', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} />
       </MemoryRouter>
     );
     expect(screen.getByText('New Chat')).toBeInTheDocument();
@@ -67,19 +69,7 @@ describe('Sidebar', () => {
   it('renders conversation titles', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} />
       </MemoryRouter>
     );
     expect(screen.getByText('First conversation')).toBeInTheDocument();
@@ -89,24 +79,10 @@ describe('Sidebar', () => {
   it('highlights current conversation with bg-primary/10 class', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid="conv-1"
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} currentUuid="conv-1" />
       </MemoryRouter>
     );
-    // Find the conversation item containing "First conversation"
     const convItem = screen.getByText('First conversation').closest('div');
-    // Check that the parent container has the active styling (bg-primary/10)
     expect(convItem?.className).toContain('bg-primary/10');
   });
 
@@ -114,19 +90,7 @@ describe('Sidebar', () => {
     const onSwitch = vi.fn();
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={onSwitch}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} onSwitch={onSwitch} />
       </MemoryRouter>
     );
     fireEvent.click(screen.getByText('First conversation'));
@@ -136,19 +100,7 @@ describe('Sidebar', () => {
   it('shows empty state when no conversations', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={[]}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} conversations={[]} />
       </MemoryRouter>
     );
     expect(screen.getByText('No conversations yet')).toBeInTheDocument();
@@ -157,19 +109,7 @@ describe('Sidebar', () => {
   it('shows user display name', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={[]}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} conversations={[]} />
       </MemoryRouter>
     );
     expect(screen.getByText('Test User')).toBeInTheDocument();
@@ -178,19 +118,7 @@ describe('Sidebar', () => {
   it('renders settings and sign out buttons', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} />
       </MemoryRouter>
     );
     expect(screen.getByTitle('Settings')).toBeInTheDocument();
@@ -200,19 +128,7 @@ describe('Sidebar', () => {
   it('filters conversations by search', () => {
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={vi.fn()}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} />
       </MemoryRouter>
     );
     const searchInput = screen.getByPlaceholderText('Search...');
@@ -225,22 +141,51 @@ describe('Sidebar', () => {
     const onNew = vi.fn();
     render(
       <MemoryRouter>
-        <Sidebar
-          conversations={mockConversations}
-          currentUuid={null}
-          user={mockUser}
-          convStatuses={{}}
-          projects={[]}
-          activeProject={null}
-          onSwitch={vi.fn()}
-          onNew={onNew}
-          onDelete={vi.fn()}
-          onSelectProject={vi.fn()}
-          onNewProject={vi.fn()}
-        />
+        <Sidebar {...defaultProps} onNew={onNew} />
       </MemoryRouter>
     );
     fireEvent.click(screen.getByText('New Chat'));
     expect(onNew).toHaveBeenCalled();
+  });
+
+  it('renders terminal button with Closed status when terminal is not open', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar {...defaultProps} terminalOpen={false} terminalConnected={false} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+  });
+
+  it('renders terminal button with Connected status when terminal is open and connected', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar {...defaultProps} terminalOpen={true} terminalConnected={true} terminalSessionCount={1} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('renders terminal button with Disconnected when terminal is open but not connected', () => {
+    render(
+      <MemoryRouter>
+        <Sidebar {...defaultProps} terminalOpen={true} terminalConnected={false} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Disconnected')).toBeInTheDocument();
+  });
+
+  it('calls onTerminalToggle when terminal button clicked', () => {
+    const onTerminalToggle = vi.fn();
+    render(
+      <MemoryRouter>
+        <Sidebar {...defaultProps} onTerminalToggle={onTerminalToggle} />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByText('Terminal'));
+    expect(onTerminalToggle).toHaveBeenCalled();
   });
 });
