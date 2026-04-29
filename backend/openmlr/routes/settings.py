@@ -64,6 +64,7 @@ async def update_setting(
             "openalex_api_key": "OPENALEX_API_KEY",
             "modal_token_id": "MODAL_TOKEN_ID",
             "modal_token_secret": "MODAL_TOKEN_SECRET",
+            "hf_token": "HF_TOKEN",
         }
         env_key = env_key_map.get(key)
         if env_key and isinstance(value, str):
@@ -127,6 +128,7 @@ def _is_provider_configured(provider_id: str, provider_settings: dict) -> bool:
         "semantic_scholar": "SEMANTIC_SCHOLAR_API_KEY",
         "openalex": "OPENALEX_API_KEY",
         "modal": "MODAL_TOKEN_ID",
+        "huggingface": "HF_TOKEN",
     }
     env_key = env_map.get(provider_id)
     if env_key and os.environ.get(env_key):
@@ -143,6 +145,7 @@ def _is_provider_configured(provider_id: str, provider_settings: dict) -> bool:
         "semantic_scholar": "semantic_scholar_api_key",
         "openalex": "openalex_api_key",
         "modal": "modal_token_id",
+        "huggingface": "hf_token",
     }.get(provider_id)
     if setting_key and provider_settings.get(setting_key):
         return True
@@ -257,6 +260,14 @@ async def list_providers(
             "configured": _is_provider_configured("modal", provider_settings),
             "categories": ["compute"],
             "docs_url": "https://modal.com/docs",
+        },
+        {
+            "id": "huggingface",
+            "name": "Hugging Face",
+            "key_env": "HF_TOKEN",
+            "configured": _is_provider_configured("huggingface", provider_settings),
+            "categories": ["models", "papers"],
+            "docs_url": "https://huggingface.co/docs/hub/security-tokens",
         },
     ]
 
@@ -759,6 +770,7 @@ async def save_config(
         "OPENALEX_API_KEY",
         "MODAL_TOKEN_ID",
         "MODAL_TOKEN_SECRET",
+        "HF_TOKEN",
     }
 
     body = await request.json()

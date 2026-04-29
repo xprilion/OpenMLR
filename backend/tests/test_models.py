@@ -146,9 +146,25 @@ class TestMessageSend:
         assert m.message == "Hello world"
         assert m.mode is None
 
-    def test_with_mode(self):
-        m = MessageSend(message="Research this", mode="research")
-        assert m.mode == "research"
+    def test_with_plan_mode(self):
+        m = MessageSend(message="Plan this", mode="plan")
+        assert m.mode == "plan"
+
+    def test_with_execute_mode(self):
+        m = MessageSend(message="Do this", mode="execute")
+        assert m.mode == "execute"
+
+    def test_rejects_invalid_mode(self):
+        with pytest.raises(ValidationError):
+            MessageSend(message="test", mode="research")
+
+    def test_rejects_arbitrary_mode(self):
+        with pytest.raises(ValidationError):
+            MessageSend(message="test", mode="anything_else")
+
+    def test_allows_null_mode(self):
+        m = MessageSend(message="test", mode=None)
+        assert m.mode is None
 
 
 class TestApprovalRequest:

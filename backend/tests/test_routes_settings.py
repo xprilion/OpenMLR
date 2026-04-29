@@ -108,6 +108,40 @@ class TestProviders:
             assert "key_env" in p
             assert "configured" in p
 
+    async def test_huggingface_provider_listed(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/api/providers")
+        data = resp.json()
+        provider_ids = [p["id"] for p in data["providers"]]
+        assert "huggingface" in provider_ids
+
+    async def test_huggingface_provider_fields(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/api/providers")
+        data = resp.json()
+        hf = [p for p in data["providers"] if p["id"] == "huggingface"][0]
+        assert hf["name"] == "Hugging Face"
+        assert hf["key_env"] == "HF_TOKEN"
+        assert "models" in hf["categories"]
+        assert "papers" in hf["categories"]
+        assert "docs_url" in hf
+
+    async def test_huggingface_token_sets_env(
+        self, auth_client: AsyncClient, db_session, test_user
+    ):
+        resp = await auth_client.put(
+            "/api/settings/providers/hf_token",
+            json={"value": "hf_test_token_123"},
+        )
+        assert resp.status_code == 200
+        assert os.environ.get("HF_TOKEN") == "hf_test_token_123"
+
+    async def test_huggingface_token_in_config_allowlist(self, auth_client: AsyncClient):
+        resp = await auth_client.post(
+            "/api/config",
+            json={"HF_TOKEN": "hf_from_config"},
+        )
+        assert resp.status_code == 200
+        assert os.environ.get("HF_TOKEN") == "hf_from_config"
+
 
 class TestAppStatus:
     async def test_get_status(self, auth_client: AsyncClient):

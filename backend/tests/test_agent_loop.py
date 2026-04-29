@@ -50,6 +50,7 @@ def mock_session(config):
     session.is_cancelled = MagicMock(return_value=False)
     session.pending_approval = None
     session.pending_answers = None
+    session.current_mode = "plan"
     session.turn_count = 0
     session.on_event = MagicMock()
     session.update_model = MagicMock()
@@ -234,7 +235,9 @@ class TestRunAgentTurn:
 
         mock_router.set_mode.assert_called_with("plan")
 
-    async def test_default_mode_is_execute(self, mock_session, mock_router):
+    async def test_unknown_mode_falls_back_to_session_mode(self, mock_session, mock_router):
+        """When mode is invalid, fall back to session.current_mode (defaults to plan)."""
+        mock_session.current_mode = "plan"
         mock_session.context_manager.get_messages.return_value = []
         mock_session.context_manager.needs_compaction.return_value = False
         mock_session.context_manager.get_token_usage.return_value = {"ratio": 0.0}
@@ -248,7 +251,44 @@ class TestRunAgentTurn:
             )
             await run_agent_turn(mock_session, mock_router, "test", mode="unknown")
 
+        mock_router.set_mode.assert_called_with("plan")
+
+    async def test_null_mode_falls_back_to_session_mode(self, mock_session, mock_router):
+        """When mode is None, fall back to session.current_mode."""
+        mock_session.current_mode = "execute"
+        mock_session.context_manager.get_messages.return_value = []
+        mock_session.context_manager.needs_compaction.return_value = False
+        mock_session.context_manager.get_token_usage.return_value = {"ratio": 0.0}
+        mock_session.config.stream = False
+
+        with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
+            mock_gen.return_value = LLMResult(
+                content="Ok",
+                tool_calls=[],
+                finish_reason="stop",
+            )
+            await run_agent_turn(mock_session, mock_router, "test", mode=None)
+
         mock_router.set_mode.assert_called_with("execute")
+
+    async def test_explicit_mode_updates_session(self, mock_session, mock_router):
+        """When a valid mode is passed, it should be stored on session.current_mode."""
+        mock_session.current_mode = "plan"
+        mock_session.context_manager.get_messages.return_value = []
+        mock_session.context_manager.needs_compaction.return_value = False
+        mock_session.context_manager.get_token_usage.return_value = {"ratio": 0.0}
+        mock_session.config.stream = False
+
+        with patch("openmlr.agent.loop.LLMProvider.generate") as mock_gen:
+            mock_gen.return_value = LLMResult(
+                content="Ok",
+                tool_calls=[],
+                finish_reason="stop",
+            )
+            await run_agent_turn(mock_session, mock_router, "test", mode="execute")
+
+        mock_router.set_mode.assert_called_with("execute")
+        assert mock_session.current_mode == "execute"
 
 
 # ── Submissions ────────────────────────────────────────────

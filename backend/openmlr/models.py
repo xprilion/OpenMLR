@@ -1,7 +1,7 @@
 """Pydantic models for API requests and responses."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -71,7 +71,9 @@ class ConversationDetail(BaseModel):
 
 class MessageSend(BaseModel):
     message: str
-    mode: str | None = None  # plan, research, write — per-message mode override
+    mode: Literal["plan", "execute"] | None = (
+        None  # per-message mode; only plan or execute accepted
+    )
 
 
 class ApprovalRequest(BaseModel):

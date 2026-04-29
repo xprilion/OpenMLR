@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { ArrowUp, Square } from 'lucide-react';
+import { ArrowUp, Square, Play } from 'lucide-react';
 
 export type Mode = 'plan' | 'execute';
 
@@ -34,22 +34,37 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   }, [text, disabled, onSend, mode, onTextChange]);
 
+  /** Send message AND switch to execute mode in one action. */
+  const submitAndExecute = useCallback(() => {
+    const trimmed = text.trim();
+    if (!trimmed || disabled) return;
+    onTextChange('');
+    onModeChange('execute');
+    onSend(trimmed, 'execute');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+  }, [text, disabled, onSend, onModeChange, onTextChange]);
+
   const toggleMode = useCallback(() => {
     onModeChange(mode === 'plan' ? 'execute' : 'plan');
   }, [mode, onModeChange]);
 
-  // Keyboard shortcut: Cmd+M (or Ctrl+M) toggles between Plan and Execute
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key === 'm' || e.key === 'M') {
+        // Cmd+M: toggle mode
         e.preventDefault();
         onModeChange(mode === 'plan' ? 'execute' : 'plan');
+      } else if (e.key === 'Enter' && mode === 'plan') {
+        // Cmd+Enter in plan mode: send & execute
+        e.preventDefault();
+        submitAndExecute();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [mode, onModeChange]);
+  }, [mode, onModeChange, submitAndExecute]);
 
   const isPlan = mode === 'plan';
   
@@ -117,20 +132,36 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
           </button>
         )}
         
-        {/* Send button - same height as mode toggle */}
+        {/* Send buttons */}
         {!disabled && (
-          <button 
-            className="h-11 w-11 rounded-lg flex items-center justify-center transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              backgroundColor: isPlan ? '#f59e0b' : '#3b82f6',
-              color: isPlan ? '#000' : '#fff',
-            }}
-            onClick={submit} 
-            disabled={!text.trim()}
-            title="Send message"
-          >
-            <ArrowUp size={20} strokeWidth={2.5} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Primary send: uses current mode */}
+            <button 
+              className="h-11 w-11 rounded-lg flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: isPlan ? '#f59e0b' : '#3b82f6',
+                color: isPlan ? '#000' : '#fff',
+              }}
+              onClick={submit} 
+              disabled={!text.trim()}
+              title={isPlan ? 'Send in Plan mode (Enter)' : 'Send in Execute mode (Enter)'}
+            >
+              <ArrowUp size={20} strokeWidth={2.5} />
+            </button>
+            
+            {/* Send & Execute: visible only in Plan mode */}
+            {isPlan && (
+              <button 
+                className="h-11 px-3 rounded-lg flex items-center justify-center gap-1.5 text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-primary text-white hover:bg-primary-hover"
+                onClick={submitAndExecute} 
+                disabled={!text.trim()}
+                title="Send & switch to Execute mode (Cmd+Enter)"
+              >
+                <Play size={14} fill="currentColor" />
+                <span className="hidden sm:inline">Execute</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

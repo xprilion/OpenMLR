@@ -230,6 +230,7 @@ async def _handle_research(
 def _get_research_tool_specs() -> list[dict]:
     """Get the read-only tool subset for research."""
     from .github import create_github_tools
+    from .huggingface import create_huggingface_tools
     from .papers import create_papers_tool
     from .search import create_search_tools
 
@@ -271,12 +272,28 @@ def _get_research_tool_specs() -> list[dict]:
                 }
             )
 
+    # Hugging Face tools for ML research (model discovery + file reading)
+    for spec in create_huggingface_tools():
+        if spec.name in ("hf_search_models", "hf_read_file"):
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": spec.name,
+                        "description": spec.description,
+                        "parameters": spec.parameters,
+                    },
+                }
+            )
+
     return tools
 
 
 async def _execute_research_tool(tc: ToolCall) -> tuple[str, bool]:
     """Execute a tool call for the research sub-agent."""
     from .github import _handle_find_examples, _handle_read_file
+    from .huggingface import _handle_read_file as _hf_handle_read_file
+    from .huggingface import _handle_search_models as _hf_handle_search_models
     from .papers import _handle_papers
     from .search import _handle_web_search
 
@@ -285,6 +302,8 @@ async def _execute_research_tool(tc: ToolCall) -> tuple[str, bool]:
         "papers": _handle_papers,
         "github_read_file": _handle_read_file,
         "github_find_examples": _handle_find_examples,
+        "hf_search_models": _hf_handle_search_models,
+        "hf_read_file": _hf_handle_read_file,
     }
 
     handler = handlers.get(tc.name)

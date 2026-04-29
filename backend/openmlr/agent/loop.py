@@ -47,8 +47,15 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
     if session.pending_approval:
         session.pending_approval = None
 
-    # Set the mode on the tool router for strict enforcement
-    effective_mode = mode if mode in ("plan", "execute") else "execute"
+    # Set the mode on the tool router for strict enforcement.
+    # Default to plan (safe) if mode is missing or invalid.
+    # If mode is explicitly provided, use it and persist on session.
+    # If not provided (e.g. approval continuation), fall back to session's stored mode.
+    if mode in ("plan", "execute"):
+        effective_mode = mode
+        session.current_mode = mode
+    else:
+        effective_mode = session.current_mode  # preserved from the last explicit mode
     tool_router.set_mode(effective_mode)
 
     # Inject per-message mode hint (short reinforcement of system prompt rules)

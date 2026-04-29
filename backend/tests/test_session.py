@@ -180,3 +180,24 @@ class TestUpdateModel:
         """ContextManager shares the config object, so the change propagates."""
         session.update_model("openai/gpt-4o")
         assert session.context_manager.config.model_name == "openai/gpt-4o"
+
+
+# ---------------------------------------------------------------------------
+# current_mode
+# ---------------------------------------------------------------------------
+
+
+class TestCurrentMode:
+    def test_default_mode_is_plan(self, session: Session):
+        """Session defaults to plan mode (safe default)."""
+        assert session.current_mode == "plan"
+
+    def test_mode_can_be_set(self, session: Session):
+        session.current_mode = "execute"
+        assert session.current_mode == "execute"
+
+    def test_mode_persists_across_reads(self, session: Session):
+        session.current_mode = "plan"
+        assert session.current_mode == "plan"
+        session.current_mode = "execute"
+        assert session.current_mode == "execute"
