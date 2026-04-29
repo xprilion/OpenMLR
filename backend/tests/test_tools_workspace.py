@@ -1,5 +1,6 @@
 """Tests for workspace agent tools."""
 
+import asyncio
 import os
 import tempfile
 
@@ -177,10 +178,14 @@ class TestWorkspaceTools:
         assert "No recent" in result
 
     async def test_search_operation(self, workspace_dir):
-        # Create a test file
+        # Create a test file using async-compatible file write
         test_file = os.path.join(workspace_dir, "code", "test.py")
-        with open(test_file, "w") as f:
-            f.write("import torch\nmodel = TransformerModel()")
+
+        def _write_file():
+            with open(test_file, "w") as f:
+                f.write("import torch\nmodel = TransformerModel()")
+
+        await asyncio.to_thread(_write_file)
 
         result, success = await _handle_workspace(
             operation="search",

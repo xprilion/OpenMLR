@@ -53,7 +53,7 @@ class TestExecutionResult:
         r = ExecutionResult(output="error", success=False, exit_code=1, duration_seconds=2.5)
         assert r.success is False
         assert r.exit_code == 1
-        assert r.duration_seconds == 2.5
+        assert r.duration_seconds == pytest.approx(2.5)
 
     def test_truncation_handled_by_caller(self):
         # Truncation is done by the tools, not the dataclass

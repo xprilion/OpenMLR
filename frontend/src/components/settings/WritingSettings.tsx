@@ -72,8 +72,9 @@ export function WritingSettings() {
           
           <div className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm font-medium text-text mb-2">Full Name</label>
+              <label className="block text-sm font-medium text-text mb-2" htmlFor="author-name">Full Name</label>
               <input
+                id="author-name"
                 type="text"
                 className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
                 placeholder="e.g., Jane Doe"
@@ -83,8 +84,9 @@ export function WritingSettings() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-text mb-2">Email</label>
+              <label className="block text-sm font-medium text-text mb-2" htmlFor="author-email">Email</label>
               <input
+                id="author-email"
                 type="email"
                 className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
                 placeholder="e.g., jane.doe@university.edu"
@@ -94,8 +96,9 @@ export function WritingSettings() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-text mb-2">Affiliation</label>
+              <label className="block text-sm font-medium text-text mb-2" htmlFor="author-affiliation">Affiliation</label>
               <input
+                id="author-affiliation"
                 type="text"
                 className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
                 placeholder="e.g., Department of Computer Science, MIT"
@@ -105,8 +108,9 @@ export function WritingSettings() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-text mb-2">ORCID <span className="text-text-dim font-normal">(optional)</span></label>
+              <label className="block text-sm font-medium text-text mb-2" htmlFor="author-orcid">ORCID <span className="text-text-dim font-normal">(optional)</span></label>
               <input
+                id="author-orcid"
                 type="text"
                 className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
                 placeholder="e.g., 0000-0002-1234-5678"
@@ -119,8 +123,9 @@ export function WritingSettings() {
         
         {/* Writing Preferences Section */}
         <div>
-          <label className="block text-sm font-medium text-text mb-2">Citation Style</label>
+          <label className="block text-sm font-medium text-text mb-2" htmlFor="citation-style">Citation Style</label>
           <select
+            id="citation-style"
             className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:border-primary focus:outline-none transition-colors"
             value={form.citation_style}
             onChange={(e) => setForm((f) => ({ ...f, citation_style: e.target.value }))}
@@ -133,8 +138,9 @@ export function WritingSettings() {
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-text mb-2">Export Format</label>
+          <label className="block text-sm font-medium text-text mb-2" htmlFor="export-format">Export Format</label>
           <select
+            id="export-format"
             className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:border-primary focus:outline-none transition-colors"
             value={form.export_format}
             onChange={(e) => setForm((f) => ({ ...f, export_format: e.target.value }))}

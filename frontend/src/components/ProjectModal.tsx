@@ -50,8 +50,9 @@ export function ProjectModal({ onClose, onCreate }: Props) {
         {/* Form */}
         <div className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">Project Name</label>
+            <label className="block text-sm font-medium text-text mb-1.5" htmlFor="project-name">Project Name</label>
             <input
+              id="project-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -66,10 +67,11 @@ export function ProjectModal({ onClose, onCreate }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">
+            <label className="block text-sm font-medium text-text mb-1.5" htmlFor="project-desc">
               Description <span className="text-text-dim font-normal">(optional)</span>
             </label>
             <textarea
+              id="project-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief description of the research goal..."

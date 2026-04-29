@@ -93,7 +93,7 @@ function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: numbe
           </button>
           <button
             className="px-4 py-1.5 text-xs font-medium rounded-lg bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-50"
-            disabled={saving || !value || parseInt(value, 10) < 1}
+            disabled={saving || !value || Number.parseInt(value, 10) < 1}
             onClick={handleSave}
           >
             {saving ? 'Saving...' : 'Save'}

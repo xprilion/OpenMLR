@@ -1,6 +1,6 @@
 
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api } from '../../api';
 import type { Provider } from '../../types';
 
@@ -42,6 +42,7 @@ export function ProvidersSettings() {
   const [activeTab, setActiveTab] = useState<TabId>('models');
 
   // Custom provider modal state
+  const customDialogRef = useRef<HTMLDialogElement>(null);
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customForm, setCustomForm] = useState<{
     name: string;
@@ -62,6 +63,26 @@ export function ProvidersSettings() {
   useEffect(() => {
     api.getProviders().then((d) => setProviders(d.providers || [])).catch(() => {});
   }, []);
+
+  // Handle custom provider dialog open/close
+  useEffect(() => {
+    const dialog = customDialogRef.current;
+    if (!dialog) return;
+    
+    if (showCustomModal && !dialog.open) {
+      dialog.showModal();
+    } else if (!showCustomModal && dialog.open) {
+      dialog.close();
+    }
+
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      setShowCustomModal(false);
+    };
+
+    dialog.addEventListener('cancel', handleCancel);
+    return () => dialog.removeEventListener('cancel', handleCancel);
+  }, [showCustomModal]);
 
   // Group providers by tab (a provider can appear in multiple tabs)
   const providersByTab = useMemo(() => {
@@ -314,21 +335,25 @@ export function ProvidersSettings() {
       </button>
 
       {/* Custom Provider Modal */}
-      {showCustomModal && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowCustomModal(false)}
-        >
+      <dialog
+        ref={customDialogRef}
+        className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
+        onClick={(e) => {
+          if (e.target === customDialogRef.current) setShowCustomModal(false);
+        }}
+        aria-labelledby="custom-provider-title"
+      >
+        <div className="flex items-center justify-center min-h-full">
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-md flex flex-col shadow-xl p-6"
-            onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-text mb-4">Add Custom Provider</h3>
+            <h3 id="custom-provider-title" className="text-lg font-semibold text-text mb-4">Add Custom Provider</h3>
 
             <div className="flex flex-col gap-4">
               <div>
-                <label className="block text-sm text-text-dim mb-1">Display Name</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-name">Display Name</label>
                 <input
+                  id="custom-provider-name"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="e.g. My Organization"
@@ -338,8 +363,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">Provider ID (prefix)</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-id">Provider ID (prefix)</label>
                 <input
+                  id="custom-provider-id"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="e.g. my-org (models will be my-org/model-name)"
@@ -349,8 +375,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">SDK Type</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-sdk">SDK Type</label>
                 <select
+                  id="custom-provider-sdk"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
                   value={customForm.sdk_type}
                   onChange={(e) => setCustomForm((f) => ({ ...f, sdk_type: e.target.value as SdkType }))}
@@ -362,8 +389,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">API Base URL</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-base">API Base URL</label>
                 <input
+                  id="custom-provider-base"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="https://api.my-org.com/v1"
@@ -373,8 +401,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">API Key</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-key">API Key</label>
                 <input
+                  id="custom-provider-key"
                   type="password"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="sk-..."
@@ -400,7 +429,7 @@ export function ProvidersSettings() {
             </div>
           </div>
         </div>
-      )}
+      </dialog>
     </div>
   );
 }

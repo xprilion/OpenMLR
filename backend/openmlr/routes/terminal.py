@@ -6,7 +6,7 @@ connected to the project workspace's compute environment.
 Security:
 - Minimal environment (no server secrets leaked)
 - Workspace path validated against WORKSPACES_ROOT
-- Shell spawned via subprocess (not os.fork) to avoid async corruption
+- Shell spawned via asyncio.create_subprocess_exec (not os.fork) to avoid async corruption
 - --norc --noprofile to prevent .bashrc injection
 - Proper zombie process cleanup with SIGKILL escalation
 """
@@ -19,7 +19,6 @@ import os
 import pty
 import signal
 import struct
-import subprocess
 import termios
 from pathlib import Path
 
@@ -185,15 +184,17 @@ async def terminal_websocket(
 
     await websocket.accept()
 
-    # Spawn PTY using subprocess instead of os.fork() to avoid
+    # Spawn PTY using asyncio.create_subprocess_exec instead of os.fork() to avoid
     # corrupting the async event loop and leaking file descriptors.
     master_fd, slave_fd = pty.openpty()
     env = _build_safe_env(workspace_path)
     shell = "/bin/bash"
 
     try:
-        proc = subprocess.Popen(
-            [shell, "--norc", "--noprofile"],
+        proc = await asyncio.create_subprocess_exec(
+            shell,
+            "--norc",
+            "--noprofile",
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,

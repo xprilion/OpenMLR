@@ -164,7 +164,7 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
       return (data.entries || []).map((entry: FileNode) => ({
         ...entry,
         expanded: false,
-        children: entry.is_dir ? undefined : undefined,
+        children: undefined,
       }));
     } catch (err: any) {
       setError(err.message);
