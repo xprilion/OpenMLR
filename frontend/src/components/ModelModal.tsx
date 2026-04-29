@@ -271,13 +271,16 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
 
       <dialog
         ref={dialogRef}
-        className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
-        onClick={(e) => {
-          if (e.target === dialogRef.current) setOpen(false);
-        }}
+        className="fixed bg-transparent p-0 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
         aria-labelledby="model-modal-title"
       >
-        <div className="flex items-center justify-center min-h-full">
+        {/* Backdrop overlay for click-to-close */}
+        <div 
+          className="fixed inset-0" 
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+        <div className="flex items-center justify-center min-h-full p-4 relative">
           {/* Fixed-size modal — never changes dimensions between loading and loaded */}
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-lg flex flex-col shadow-xl"

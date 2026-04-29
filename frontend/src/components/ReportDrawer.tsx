@@ -40,20 +40,19 @@ export function ReportDrawer({ reportId, title, cachedContent, onClose }: Props)
       .finally(() => setLoading(false));
   }, [reportId, cachedContent]);
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
-    if (e.target === dialogRef.current) {
-      onClose();
-    }
-  };
-
   return (
     <dialog
       ref={dialogRef}
       className="fixed bg-transparent p-0 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
-      onClick={handleBackdropClick}
       aria-labelledby="report-drawer-title"
     >
-      <div className="flex justify-end min-h-full">
+      {/* Backdrop overlay for click-to-close */}
+      <div 
+        className="fixed inset-0" 
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="flex justify-end min-h-full relative">
         <div 
           className="w-full max-w-2xl h-full bg-surface border-l border-border flex flex-col animate-slide-in-right"
         >

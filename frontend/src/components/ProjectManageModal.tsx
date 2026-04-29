@@ -169,20 +169,19 @@ export function ProjectManageModal({ projects, onClose, onChanged }: Props) {
     return a.name.localeCompare(b.name);
   });
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
-    if (e.target === dialogRef.current) {
-      onClose();
-    }
-  };
-
   return (
     <dialog
       ref={dialogRef}
-      className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60 backdrop:backdrop-blur-sm"
-      onClick={handleBackdropClick}
+      className="fixed bg-transparent p-0 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60 backdrop:backdrop-blur-sm"
       aria-labelledby="project-manage-title"
     >
-      <div className="flex items-center justify-center min-h-full">
+      {/* Backdrop overlay for click-to-close */}
+      <div 
+        className="fixed inset-0" 
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="flex items-center justify-center min-h-full p-4 relative">
         <div
           className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-lg max-h-[70vh] flex flex-col"
         >

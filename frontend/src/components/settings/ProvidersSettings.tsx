@@ -337,13 +337,16 @@ export function ProvidersSettings() {
       {/* Custom Provider Modal */}
       <dialog
         ref={customDialogRef}
-        className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
-        onClick={(e) => {
-          if (e.target === customDialogRef.current) setShowCustomModal(false);
-        }}
+        className="fixed bg-transparent p-0 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
         aria-labelledby="custom-provider-title"
       >
-        <div className="flex items-center justify-center min-h-full">
+        {/* Backdrop overlay for click-to-close */}
+        <div 
+          className="fixed inset-0" 
+          onClick={() => setShowCustomModal(false)}
+          aria-hidden="true"
+        />
+        <div className="flex items-center justify-center min-h-full p-4 relative">
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-md flex flex-col shadow-xl p-6"
           >
