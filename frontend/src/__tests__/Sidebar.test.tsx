@@ -47,13 +47,9 @@ const defaultProps = {
   currentUuid: null as string | null,
   user: mockUser,
   convStatuses: {} as Record<string, any>,
-  terminalOpen: false,
-  terminalConnected: false,
-  terminalSessionCount: 0,
   onSwitch: vi.fn(),
   onNew: vi.fn(),
   onDelete: vi.fn(),
-  onTerminalToggle: vi.fn(),
 };
 
 describe('Sidebar', () => {
@@ -149,44 +145,4 @@ describe('Sidebar', () => {
     expect(onNew).toHaveBeenCalled();
   });
 
-  it('renders terminal button with Closed status when terminal is not open', () => {
-    render(
-      <MemoryRouter>
-        <Sidebar {...defaultProps} terminalOpen={false} terminalConnected={false} />
-      </MemoryRouter>
-    );
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
-    expect(screen.getByText('Closed')).toBeInTheDocument();
-  });
-
-  it('renders terminal button with Connected status when terminal is open and connected', () => {
-    render(
-      <MemoryRouter>
-        <Sidebar {...defaultProps} terminalOpen={true} terminalConnected={true} terminalSessionCount={1} />
-      </MemoryRouter>
-    );
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
-    expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
-  });
-
-  it('renders terminal button with Disconnected when terminal is open but not connected', () => {
-    render(
-      <MemoryRouter>
-        <Sidebar {...defaultProps} terminalOpen={true} terminalConnected={false} />
-      </MemoryRouter>
-    );
-    expect(screen.getByText('Disconnected')).toBeInTheDocument();
-  });
-
-  it('calls onTerminalToggle when terminal button clicked', () => {
-    const onTerminalToggle = vi.fn();
-    render(
-      <MemoryRouter>
-        <Sidebar {...defaultProps} onTerminalToggle={onTerminalToggle} />
-      </MemoryRouter>
-    );
-    fireEvent.click(screen.getByText('Terminal'));
-    expect(onTerminalToggle).toHaveBeenCalled();
-  });
 });

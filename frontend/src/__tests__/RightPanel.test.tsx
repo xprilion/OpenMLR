@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RightPanel } from '../components/RightPanel';
-import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
+import type { PlanTask, Resource, ContextUsage, SearchBudget, McpServerStatus } from '../types';
 
 vi.mock('../api', () => ({
   api: {
@@ -24,19 +24,23 @@ describe('RightPanel', () => {
 
   const mockContext: ContextUsage = { used: 50000, max: 200000, ratio: 0.25 };
   const mockSearchBudget: SearchBudget = { used: 5, max: 25 };
+  const mockMcpServers: McpServerStatus[] = [
+    { name: 'test-server', url: 'https://mcp.example.com', enabled: true, connected: true },
+  ];
+
+  const baseProps = {
+    resources: [] as Resource[],
+    contextUsage: null as ContextUsage | null,
+    searchBudget: null as SearchBudget | null,
+    mcpServers: [] as McpServerStatus[],
+    projectUuid: null as string | null,
+    onToggle: vi.fn(),
+    onViewReport: vi.fn(),
+  };
 
   it('renders collapsed rail with expand button when not visible', () => {
     render(
-      <RightPanel
-        tasks={mockTasks}
-        resources={mockResources}
-        contextUsage={mockContext}
-        searchBudget={null}
-        visible={false}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={mockTasks} resources={mockResources} contextUsage={mockContext} visible={false} />
     );
     expect(screen.getByTitle('Expand panel')).toBeInTheDocument();
     expect(screen.getByTitle('Todos')).toBeInTheDocument();
@@ -44,16 +48,7 @@ describe('RightPanel', () => {
 
   it('renders tasks when visible', () => {
     render(
-      <RightPanel
-        tasks={mockTasks}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={mockTasks} visible={true} />
     );
     expect(screen.getByText('Read papers')).toBeInTheDocument();
     expect(screen.getByText('Implement model')).toBeInTheDocument();
@@ -62,49 +57,21 @@ describe('RightPanel', () => {
 
   it('shows task completion count badge', () => {
     render(
-      <RightPanel
-        tasks={mockTasks}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={mockTasks} visible={true} />
     );
-    // CollapsiblePanel renders badge with "done/total"
     expect(screen.getByText('1/3')).toBeInTheDocument();
   });
 
   it('shows "No tasks yet" when empty', () => {
     render(
-      <RightPanel
-        tasks={[]}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={[]} visible={true} />
     );
     expect(screen.getByText('No tasks yet')).toBeInTheDocument();
   });
 
   it('renders context gauge with data', () => {
     render(
-      <RightPanel
-        tasks={[]}
-        resources={[]}
-        contextUsage={mockContext}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={[]} contextUsage={mockContext} visible={true} />
     );
     expect(screen.getByText(/50k/)).toBeInTheDocument();
     expect(screen.getByText(/200k/)).toBeInTheDocument();
@@ -112,101 +79,48 @@ describe('RightPanel', () => {
 
   it('renders context gauge placeholder when null', () => {
     render(
-      <RightPanel
-        tasks={[]}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={[]} visible={true} />
     );
     expect(screen.getByText('Context: --')).toBeInTheDocument();
   });
 
   it('renders search budget gauge', () => {
     render(
-      <RightPanel
-        tasks={[]}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={mockSearchBudget}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={[]} searchBudget={mockSearchBudget} visible={true} />
     );
     expect(screen.getByText(/Searches:/)).toBeInTheDocument();
   });
 
   it('renders default search budget when null', () => {
     render(
-      <RightPanel
-        tasks={[]}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={[]} visible={true} />
     );
     expect(screen.getByText('Searches: 0 / 25')).toBeInTheDocument();
   });
 
   it('does not render resources section (resources are now in FileTree)', () => {
     render(
-      <RightPanel
-        tasks={mockTasks}
-        resources={mockResources}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={mockTasks} resources={mockResources} visible={true} />
     );
-    // Resources section was removed — resources now appear as files in the workspace
     expect(screen.queryByText('No resources yet')).not.toBeInTheDocument();
   });
 
   it('does not render paper export buttons (papers are now in FileTree)', () => {
     render(
       <RightPanel
+        {...baseProps}
         tasks={[]}
-        resources={[
-          { title: 'My Paper', type: 'paper', id: 'paper-1', url: '' },
-        ]}
-        contextUsage={null}
-        searchBudget={null}
+        resources={[{ title: 'My Paper', type: 'paper', id: 'paper-1', url: '' }]}
         visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
       />
     );
-    // Paper export buttons were removed — papers are now files in workspace
     expect(screen.queryByText('.md')).not.toBeInTheDocument();
     expect(screen.queryByText('.tex')).not.toBeInTheDocument();
   });
 
   it('shows task count badge on collapsed rail', () => {
     render(
-      <RightPanel
-        tasks={mockTasks}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={false}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={mockTasks} visible={false} />
     );
     const todosButton = screen.getByTitle('Todos');
     const badge = todosButton.querySelector('span');
@@ -215,17 +129,30 @@ describe('RightPanel', () => {
 
   it('has search budget settings button', () => {
     render(
-      <RightPanel
-        tasks={[]}
-        resources={[]}
-        contextUsage={null}
-        searchBudget={null}
-        visible={true}
-        projectUuid={null}
-        onToggle={vi.fn()}
-        onViewReport={vi.fn()}
-      />
+      <RightPanel {...baseProps} tasks={[]} visible={true} />
     );
     expect(screen.getByTitle('Change search budget')).toBeInTheDocument();
+  });
+
+  it('renders MCP servers section when servers are configured', () => {
+    render(
+      <RightPanel {...baseProps} tasks={[]} mcpServers={mockMcpServers} visible={true} />
+    );
+    expect(screen.getByText('MCP Servers')).toBeInTheDocument();
+    expect(screen.getByText('test-server')).toBeInTheDocument();
+  });
+
+  it('shows MCP server count badge on collapsed rail', () => {
+    render(
+      <RightPanel {...baseProps} tasks={[]} mcpServers={mockMcpServers} visible={false} />
+    );
+    expect(screen.getByTitle('MCP Servers')).toBeInTheDocument();
+  });
+
+  it('does not render MCP section when no servers configured', () => {
+    render(
+      <RightPanel {...baseProps} tasks={[]} mcpServers={[]} visible={true} />
+    );
+    expect(screen.queryByText('MCP Servers')).not.toBeInTheDocument();
   });
 });

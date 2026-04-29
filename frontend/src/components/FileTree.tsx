@@ -29,6 +29,8 @@ interface TreeNode extends FileNode {
   expanded?: boolean;
 }
 
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+
 const FILE_ICONS: Record<string, React.ReactNode> = {
   '.py': <FileCode size={14} className="text-blue-400" />,
   '.js': <FileCode size={14} className="text-yellow-400" />,
@@ -240,6 +242,12 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
   }, [loadDirectory]);
 
   const handleSelect = useCallback(async (path: string) => {
+    const ext = '.' + (path.split('.').pop()?.toLowerCase() || '');
+    if (IMAGE_EXTS.has(ext)) {
+      // For image files, pass through with empty content — the parent handles the URL
+      onFileSelect?.(path, '');
+      return;
+    }
     try {
       const data = await api.readFile(projectUuid, path);
       if (data.content !== undefined) {
@@ -250,13 +258,15 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
     }
   }, [projectUuid, onFileSelect]);
 
-  const handleRefresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const entries = await loadDirectory('');
-    setNodes(entries);
-    setLoading(false);
-  }, [loadDirectory]);
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadDirectory('').then((entries) => {
+        setNodes((prev) => mergeWithPreviousState(entries, prev));
+      });
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [loadDirectory, mergeWithPreviousState]);
 
   if (loading) {
     return (
@@ -278,18 +288,6 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-xs uppercase tracking-wider text-text-dim font-semibold">Files</span>
-        <button
-          className="w-6 h-6 rounded flex items-center justify-center text-text-dim hover:text-text hover:bg-surface-hover transition-colors"
-          onClick={handleRefresh}
-          title="Refresh"
-        >
-          <RefreshCw size={12} />
-        </button>
-      </div>
-
       {/* Tree */}
       <div className="flex-1 overflow-auto py-1">
         {nodes.length === 0 ? (

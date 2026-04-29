@@ -17,14 +17,16 @@ import shutil
 import uuid as uuid_mod
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.security import decode_access_token
 from ..db import operations as ops
 from ..db.engine import get_db
 from ..db.models import User
-from ..dependencies import get_current_user
+from ..dependencies import get_current_user, get_current_user_optional
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -434,14 +436,36 @@ async def list_files(
     return {"path": path, "entries": entries}
 
 
+async def _get_user_from_token_param(token: str | None, db: AsyncSession) -> User | None:
+    """Resolve a user from a query-string token (for img/binary loads)."""
+    if not token:
+        return None
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+    result = await db.execute(
+        select(User).where(User.id == int(payload["sub"]), User.is_active == True)
+    )
+    return result.scalar_one_or_none()
+
+
 @router.get("/{project_uuid}/files/{file_path:path}")
 async def read_file(
     project_uuid: str,
     file_path: str,
-    user: User = Depends(get_current_user),
+    token: str | None = Query(None),
+    user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    """Read a file from the project workspace."""
+    """Read a file from the project workspace.
+
+    Supports auth via Bearer header or ?token= query param (for <img> tags).
+    """
+    # Fall back to token query param (for image tags that can't set headers)
+    if user is None and token:
+        user = await _get_user_from_token_param(token, db)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     project = await ops.get_project_by_uuid(db, project_uuid, user.id)
     if not project or not project.workspace_path:
         raise HTTPException(status_code=404, detail="Project not found")

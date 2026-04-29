@@ -45,7 +45,7 @@ class SessionManager:
         self.event_bus = event_bus
         self.default_config = default_config
         self.current_conversation_id: int | None = None
-        self._is_processing: bool = False
+        self._processing: set[int] = set()  # per-conversation processing locks
         self._message_queues: dict[int, list[str]] = {}
 
     def get_session(self, conversation_id: int) -> ActiveSession | None:
@@ -314,14 +314,15 @@ class SessionManager:
         message: str,
         mode: str = None,
     ) -> None:
-        """Queue and process a user message."""
+        """Queue and process a user message (per-conversation locking)."""
         queue = self._message_queues.setdefault(conversation_id, [])
         queue.append((message, mode))
 
-        if self._is_processing:
+        # Per-conversation lock: if this conversation is already processing, just queue
+        if conversation_id in self._processing:
             return
 
-        self._is_processing = True
+        self._processing.add(conversation_id)
         await self.event_bus.broadcast(
             AgentEvent(event_type="status", data={"status": "thinking..."})
         )
@@ -340,7 +341,7 @@ class SessionManager:
                         AgentEvent(event_type="error", data={"error": str(e)})
                     )
         finally:
-            self._is_processing = False
+            self._processing.discard(conversation_id)
             await self.event_bus.broadcast(
                 AgentEvent(event_type="status", data={"status": "ready"})
             )

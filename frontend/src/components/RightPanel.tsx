@@ -10,21 +10,25 @@ import {
   Settings,
   PanelRightClose,
   PanelRightOpen,
+  Plug,
 } from 'lucide-react';
 import { api } from '../api';
 import { FileTree } from './FileTree';
 import { CollapsiblePanel } from './CollapsiblePanel';
-import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
+import type { PlanTask, Resource, ContextUsage, SearchBudget, McpServerStatus } from '../types';
 
 interface Props {
   readonly tasks: readonly PlanTask[];
   readonly resources: readonly Resource[];
   readonly contextUsage: ContextUsage | null;
   readonly searchBudget: SearchBudget | null;
+  readonly mcpServers: readonly McpServerStatus[];
   readonly visible: boolean;
+  readonly mobileOpen?: boolean;
   readonly projectUuid: string | null;
   readonly fileTreeRefreshKey?: number;
   onToggle: () => void;
+  onMobileClose?: () => void;
   onViewReport: (resource: Resource) => void;
   onFileOpen?: (path: string, content: string) => void;
   onSearchBudgetChange?: (newMax: number) => void;
@@ -104,7 +108,7 @@ function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: numbe
   );
 }
 
-export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, visible, projectUuid, fileTreeRefreshKey, onToggle, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
+export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, mcpServers, visible, mobileOpen, projectUuid, fileTreeRefreshKey, onToggle, onMobileClose, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
   const [showBudgetDialog, setShowBudgetDialog] = useState(false);
 
   const done = tasks.filter((t) => t.status === 'completed').length;
@@ -114,49 +118,9 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
   const budgetMax = searchBudget?.max ?? 25;
   const budgetPct = budgetMax > 0 ? Math.round((budgetUsed / budgetMax) * 100) : 0;
 
-  // Collapsed state: show narrow icon rail
-  if (!visible) {
-    return (
-      <aside className="fixed right-0 top-14 bottom-0 w-12 bg-surface border-l border-border flex flex-col items-center py-3 gap-2 z-10 max-lg:hidden">
-        <button
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-          onClick={onToggle}
-          title="Expand panel"
-        >
-          <PanelRightOpen size={18} />
-        </button>
-        {tasks.length > 0 && (
-          <button
-            className="relative w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-            onClick={onToggle}
-            title="Todos"
-          >
-            <ListTodo size={18} />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-medium">
-              {tasks.length}
-            </span>
-          </button>
-        )}
-      </aside>
-    );
-  }
-
-  // Expanded state — no tabs, everything stacked
-  return (
-    <aside
-      className="fixed right-0 top-14 bottom-0 w-72 bg-surface border-l border-border flex flex-col z-10 max-lg:hidden"
-    >
-      {/* Header — just the collapse button */}
-      <div className="flex items-center justify-end px-3 py-2 border-b border-border shrink-0">
-        <button 
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-          onClick={onToggle}
-          title="Collapse panel"
-        >
-          <PanelRightClose size={16} />
-        </button>
-      </div>
-
+  // Shared panel body content
+  const panelBody = (
+    <>
       {/* Context gauge */}
       <div className="px-4 py-3 border-b border-border shrink-0">
         <div className="text-xs text-text-dim mb-2">
@@ -195,9 +159,37 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
         </div>
       </div>
 
-      {/* Scrollable content: Todos + Files stacked */}
+      {/* Scrollable content: MCP + Todos + Files stacked */}
       <div className="flex-1 overflow-y-auto">
-        {/* Todos */}
+        {mcpServers.length > 0 && (
+          <CollapsiblePanel
+            title="MCP Servers"
+            icon={<Plug size={12} />}
+            badge={`${mcpServers.filter((s) => s.enabled).length}/${mcpServers.length}`}
+          >
+            <div className="flex flex-col gap-1.5">
+              {mcpServers.map((s) => (
+                <div
+                  key={s.name}
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm ${
+                    !s.enabled ? 'text-text-dim opacity-60' : 'text-text'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      s.connected ? 'bg-success' : s.enabled ? 'bg-warning' : 'bg-text-dim'
+                    }`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{s.name}</div>
+                    <div className="text-[10px] text-text-dim font-mono truncate">{s.url}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsiblePanel>
+        )}
+
         <CollapsiblePanel title="Todos" icon={<ListTodo size={12} />} badge={`${done}/${tasks.length}`}>
           <div className="flex flex-col gap-1.5">
             {tasks.map((t, i) => (
@@ -225,7 +217,6 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
           </div>
         </CollapsiblePanel>
 
-        {/* Files */}
         {projectUuid && (
           <CollapsiblePanel title="Files" icon={<Files size={12} />}>
             <div className="-mx-4 -mb-3">
@@ -235,7 +226,6 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
         )}
       </div>
 
-      {/* Search Budget Settings Dialog */}
       {showBudgetDialog && (
         <SearchBudgetDialog
           currentMax={budgetMax}
@@ -246,6 +236,86 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
           onClose={() => setShowBudgetDialog(false)}
         />
       )}
+    </>
+  );
+
+  // Mobile drawer overlay
+  if (mobileOpen) {
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onMobileClose} />
+        <aside className="fixed inset-y-0 right-0 w-80 bg-surface border-l border-border flex flex-col z-50 lg:hidden animate-[slide-in-right_0.2s_ease-out]">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
+            <span className="text-sm font-medium text-text">Details</span>
+            <button 
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+              onClick={onMobileClose}
+              title="Close panel"
+            >
+              <PanelRightClose size={16} />
+            </button>
+          </div>
+          {panelBody}
+        </aside>
+      </>
+    );
+  }
+
+  // Collapsed state: show narrow icon rail
+  if (!visible) {
+    return (
+      <aside className="fixed right-0 top-14 bottom-0 w-12 bg-surface border-l border-border flex flex-col items-center py-3 gap-2 z-10 max-lg:hidden">
+        <button
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+          onClick={onToggle}
+          title="Expand panel"
+        >
+          <PanelRightOpen size={18} />
+        </button>
+        {tasks.length > 0 && (
+          <button
+            className="relative w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+            onClick={onToggle}
+            title="Todos"
+          >
+            <ListTodo size={18} />
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-medium">
+              {tasks.length}
+            </span>
+          </button>
+        )}
+        {mcpServers.length > 0 && (
+          <button
+            className="relative w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+            onClick={onToggle}
+            title="MCP Servers"
+          >
+            <Plug size={18} />
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-medium">
+              {mcpServers.length}
+            </span>
+          </button>
+        )}
+      </aside>
+    );
+  }
+
+  // Expanded state — no tabs, everything stacked
+  return (
+    <aside
+      className="fixed right-0 top-14 bottom-0 w-72 bg-surface border-l border-border flex flex-col z-10 max-lg:hidden"
+    >
+      {/* Header — just the collapse button */}
+      <div className="flex items-center justify-end px-3 py-2 border-b border-border shrink-0">
+        <button 
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+          onClick={onToggle}
+          title="Collapse panel"
+        >
+          <PanelRightClose size={16} />
+        </button>
+      </div>
+      {panelBody}
     </aside>
   );
 }

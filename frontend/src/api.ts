@@ -70,7 +70,8 @@ export const api = {
   getMe: () => get('/api/auth/me'),
 
   // Messages
-  sendMessage: (message: string, mode?: string) => post('/api/message', { message, mode }),
+  sendMessage: (message: string, mode?: string) =>
+    post('/api/message', { message, mode, request_id: crypto.randomUUID() }),
   submitAnswers: (answers: Record<string, string>) => post('/api/answers', { answers }),
   interrupt: () => post('/api/interrupt', {}),
   sendApproval: (approvals: Record<string, boolean>) => post('/api/approval', { approvals }),
@@ -136,6 +137,12 @@ export const api = {
     get(`/api/projects/${projectUuid}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`),
   readFile: (projectUuid: string, filePath: string) =>
     get(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
+  /** Build an authenticated URL for directly loading a binary file (e.g. images). */
+  fileUrl: (projectUuid: string, filePath: string): string => {
+    const token = getToken();
+    const base = `/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`;
+    return token ? `${base}?token=${token}` : base;
+  },
   writeFile: (projectUuid: string, filePath: string, content: string) =>
     put(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`, { content }),
   deleteFile: (projectUuid: string, filePath: string) =>
@@ -152,4 +159,9 @@ export const api = {
     post('/api/compute/test', { type, config }),
   probeComputeNode: (id: number) => post(`/api/compute/nodes/${id}/probe`, {}),
   setDefaultComputeNode: (id: number) => post(`/api/compute/nodes/${id}/set-default`, {}),
+
+  // MCP Servers
+  getMcpStatus: () => get('/api/mcp/status'),
+  testMcpServer: (url: string, headers?: Record<string, string>, params?: Record<string, string>) =>
+    post('/api/mcp/test', { url, headers: headers || null, params: params || null }),
 };

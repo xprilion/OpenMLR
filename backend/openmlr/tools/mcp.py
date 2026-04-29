@@ -1,4 +1,8 @@
-"""MCP (Model Context Protocol) server integration."""
+"""MCP (Model Context Protocol) server integration.
+
+Only HTTP/HTTPS MCP servers are supported. Each server config can include
+custom authentication via headers or query parameters.
+"""
 
 import logging
 import os
@@ -32,15 +36,50 @@ def process_mcp_config(config: dict) -> dict:
     return processed
 
 
+def _build_url_with_params(url: str, params: dict[str, str] | None) -> str:
+    """Append query parameters to a URL."""
+    if not params:
+        return url
+    from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+    parsed = urlparse(url)
+    existing = parse_qs(parsed.query, keep_blank_values=True)
+    for k, v in params.items():
+        existing[k] = [v]
+    new_query = urlencode({k: v[0] for k, v in existing.items()})
+    return urlunparse(parsed._replace(query=new_query))
+
+
+def _create_mcp_client(url: str, headers: dict | None = None):
+    """Create a fastmcp Client with optional custom headers on the transport.
+
+    Uses StreamableHttpTransport by default (POST-based, newer standard).
+    Falls back to SSETransport for URLs ending in /sse (legacy convention).
+    """
+    from fastmcp import Client as MCPClient
+    from fastmcp.client.transports.http import StreamableHttpTransport
+    from fastmcp.client.transports.sse import SSETransport
+
+    if headers:
+        # Pick transport based on URL convention (same logic as fastmcp's infer_transport)
+        if url.rstrip("/").endswith("/sse"):
+            transport = SSETransport(url=url, headers=headers)
+        else:
+            transport = StreamableHttpTransport(url=url, headers=headers)
+        return MCPClient(transport)
+    return MCPClient(url)
+
+
 class MCPManager:
     """
     Manages MCP server connections for a session.
-    Supports connecting to multiple servers and registering their tools.
+    Only HTTP/HTTPS MCP servers are supported.
     """
 
     def __init__(self):
         self._clients: dict[str, object] = {}  # server_name -> client
         self._connected: set[str] = set()
+        self._configs: dict[str, dict] = {}  # server_name -> processed config
 
     async def connect_servers(
         self,
@@ -59,7 +98,7 @@ class MCPManager:
         total_registered = 0
 
         try:
-            from fastmcp import Client as MCPClient
+            from fastmcp import Client as _MCPClient  # noqa: F401 — validates import
         except ImportError:
             log.warning("fastmcp not installed — MCP servers will not be available")
             return 0
@@ -67,6 +106,7 @@ class MCPManager:
         for server_name, server_config in mcp_configs.items():
             # Skip disabled servers
             if not server_config.get("enabled", True):
+                self._configs[server_name] = process_mcp_config(server_config)
                 continue
 
             # Skip already connected servers
@@ -74,25 +114,31 @@ class MCPManager:
                 continue
 
             config = process_mcp_config(server_config)
-            transport = config.get("transport", "http")
+            self._configs[server_name] = config
             url = config.get("url", "")
-            command = config.get("command", "")
+
+            if not url:
+                log.warning(f"MCP server {server_name}: missing URL")
+                continue
+
+            # Validate URL scheme
+            if not url.startswith(("http://", "https://")):
+                log.warning(
+                    f"MCP server {server_name}: only http/https URLs are supported, got {url[:20]}"
+                )
+                continue
 
             try:
-                if transport == "http" and url:
-                    client = MCPClient(url)
-                elif transport == "stdio" and command:
-                    args = config.get("args", [])
-                    env = config.get("env", {})
-                    # Merge environment variables
-                    full_env = {**os.environ, **env} if env else None
-                    client = MCPClient(command, args=args, env=full_env)
-                else:
-                    log.warning(f"MCP server {server_name}: invalid config (transport={transport})")
-                    continue
+                # Build URL with query params if configured
+                params = config.get("params")
+                final_url = _build_url_with_params(url, params)
+
+                # Build headers dict if configured
+                headers = config.get("headers") or None
+
+                client = _create_mcp_client(final_url, headers)
 
                 # Connect and register tools
-                # Note: We keep the client connection open for the session
                 await client.__aenter__()
                 count = await tool_router.register_mcp_tools(
                     client,
@@ -121,11 +167,53 @@ class MCPManager:
 
         self._clients.clear()
         self._connected.clear()
+        self._configs.clear()
 
     @property
     def connected_servers(self) -> set[str]:
         """Return names of connected MCP servers."""
         return self._connected.copy()
+
+    def get_server_statuses(self) -> list[dict]:
+        """Return status info for all known servers."""
+        statuses = []
+        for name, config in self._configs.items():
+            statuses.append(
+                {
+                    "name": name,
+                    "url": config.get("url", ""),
+                    "enabled": config.get("enabled", True),
+                    "connected": name in self._connected,
+                }
+            )
+        return statuses
+
+
+async def test_mcp_connection(
+    url: str, headers: dict | None = None, params: dict | None = None
+) -> dict:
+    """
+    Test an MCP server connection.
+    Returns {"ok": True, "tools": int} on success or {"ok": False, "error": str} on failure.
+    """
+    try:
+        from fastmcp import Client as _MCPClient  # noqa: F401 — validates import
+    except ImportError:
+        return {"ok": False, "error": "fastmcp not installed on server"}
+
+    final_url = _build_url_with_params(url, params)
+
+    try:
+        client = _create_mcp_client(final_url, headers)
+        await client.__aenter__()
+        try:
+            tools = await client.list_tools()
+            tool_count = len(tools) if tools else 0
+            return {"ok": True, "tools": tool_count}
+        finally:
+            await client.__aexit__(None, None, None)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # Legacy function for backward compatibility

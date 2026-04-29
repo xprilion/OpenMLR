@@ -45,6 +45,9 @@ dependencies = [
     # Background jobs
     "celery>=5.4.0",
     "redis>=5.0.0",
+
+    # MCP (Model Context Protocol)
+    "fastmcp>=2.0.0",
 ]
 
 [project.optional-dependencies]

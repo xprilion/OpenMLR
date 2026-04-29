@@ -75,6 +75,7 @@ class MessageSend(BaseModel):
     mode: Literal["plan", "execute"] | None = (
         None  # per-message mode; only plan or execute accepted
     )
+    request_id: str | None = None  # client-generated idempotency key
 
 
 class ApprovalRequest(BaseModel):

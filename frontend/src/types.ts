@@ -151,6 +151,15 @@ export interface SearchBudget {
   max: number;
 }
 
+// ── MCP Servers ─────────────────────────────────────────
+
+export interface McpServerStatus {
+  name: string;
+  url: string;
+  enabled: boolean;
+  connected: boolean;
+}
+
 // ── Background Jobs ─────────────────────────────────────
 
 export interface AgentJob {
