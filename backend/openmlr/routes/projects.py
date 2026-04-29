@@ -58,7 +58,12 @@ DEFAULT_PROJECT_NAME = "All Conversations"
 
 
 async def get_or_create_default_project(db, user_id: int):
-    """Get (or create) the user's default project. Every user has exactly one."""
+    """Get (or create) the user's default project.
+
+    DEPRECATED: This exists only as a fallback for the terminal route.
+    New code should not call this — all conversations must belong to
+    a user-created project.
+    """
     existing = await ops.get_project_by_slug(db, user_id, DEFAULT_PROJECT_SLUG)
     if existing:
         return existing
@@ -71,7 +76,7 @@ async def get_or_create_default_project(db, user_id: int):
         user_id,
         DEFAULT_PROJECT_NAME,
         DEFAULT_PROJECT_SLUG,
-        description="Default workspace for all conversations",
+        description="Default workspace (legacy fallback)",
         workspace_path=workspace_path,
         settings={"is_default": True},
     )
@@ -176,16 +181,15 @@ async def list_projects(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all projects for the current user. Ensures default project exists."""
-    # Ensure default project exists
-    await get_or_create_default_project(db, user.id)
-
+    """List all projects for the current user. Excludes the legacy default project."""
     projects = await ops.get_user_projects(db, user.id, include_archived=include_archived)
     result = []
     for p in projects:
+        # Skip the legacy default project — it shouldn't appear in the UI
+        if p.settings and p.settings.get("is_default"):
+            continue
         convs = await ops.get_project_conversations(db, p.id)
         d = _project_dict(p, conv_count=len(convs))
-        d["is_default"] = bool(p.settings and p.settings.get("is_default"))
         result.append(d)
     return {"projects": result}
 

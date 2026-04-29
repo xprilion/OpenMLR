@@ -1,29 +1,19 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { 
-  X, 
-  Menu, 
   Circle, 
   CircleDot, 
   CheckCircle2, 
   XCircle,
-  FileText,
-  Pin,
-  Code,
-  Database,
-  FileEdit,
-  ClipboardList,
-  Download,
-  ExternalLink,
-  ChevronDown,
-  ChevronRight,
   ListTodo,
   Files,
+  Settings,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 import { api } from '../api';
 import { FileTree } from './FileTree';
+import { CollapsiblePanel } from './CollapsiblePanel';
 import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
-
-type TabId = 'tasks' | 'files';
 
 interface Props {
   tasks: PlanTask[];
@@ -32,8 +22,11 @@ interface Props {
   searchBudget: SearchBudget | null;
   visible: boolean;
   projectUuid: string | null;
+  fileTreeRefreshKey?: number;
   onToggle: () => void;
   onViewReport: (resource: Resource) => void;
+  onFileOpen?: (path: string, content: string) => void;
+  onSearchBudgetChange?: (newMax: number) => void;
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -43,261 +36,157 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   cancelled: <XCircle size={14} />,
 };
 
-const RES_ICONS: Record<string, React.ReactNode> = {
-  plan: <Pin size={14} />,
-  paper: <FileText size={14} />,
-  code: <Code size={14} />,
-  dataset: <Database size={14} />,
-  doc: <FileEdit size={14} />,
-  report: <ClipboardList size={14} />,
-};
+/* ── Search Budget Settings Dialog ── */
+function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: number; onSave: (v: number) => void; onClose: () => void }) {
+  const [value, setValue] = useState(String(currentMax));
+  const [saving, setSaving] = useState(false);
 
-/** Convert markdown to a basic LaTeX document. */
-function markdownToLatex(md: string, title: string): string {
-  const lines: string[] = [
-    '\\documentclass{article}',
-    '\\usepackage[utf8]{inputenc}',
-    '\\usepackage{amsmath,amssymb}',
-    '\\usepackage{hyperref}',
-    '',
-    `\\title{${title}}`,
-    '\\author{}',
-    '\\date{\\today}',
-    '',
-    '\\begin{document}',
-    '\\maketitle',
-    '',
-  ];
-  for (const line of md.split('\n')) {
-    if (line.startsWith('### ')) {
-      lines.push(`\\subsubsection{${line.slice(4)}}`);
-    } else if (line.startsWith('## ')) {
-      lines.push(`\\subsection{${line.slice(3)}}`);
-    } else if (line.startsWith('# ')) {
-      // Skip title heading — already in \maketitle
-      continue;
-    } else {
-      lines.push(line);
-    }
-  }
-  lines.push('\\end{document}');
-  return lines.join('\n');
-}
-
-/** Trigger a file download from a string. */
-function downloadFile(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-export function RightPanel({ tasks, resources, contextUsage, searchBudget, visible, projectUuid, onToggle, onViewReport }: Props) {
-  const hasContent = tasks.length > 0 || resources.length > 0;
-  const [splitY, setSplitY] = useState(50); // percentage for tasks section
-  const [exporting, setExporting] = useState(false);
-  const [tasksCollapsed, setTasksCollapsed] = useState(false);
-  const [resourcesCollapsed, setResourcesCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>('tasks');
-  const dragging = useRef(false);
-  const panelRef = useRef<HTMLElement>(null);
-
-  const onMouseDown = useCallback(() => { dragging.current = true; }, []);
-
-  const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragging.current || !panelRef.current) return;
-    const rect = panelRef.current.getBoundingClientRect();
-    // Subtract header height (~42px) and gauge area (~60px)
-    const contentTop = rect.top + 102;
-    const contentHeight = rect.height - 102;
-    const y = ((e.clientY - contentTop) / contentHeight) * 100;
-    setSplitY(Math.max(15, Math.min(85, y)));
-  }, []);
-
-  const onMouseUp = useCallback(() => { dragging.current = false; }, []);
-
-  // Find the paper resource (if any)
-  const paperResource = resources.find((r) => r.type === 'paper');
-  // Non-paper resources for the general list
-  const otherResources = resources.filter((r) => r.type !== 'paper');
-
-  /** Fetch paper content and download in the given format. */
-  const handleExport = useCallback(async (format: 'markdown' | 'latex') => {
-    if (!paperResource?.id) return;
-    setExporting(true);
+  const handleSave = async () => {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 1) return;
+    setSaving(true);
     try {
-      const data = await api.getReport(paperResource.id);
-      const content: string = data.content || '';
-      if (format === 'latex') {
-        const latex = markdownToLatex(content, paperResource.title);
-        downloadFile(latex, 'paper.tex', 'application/x-tex');
-      } else {
-        downloadFile(content, 'paper.md', 'text/markdown');
-      }
+      await api.updateSetting('agent', 'paper_search_budget', num);
+      onSave(num);
     } catch {
-      // silently fail — could add a toast here
+      // ignore
     } finally {
-      setExporting(false);
+      setSaving(false);
     }
-  }, [paperResource]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-surface border border-border rounded-xl shadow-2xl p-6 w-80" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-text mb-4">Search Budget</h3>
+        <p className="text-xs text-text-dim mb-3">
+          Set the maximum number of paper searches allowed per session.
+        </p>
+        <input
+          type="number"
+          min={1}
+          max={200}
+          className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-primary focus:outline-none transition-colors mb-4"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+          autoFocus
+        />
+        <div className="flex gap-2 justify-end">
+          <button
+            className="px-4 py-1.5 text-xs font-medium rounded-lg text-text-dim hover:text-text hover:bg-surface-hover transition-colors"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="px-4 py-1.5 text-xs font-medium rounded-lg bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-50"
+            disabled={saving || !value || parseInt(value, 10) < 1}
+            onClick={handleSave}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, visible, projectUuid, fileTreeRefreshKey, onToggle, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
+  const [showBudgetDialog, setShowBudgetDialog] = useState(false);
 
   const done = tasks.filter((t) => t.status === 'completed').length;
   const ctxPct = contextUsage ? Math.round(contextUsage.ratio * 100) : 0;
   const ctxColor = ctxPct > 80 ? 'bg-error' : ctxPct > 60 ? 'bg-warning' : 'bg-success';
+  const budgetUsed = searchBudget?.used ?? 0;
+  const budgetMax = searchBudget?.max ?? 25;
+  const budgetPct = budgetMax > 0 ? Math.round((budgetUsed / budgetMax) * 100) : 0;
 
-  // Don't render anything if there's no content and no context usage
-  if (!hasContent && !contextUsage && !visible) {
-    return null;
-  }
-
-  // Collapsed state: show toggle button (fixed position, doesn't affect layout)
+  // Collapsed state: show narrow icon rail
   if (!visible) {
     return (
-      <button 
-        className="fixed right-4 top-20 z-20 w-10 h-10 rounded-lg bg-surface border border-border flex items-center justify-center text-text-dim hover:text-text hover:border-primary transition-all shadow-md"
-        onClick={onToggle} 
-        title="Tasks & resources"
-      >
+      <aside className="fixed right-0 top-14 bottom-0 w-12 bg-surface border-l border-border flex flex-col items-center py-3 gap-2 z-10 max-lg:hidden">
+        <button
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+          onClick={onToggle}
+          title="Expand panel"
+        >
+          <PanelRightOpen size={18} />
+        </button>
         {tasks.length > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center font-medium">
-            {tasks.length}
-          </span>
+          <button
+            className="relative w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+            onClick={onToggle}
+            title="Todos"
+          >
+            <ListTodo size={18} />
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[9px] rounded-full flex items-center justify-center font-medium">
+              {tasks.length}
+            </span>
+          </button>
         )}
-        <Menu size={18} />
-      </button>
+      </aside>
     );
   }
 
-  // Expanded state: fixed position sidebar that doesn't affect main layout
+  // Expanded state — no tabs, everything stacked
   return (
     <aside
       className="fixed right-0 top-14 bottom-0 w-72 bg-surface border-l border-border flex flex-col z-10 max-lg:hidden"
-      ref={panelRef}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
     >
-      {/* Header with tabs */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-1">
-          <button
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'tasks' ? 'bg-primary/10 text-primary' : 'text-text-dim hover:text-text'}`}
-            onClick={() => setActiveTab('tasks')}
-          >
-            <span className="flex items-center gap-1.5">
-              <ListTodo size={12} />
-              Tasks
-              {tasks.length > 0 && <span className="text-[10px]">({tasks.length})</span>}
-            </span>
-          </button>
-          {projectUuid && (
-            <button
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'files' ? 'bg-primary/10 text-primary' : 'text-text-dim hover:text-text'}`}
-              onClick={() => setActiveTab('files')}
-            >
-              <span className="flex items-center gap-1.5">
-                <Files size={12} />
-                Files
-              </span>
-            </button>
-          )}
-        </div>
+      {/* Header — just the collapse button */}
+      <div className="flex items-center justify-end px-3 py-2 border-b border-border shrink-0">
         <button 
           className="w-7 h-7 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
           onClick={onToggle}
+          title="Collapse panel"
         >
-          <X size={16} />
+          <PanelRightClose size={16} />
         </button>
       </div>
 
       {/* Context gauge */}
-      {contextUsage && (
-        <div className="px-4 py-3 border-b border-border">
-          <div className="text-xs text-text-dim mb-2">
-            Context: {(contextUsage.used / 1000).toFixed(0)}k / {(contextUsage.max / 1000).toFixed(0)}k tokens
-          </div>
-          <div className="h-2 bg-bg rounded-full overflow-hidden">
-            <div className={`h-full ${ctxColor} transition-all`} style={{ width: `${ctxPct}%` }} />
-          </div>
+      <div className="px-4 py-3 border-b border-border shrink-0">
+        <div className="text-xs text-text-dim mb-2">
+          {contextUsage
+            ? `Context: ${(contextUsage.used / 1000).toFixed(0)}k / ${(contextUsage.max / 1000).toFixed(0)}k tokens`
+            : 'Context: --'}
         </div>
-      )}
+        <div className="h-2 bg-bg rounded-full overflow-hidden">
+          {contextUsage && (
+            <div className={`h-full ${ctxColor} transition-all`} style={{ width: `${ctxPct}%` }} />
+          )}
+        </div>
+      </div>
 
       {/* Search budget */}
-      {searchBudget && (
-        <div className="px-4 py-3 border-b border-border">
-          <div className="text-xs text-text-dim mb-2">
-            Searches: {searchBudget.used} / {searchBudget.max}
-          </div>
-          <div className="h-2 bg-bg rounded-full overflow-hidden">
+      <div className="px-4 py-3 border-b border-border shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-text-dim">
+            Searches: {budgetUsed} / {budgetMax}
+          </span>
+          <button
+            className="w-5 h-5 rounded flex items-center justify-center text-text-dim hover:text-text hover:bg-surface-hover transition-colors"
+            onClick={() => setShowBudgetDialog(true)}
+            title="Change search budget"
+          >
+            <Settings size={12} />
+          </button>
+        </div>
+        <div className="h-2 bg-bg rounded-full overflow-hidden">
+          {budgetUsed > 0 && (
             <div 
-              className={`h-full transition-all ${searchBudget.used >= searchBudget.max ? 'bg-error' : 'bg-warning'}`}
-              style={{ width: `${Math.round((searchBudget.used / searchBudget.max) * 100)}%` }} 
+              className={`h-full transition-all ${budgetUsed >= budgetMax ? 'bg-error' : 'bg-warning'}`}
+              style={{ width: `${budgetPct}%` }} 
             />
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Files tab */}
-      {activeTab === 'files' && projectUuid && (
-        <div className="flex-1 overflow-hidden">
-          <FileTree projectUuid={projectUuid} />
-        </div>
-      )}
-
-      {/* Tasks tab content */}
-      {activeTab === 'tasks' && <>
-
-      {/* Paper section — only shown when a paper resource exists */}
-      {paperResource && (
-        <div className="px-4 py-3 border-b border-border">
-          <div className="text-xs uppercase tracking-wider text-text-dim font-semibold mb-2">Paper</div>
-          <div className="bg-bg rounded-lg p-3 border border-border">
-            <button 
-              className="flex items-center gap-2 text-left w-full text-text hover:text-primary transition-colors"
-              onClick={() => onViewReport(paperResource)}
-            >
-              <FileText size={16} />
-              <span className="truncate font-medium">{paperResource.title}</span>
-            </button>
-            <div className="flex gap-2 mt-3">
-              <button
-                className="flex-1 py-1.5 text-xs font-medium bg-surface-hover rounded-md text-text-dim hover:text-text transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                disabled={exporting}
-                onClick={() => handleExport('markdown')}
-                title="Download as Markdown"
-              >
-                <Download size={12} />
-                .md
-              </button>
-              <button
-                className="flex-1 py-1.5 text-xs font-medium bg-surface-hover rounded-md text-text-dim hover:text-text transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
-                disabled={exporting}
-                onClick={() => handleExport('latex')}
-                title="Download as LaTeX"
-              >
-                <Download size={12} />
-                .tex
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tasks section */}
-      <div className="px-4 py-3 overflow-auto" style={{ flex: tasksCollapsed ? '0 0 auto' : `0 0 ${splitY}%` }}>
-        <button 
-          className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 hover:text-text transition-colors w-full text-left"
-          onClick={() => setTasksCollapsed(!tasksCollapsed)}
-        >
-          {tasksCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-          Tasks ({done}/{tasks.length})
-        </button>
-        {!tasksCollapsed && (
+      {/* Scrollable content: Todos + Files stacked */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Todos */}
+        <CollapsiblePanel title="Todos" icon={<ListTodo size={12} />} badge={`${done}/${tasks.length}`}>
           <div className="flex flex-col gap-1.5">
             {tasks.map((t, i) => (
               <div 
@@ -322,70 +211,29 @@ export function RightPanel({ tasks, resources, contextUsage, searchBudget, visib
               <div className="text-sm text-text-dim py-2">No tasks yet</div>
             )}
           </div>
+        </CollapsiblePanel>
+
+        {/* Files */}
+        {projectUuid && (
+          <CollapsiblePanel title="Files" icon={<Files size={12} />}>
+            <div className="-mx-4 -mb-3">
+              <FileTree projectUuid={projectUuid} refreshKey={fileTreeRefreshKey} onFileSelect={onFileOpen} />
+            </div>
+          </CollapsiblePanel>
         )}
       </div>
 
-      {/* Draggable separator */}
-      <div 
-        className="h-1 bg-border hover:bg-primary cursor-ns-resize transition-colors"
-        onMouseDown={onMouseDown} 
-      />
-
-      {/* Resources section */}
-      <div className="px-4 py-3 overflow-auto" style={{ flex: resourcesCollapsed ? '0 0 auto' : `0 0 ${100 - splitY}%` }}>
-        <button 
-          className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 hover:text-text transition-colors w-full text-left"
-          onClick={() => setResourcesCollapsed(!resourcesCollapsed)}
-        >
-          {resourcesCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-          Resources ({otherResources.length})
-        </button>
-        {!resourcesCollapsed && (
-          <div className="flex flex-col gap-1.5">
-            {[...otherResources].sort((a, b) => (a.type === 'plan' ? -1 : b.type === 'plan' ? 1 : 0)).map((r, i) => (
-              <div 
-                key={i} 
-                className={`flex items-start gap-2 px-2.5 py-2 rounded-lg text-sm ${
-                  r.type === 'report' || r.type === 'plan' ? 'bg-primary/5 border border-primary/20' : ''
-                }`}
-              >
-                <span className="shrink-0 text-text-dim mt-0.5">
-                  {RES_ICONS[r.type] || <FileText size={14} />}
-                </span>
-                <div className="flex-1 min-w-0">
-                  {(r.type === 'report' || r.type === 'plan') && r.id ? (
-                    <button 
-                      className="text-left font-medium text-text hover:text-primary transition-colors truncate block w-full"
-                      onClick={() => onViewReport(r)}
-                    >
-                      {r.title}
-                    </button>
-                  ) : (
-                    <span className="font-medium text-text truncate block">{r.title}</span>
-                  )}
-                  {r.url && (
-                    <a 
-                      className="text-xs text-text-dim hover:text-primary truncate flex items-center gap-1 mt-0.5"
-                      href={r.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink size={10} />
-                      {r.url.length > 35 ? r.url.slice(0, 35) + '...' : r.url}
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-            {otherResources.length === 0 && (
-              <div className="text-sm text-text-dim py-2">No resources yet</div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* End of tasks tab */}
-      </>}
+      {/* Search Budget Settings Dialog */}
+      {showBudgetDialog && (
+        <SearchBudgetDialog
+          currentMax={budgetMax}
+          onSave={(newMax) => {
+            setShowBudgetDialog(false);
+            onSearchBudgetChange?.(newMax);
+          }}
+          onClose={() => setShowBudgetDialog(false)}
+        />
+      )}
     </aside>
   );
 }

@@ -57,6 +57,7 @@ make dev-logs       # Watch logs
 
 Open `http://localhost:5173` for the UI (Vite HMR).
 `http://localhost:3000` serves the API with Swagger docs at `/docs`.
+`http://localhost:4000` for the docs site (run `make docs-dev` separately).
 
 ### Native
 ```bash

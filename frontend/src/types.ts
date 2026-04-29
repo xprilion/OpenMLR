@@ -109,6 +109,12 @@ export interface FileNode {
   modified: number;
 }
 
+export interface OpenFile {
+  path: string;
+  content: string;
+  language: string;
+}
+
 // ── Task Plan & Resources ───────────────────────────────
 
 export interface PlanTask {
@@ -122,6 +128,14 @@ export interface Resource {
   type: 'paper' | 'code' | 'dataset' | 'doc' | 'report' | 'plan';
   id?: string;    // for reports — used to fetch content
   content?: string;
+}
+
+// ── TODO Approval ───────────────────────────────────────
+
+export interface TodoApprovalPayload {
+  change_type: 'create' | 'add';
+  proposed_tasks: Array<{ title: string; status: string; priority?: string }>;
+  current_tasks: Array<{ title: string; status: string; priority?: string }>;
 }
 
 // ── Context & Budget ────────────────────────────────────

@@ -8,12 +8,14 @@ import pytest
 from openmlr.tools.local import (
     CONTAINER_PREFIX,
     DOCKER_IMAGE,
+    _get_effective_root,
     _handle_edit,
     _handle_read,
     _handle_write,
     _running_in_container,
     _validate_path,
     create_local_tools,
+    set_project_workspace,
 )
 
 
@@ -99,6 +101,64 @@ class TestValidatePath:
         within = Path(workspace) / "file.txt"
         resolved, error = _validate_path(within)
         assert error is None
+
+
+class TestProjectWorkspace:
+    """Tests for project workspace targeting (set_project_workspace, _get_effective_root)."""
+
+    def test_get_effective_root_defaults_to_cwd(self):
+        set_project_workspace(None)
+        root = _get_effective_root()
+        assert root == Path.cwd().resolve()
+
+    def test_get_effective_root_uses_project_workspace(self, tmp_path):
+        set_project_workspace(str(tmp_path))
+        try:
+            root = _get_effective_root()
+            assert root == tmp_path.resolve()
+        finally:
+            set_project_workspace(None)
+
+    def test_get_effective_root_prefers_project_over_env(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("openmlr.tools.local.WORKSPACE_ROOT", "/some/other/path")
+        set_project_workspace(str(tmp_path))
+        try:
+            root = _get_effective_root()
+            assert root == tmp_path.resolve()
+        finally:
+            set_project_workspace(None)
+
+    def test_validate_path_allows_project_workspace(self, tmp_path):
+        set_project_workspace(str(tmp_path))
+        try:
+            path = tmp_path / "code" / "train.py"
+            resolved, error = _validate_path(path)
+            assert error is None
+        finally:
+            set_project_workspace(None)
+
+    def test_validate_path_blocks_outside_project_workspace(self, tmp_path, monkeypatch):
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        set_project_workspace(str(project_dir))
+        # Also change cwd so the "also allow CWD" fallback doesn't save it
+        monkeypatch.chdir(project_dir)
+        try:
+            path = other_dir / "secret.txt"
+            resolved, error = _validate_path(path)
+            assert error is not None
+            assert "outside workspace" in error
+        finally:
+            set_project_workspace(None)
+
+    def test_set_project_workspace_clears(self):
+        set_project_workspace("/tmp/test-project")
+        set_project_workspace(None)
+        root = _get_effective_root()
+        # Should fall back to CWD or WORKSPACE_ROOT, not /tmp/test-project
+        assert str(root) != "/tmp/test-project"
 
 
 @pytest.mark.asyncio

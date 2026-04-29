@@ -76,7 +76,7 @@ async def fetch_with_retry(
 
     for attempt in range(max_retries + 1):
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
                 response = await client.request(
                     method,
                     url,

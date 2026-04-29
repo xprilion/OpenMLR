@@ -40,6 +40,7 @@ class ConversationCreate(BaseModel):
     title: str | None = "New conversation"
     model: str | None = None
     mode: str | None = "general"  # "research", "writing", "coding", "general"
+    project_uuid: str | None = None  # required — conversations must belong to a project
 
 
 class ConversationResponse(BaseModel):

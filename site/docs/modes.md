@@ -15,8 +15,8 @@ OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focuse
 - Ask clarifying questions via `ask_user` (structured options UI)
 - Create and update task plans via `plan_tool`
 - Read files and search the codebase (read-only filesystem tools)
-- Search the web and papers for context
-- Generate `PLAN.md` and pin it in resources
+- Search the web and papers for quick feasibility checks (budget: 5 calls before warning)
+- Generate `PLAN.md` (auto-saved to `.project-meta/plans/PLAN.md` in the workspace)
 
 **What the agent cannot do:**
 - Write or edit files
@@ -28,6 +28,10 @@ OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focuse
 
 **When to use**: Start here. Let the agent understand the problem, ask questions, and build a plan before switching to Execute.
 
+::: tip Research budget
+Plan mode has a research call budget. After 5+ research tool calls (papers, web_search, GitHub, HuggingFace), the agent is warned to save comprehensive research for Execute mode tasks.
+:::
+
 ## Execute Mode (E)
 
 **Purpose**: Do the work. Follow the plan built in Plan mode.
@@ -35,12 +39,16 @@ OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focuse
 **What the agent can do:**
 - All tools except `ask_user`
 - Research papers, crawl citations, spawn sub-agents
-- Write and edit files
-- Draft paper sections with auto-save
+- Write and edit files (auto-targeted to the project workspace)
+- Draft paper sections with auto-save (to `papers/` in workspace)
 - Run code in bash or sandboxes (Docker/SSH/Modal)
 
 **What the agent cannot do:**
-- Use `ask_user` (no structured questions — it should be working, not asking)
+- Use `ask_user` (no structured questions -- it should be working, not asking)
+
+::: info TODO approval
+In Execute mode, creating a new task plan or adding tasks requires **user approval**. The agent proposes the changes and a review UI lets you approve, edit, or reject before they take effect.
+:::
 
 **Visual indicator**: Messages have a **blue border**.
 

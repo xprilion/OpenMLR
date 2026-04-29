@@ -70,7 +70,7 @@ async def _get_author_info(db, conv_id: int) -> dict | None:
 
 
 async def _save_project(conv_id: int, proj: dict) -> None:
-    """Save project metadata and draft to DB."""
+    """Save project metadata and draft to DB and workspace filesystem."""
     _projects[conv_id] = proj
 
     session_factory = _get_session_factory()
@@ -89,16 +89,52 @@ async def _save_project(conv_id: int, proj: dict) -> None:
         draft, _ = _get_draft_from_proj(proj, author_info)
         await ops.upsert_paper_resource(db, conv_id, proj.get("title", "Paper"), draft)
 
+        # Also write the paper draft and metadata to the project workspace
+        # so they appear in the FileTree.
+        try:
+            ws_path = await ops.get_project_workspace_for_conversation(db, conv_id)
+            if ws_path:
+                from pathlib import Path
+
+                papers_dir = Path(ws_path) / "papers"
+                papers_dir.mkdir(parents=True, exist_ok=True)
+
+                # Sanitize title for filename
+                safe_title = (
+                    "".join(
+                        c if c.isalnum() or c in "-_ " else "_" for c in proj.get("title", "paper")
+                    )[:80]
+                    .strip()
+                    .replace(" ", "_")
+                    or "paper"
+                )
+
+                (papers_dir / f"{safe_title}.md").write_text(draft, encoding="utf-8")
+                (papers_dir / f".{safe_title}.meta.json").write_text(
+                    json.dumps(proj, indent=2, default=str), encoding="utf-8"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to write paper to workspace: {e}")
+
 
 def create_writing_tool() -> ToolSpec:
     return ToolSpec(
         name="writing",
         description=(
-            "Manage academic paper writing. Supports section-by-section writing.\n"
-            "Operations: create_project, set_outline, write_section, refine_section, "
-            "add_citation, get_draft, list_sections.\n\n"
-            "The paper is auto-saved after each write. Users can preview and export "
-            "from the Paper tab in the UI — do NOT use the 'write' file tool for papers."
+            "Manage academic paper writing with section-by-section authoring.\n\n"
+            "Workflow: create_project -> set_outline -> write_section (for each) -> "
+            "add_citation -> get_draft to review.\n\n"
+            "Operations:\n"
+            "- create_project: Start a new paper with a title\n"
+            "- set_outline: Define section structure [{id, title, subsections}]\n"
+            "- write_section: Write content for a section by ID\n"
+            "- refine_section: Revise an existing section\n"
+            "- add_citation: Add a reference to the bibliography\n"
+            "- get_draft: Review the full rendered paper\n"
+            "- list_sections: Check which sections are done/pending\n\n"
+            "The paper auto-saves to the database AND to papers/ in the workspace "
+            "(visible in Files tab). Do NOT use the 'write' tool for papers.\n"
+            "You MUST write ALL sections — do NOT leave '[Not yet written]' placeholders."
         ),
         parameters={
             "type": "object",
@@ -198,6 +234,7 @@ async def _handle_writing(
         if ok and conv_id:
             await _save_project(conv_id, _projects[conv_id])
             await _emit_resources(session, conv_id)
+            await _emit_files_changed(session, "papers")
         return result, ok
 
     # For all other operations, try to load existing project
@@ -209,24 +246,28 @@ async def _handle_writing(
         if ok and conv_id:
             await _save_project(conv_id, _projects[conv_id])
             await _emit_resources(session, conv_id)
+            await _emit_files_changed(session, "papers")
         return result, ok
     elif operation == "write_section":
         result, ok = _write_section(conv_id, section_id, content)
         if ok and conv_id:
             await _save_project(conv_id, _projects[conv_id])
             await _emit_resources(session, conv_id)
+            await _emit_files_changed(session, "papers")
         return result, ok
     elif operation == "refine_section":
         result, ok = _refine_section(conv_id, section_id, content, feedback)
         if ok and content and conv_id:
             await _save_project(conv_id, _projects[conv_id])
             await _emit_resources(session, conv_id)
+            await _emit_files_changed(session, "papers")
         return result, ok
     elif operation == "add_citation":
         result, ok = _add_citation(conv_id, citation)
         if ok and conv_id:
             await _save_project(conv_id, _projects[conv_id])
             await _emit_resources(session, conv_id)
+            await _emit_files_changed(session, "papers")
         return result, ok
     elif operation == "get_draft":
         return await _get_draft(conv_id)
@@ -285,10 +326,20 @@ def _write_section(conv_id: int, section_id: str, content: str) -> tuple[str, bo
     proj["sections"][section_id] = content
     written = len(proj["sections"])
     total = _count_sections(proj["outline"])
-    return (
+    incomplete = _get_incomplete_sections(proj)
+    msg = (
         f"Section '{section_id}' written ({len(content)} chars). "
         f"Progress: {written}/{total} sections. Paper auto-saved."
-    ), True
+    )
+    if incomplete:
+        msg += (
+            f"\n\nRemaining incomplete sections ({len(incomplete)}): "
+            + ", ".join(incomplete)
+            + "\nYou MUST write all remaining sections — do NOT leave placeholders."
+        )
+    else:
+        msg += "\n\nAll sections are now written."
+    return msg, True
 
 
 def _refine_section(conv_id: int, section_id: str, content: str, feedback: str) -> tuple[str, bool]:
@@ -335,7 +386,39 @@ async def _get_draft(conv_id: int) -> tuple[str, bool]:
         async with session_factory() as db:
             author_info = await _get_author_info(db, conv_id)
 
-    return _get_draft_from_proj(proj, author_info)
+    draft, ok = _get_draft_from_proj(proj, author_info)
+
+    # Append warning about incomplete sections so the agent cannot
+    # consider the paper finished while placeholders remain.
+    incomplete = _get_incomplete_sections(proj)
+    if incomplete:
+        draft += (
+            "\n\n---\n"
+            f"**WARNING — {len(incomplete)} section(s) still incomplete "
+            "(marked '[Not yet written]'):**\n"
+        )
+        for sec in incomplete:
+            draft += f"  - {sec}\n"
+        draft += (
+            "\nYou MUST write content for every section before the paper "
+            "can be considered complete. Do NOT leave placeholder sections."
+        )
+
+    return draft, ok
+
+
+def _get_incomplete_sections(proj: dict) -> list[str]:
+    """Return a list of section IDs that still have placeholder content."""
+    incomplete = []
+    for sec in proj.get("outline", []):
+        sid = sec.get("id", "")
+        if sid and sid not in proj.get("sections", {}):
+            incomplete.append(f"{sid} ({sec.get('title', '')})")
+        for sub in sec.get("subsections", []):
+            sub_id = sub.get("id", "")
+            if sub_id and sub_id not in proj.get("sections", {}):
+                incomplete.append(f"{sub_id} ({sub.get('title', '')})")
+    return incomplete
 
 
 def _get_draft_from_proj(proj: dict, author_info: dict | None = None) -> tuple[str, bool]:
@@ -403,6 +486,12 @@ def _list_sections(conv_id: int) -> tuple[str, bool]:
     else:
         lines.append("No outline defined. Use set_outline first.")
     return "\n".join(lines), True
+
+
+async def _emit_files_changed(session, path: str = "") -> None:
+    """Notify the frontend that workspace files changed so FileTree refreshes."""
+    if session:
+        await session.emit(AgentEvent(event_type="workspace_files_changed", data={"path": path}))
 
 
 async def _emit_resources(session, conv_id: int) -> None:

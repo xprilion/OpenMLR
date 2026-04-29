@@ -310,6 +310,28 @@ class TestWorkspacePersistence:
         assert "Attention is effective for NLP" in state2["key_findings"]
         assert "Does it scale?" in state2["open_questions"]
 
+    def test_save_report(self, workspace_dir):
+        wp = WorkspacePersistence(workspace_dir)
+        filepath = wp.save_report(
+            title="Literature Review",
+            content="# Report\n\nFound 5 relevant papers.",
+        )
+        assert filepath.exists()
+        content = filepath.read_text()
+        assert "Found 5 relevant papers" in content
+        assert filepath.parent.name == "reports"
+
+    def test_save_report_sanitizes_filename(self, workspace_dir):
+        wp = WorkspacePersistence(workspace_dir)
+        filepath = wp.save_report(
+            title="Task: Find papers/methods!",
+            content="Report content.",
+        )
+        assert filepath.exists()
+        # Filename should not contain special chars
+        assert "/" not in filepath.name
+        assert "!" not in filepath.name
+
     def test_save_plan(self, workspace_dir):
         wp = WorkspacePersistence(workspace_dir)
         filepath = wp.save_plan(

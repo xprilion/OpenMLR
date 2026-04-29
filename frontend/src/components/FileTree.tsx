@@ -10,12 +10,16 @@ import {
   ChevronDown,
   RefreshCw,
   AlertCircle,
+  Pin,
+  ClipboardList,
+  BookOpen,
 } from 'lucide-react';
 import { api } from '../api';
 import type { FileNode } from '../types';
 
 interface Props {
   projectUuid: string;
+  refreshKey?: number;
   onFileSelect?: (path: string, content: string) => void;
 }
 
@@ -39,6 +43,16 @@ const FILE_ICONS: Record<string, React.ReactNode> = {
   '.jpg': <Image size={14} className="text-purple-400" />,
   '.svg': <Image size={14} className="text-purple-400" />,
 };
+
+/** Get a special badge/icon for generated resource files. */
+function getSpecialBadge(path: string, name: string): React.ReactNode | null {
+  if (name === 'PLAN.md') return <Pin size={10} className="text-primary" />;
+  if (path.includes('.project-meta/reports/') && name.endsWith('.md'))
+    return <ClipboardList size={10} className="text-success" />;
+  if (path.startsWith('papers/') && name.endsWith('.md') && !name.startsWith('.'))
+    return <BookOpen size={10} className="text-warning" />;
+  return null;
+}
 
 function getFileIcon(name: string, isDir: boolean): React.ReactNode {
   if (isDir) return null; // handled by folder icons
@@ -64,6 +78,8 @@ function TreeItem({
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
 }) {
+  const badge = getSpecialBadge(node.path, node.name);
+
   return (
     <div>
       <button
@@ -100,6 +116,9 @@ function TreeItem({
         {/* Name */}
         <span className="truncate flex-1">{node.name}</span>
 
+        {/* Special badge for generated resource files */}
+        {badge && <span className="shrink-0">{badge}</span>}
+
         {/* Size (for files) */}
         {!node.is_dir && node.size !== null && (
           <span className="text-xs text-text-dim shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -134,13 +153,10 @@ function TreeItem({
   );
 }
 
-export function FileTree({ projectUuid, onFileSelect }: Props) {
+export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<string | null>(null);
-  const [fileLoading, setFileLoading] = useState(false);
 
   const loadDirectory = useCallback(async (path: string = ''): Promise<TreeNode[]> => {
     try {
@@ -165,6 +181,25 @@ export function FileTree({ projectUuid, onFileSelect }: Props) {
       setLoading(false);
     });
   }, [projectUuid, loadDirectory]);
+
+  // Auto-refresh when refreshKey changes (triggered by workspace_files_changed SSE event)
+  useEffect(() => {
+    if (refreshKey === undefined || refreshKey === 0) return;
+    // Refresh the root directory listing without showing full loading state
+    loadDirectory('').then((entries) => {
+      setNodes((prev) => {
+        // Merge: preserve expanded state of existing nodes
+        const prevMap = new Map(prev.map((n) => [n.path, n]));
+        return entries.map((entry) => {
+          const existing = prevMap.get(entry.path);
+          if (existing && existing.expanded && existing.children) {
+            return { ...entry, expanded: true, children: existing.children };
+          }
+          return entry;
+        });
+      });
+    });
+  }, [refreshKey, loadDirectory]);
 
   const handleToggle = useCallback(async (path: string) => {
     setNodes((prev) => {
@@ -202,19 +237,14 @@ export function FileTree({ projectUuid, onFileSelect }: Props) {
   }, [loadDirectory]);
 
   const handleSelect = useCallback(async (path: string) => {
-    setSelectedFile(path);
-    setFileLoading(true);
-    setFileContent(null);
     try {
       const data = await api.readFile(projectUuid, path);
       if (data.content !== undefined) {
-        setFileContent(data.content);
         onFileSelect?.(path, data.content);
       }
     } catch {
-      setFileContent(null);
+      // File could not be read (binary, etc.)
     }
-    setFileLoading(false);
   }, [projectUuid, onFileSelect]);
 
   const handleRefresh = useCallback(async () => {
@@ -274,30 +304,6 @@ export function FileTree({ projectUuid, onFileSelect }: Props) {
         )}
       </div>
 
-      {/* Selected file preview */}
-      {selectedFile && (
-        <div className="border-t border-border">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-surface-hover">
-            <span className="text-xs text-text-dim truncate">{selectedFile}</span>
-            <button
-              className="w-5 h-5 rounded flex items-center justify-center text-text-dim hover:text-text"
-              onClick={() => { setSelectedFile(null); setFileContent(null); }}
-              title="Close"
-            >
-              ×
-            </button>
-          </div>
-          {fileLoading ? (
-            <div className="px-3 py-4 text-xs text-text-dim">Loading...</div>
-          ) : fileContent !== null ? (
-            <pre className="px-3 py-2 text-xs text-text overflow-auto max-h-48 font-mono whitespace-pre-wrap">
-              {fileContent.length > 5000 ? fileContent.slice(0, 5000) + '\n...' : fileContent}
-            </pre>
-          ) : (
-            <div className="px-3 py-4 text-xs text-text-dim">Binary file</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api';
+import type { Project } from '../types';
 
 interface Provider {
   id: string;
@@ -16,11 +17,11 @@ interface ModelInfo {
 }
 
 interface Props {
-  onComplete: (model: string) => void;
+  onComplete: (model: string, project?: Project) => void;
 }
 
 export function OnboardingModal({ onComplete }: Props) {
-  const [step, setStep] = useState<'providers' | 'model'>('providers');
+  const [step, setStep] = useState<'providers' | 'model' | 'project'>('providers');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +29,12 @@ export function OnboardingModal({ onComplete }: Props) {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
+  const [selectedModel, setSelectedModel] = useState('');
+
+  // Project creation state
+  const [projectName, setProjectName] = useState('');
+  const [projectDesc, setProjectDesc] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -77,12 +84,10 @@ export function OnboardingModal({ onComplete }: Props) {
     setSaving(true);
     try {
       await api.saveConfig(toSave);
-      // Refresh providers and models after saving keys
       const [pData, mData] = await Promise.all([api.getProviders(), api.getModels()]);
       setProviders(pData.providers || []);
       setModels(mData.models || []);
       setKeyInputs({});
-      // Only go to model step if we now have models
       if ((mData.models || []).length > 0) {
         setStep('model');
       }
@@ -93,7 +98,24 @@ export function OnboardingModal({ onComplete }: Props) {
 
   const selectModel = async (modelId: string) => {
     await api.setModel(modelId);
-    onComplete(modelId);
+    setSelectedModel(modelId);
+    // Move to project creation step
+    setStep('project');
+  };
+
+  const createProjectAndFinish = async () => {
+    if (!projectName.trim()) return;
+    setCreatingProject(true);
+    try {
+      const data = await api.createProject(projectName.trim(), projectDesc.trim() || undefined);
+      const project = data.project as Project;
+      onComplete(selectedModel, project);
+    } catch {
+      // If project creation fails, still complete onboarding with the model
+      onComplete(selectedModel);
+    } finally {
+      setCreatingProject(false);
+    }
   };
 
   if (loading) {
@@ -115,8 +137,21 @@ export function OnboardingModal({ onComplete }: Props) {
           <p className="text-text-dim">
             {step === 'providers'
               ? 'Configure at least one LLM provider to get started.'
-              : 'Pick a model to use for conversations.'}
+              : step === 'model'
+              ? 'Pick a model to use for conversations.'
+              : 'Create your first research project.'}
           </p>
+          {/* Step indicator */}
+          <div className="flex items-center justify-center gap-2 mt-4">
+            {['providers', 'model', 'project'].map((s, i) => (
+              <div
+                key={s}
+                className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                  s === step ? 'bg-primary' : i < ['providers', 'model', 'project'].indexOf(step) ? 'bg-success' : 'bg-border'
+                }`}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Providers step */}
@@ -173,7 +208,6 @@ export function OnboardingModal({ onComplete }: Props) {
         {step === 'model' && (
           <div className="flex-1 overflow-hidden flex flex-col px-8 pb-8">
             {models.length === 0 ? (
-              /* No models available — send user back to configure a provider */
               <div className="flex-1 flex flex-col items-center justify-center py-8 gap-4">
                 <div className="text-center">
                   <p className="text-text font-medium mb-2">No models available</p>
@@ -190,7 +224,6 @@ export function OnboardingModal({ onComplete }: Props) {
               </div>
             ) : (
               <>
-                {/* Filters */}
                 <div className="flex gap-3 py-4">
                   <input
                     type="text"
@@ -211,7 +244,6 @@ export function OnboardingModal({ onComplete }: Props) {
                   </select>
                 </div>
                 
-                {/* Model list */}
                 <div className="flex-1 overflow-y-auto flex flex-col gap-1">
                   {filteredModels.map((m) => (
                     <button 
@@ -231,6 +263,52 @@ export function OnboardingModal({ onComplete }: Props) {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Project creation step */}
+        {step === 'project' && (
+          <div className="flex-1 overflow-hidden flex flex-col px-8 pb-8">
+            <div className="flex-1 flex flex-col gap-4 py-6">
+              <p className="text-sm text-text-dim">
+                Projects organize your research. Each project has its own workspace
+                with files, knowledge graph, and conversation history.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Project Name <span className="text-error">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
+                  placeholder="e.g., Transformer Efficiency Survey"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && projectName.trim()) createProjectAndFinish(); }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Description <span className="text-text-dim">(optional)</span>
+                </label>
+                <textarea
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors resize-none"
+                  rows={3}
+                  placeholder="What is this project about?"
+                  value={projectDesc}
+                  onChange={(e) => setProjectDesc(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <button
+              className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={createProjectAndFinish}
+              disabled={creatingProject || !projectName.trim()}
+            >
+              {creatingProject ? 'Creating...' : 'Create Project & Start'}
+            </button>
           </div>
         )}
       </div>

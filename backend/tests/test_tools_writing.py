@@ -8,6 +8,7 @@ from openmlr.tools.writing import (
     _create_project,
     _get_draft,
     _get_draft_from_proj,
+    _get_incomplete_sections,
     _list_sections,
     _refine_section,
     _set_outline,
@@ -262,3 +263,140 @@ class TestCountSections:
 
     async def test_empty_outline(self):
         assert _count_sections([]) == 0
+
+
+class TestGetIncompleteSections:
+    async def test_all_incomplete(self):
+        proj = {
+            "outline": [
+                {"id": "s1", "title": "Intro"},
+                {"id": "s2", "title": "Methods"},
+            ],
+            "sections": {},
+        }
+        incomplete = _get_incomplete_sections(proj)
+        assert len(incomplete) == 2
+        assert "s1 (Intro)" in incomplete
+        assert "s2 (Methods)" in incomplete
+
+    async def test_all_complete(self):
+        proj = {
+            "outline": [
+                {"id": "s1", "title": "Intro"},
+                {"id": "s2", "title": "Methods"},
+            ],
+            "sections": {"s1": "content", "s2": "content"},
+        }
+        incomplete = _get_incomplete_sections(proj)
+        assert len(incomplete) == 0
+
+    async def test_partial_complete(self):
+        proj = {
+            "outline": [
+                {"id": "s1", "title": "Intro"},
+                {"id": "s2", "title": "Methods"},
+            ],
+            "sections": {"s1": "content"},
+        }
+        incomplete = _get_incomplete_sections(proj)
+        assert len(incomplete) == 1
+        assert "s2 (Methods)" in incomplete
+
+    async def test_includes_subsections(self):
+        proj = {
+            "outline": [
+                {
+                    "id": "s1",
+                    "title": "Methods",
+                    "subsections": [
+                        {"id": "s1.1", "title": "Setup"},
+                        {"id": "s1.2", "title": "Training"},
+                    ],
+                },
+            ],
+            "sections": {"s1": "content", "s1.1": "content"},
+        }
+        incomplete = _get_incomplete_sections(proj)
+        assert len(incomplete) == 1
+        assert "s1.2 (Training)" in incomplete
+
+    async def test_empty_outline(self):
+        proj = {"outline": [], "sections": {}}
+        incomplete = _get_incomplete_sections(proj)
+        assert len(incomplete) == 0
+
+
+class TestWriteSectionWarnings:
+    async def test_shows_remaining_incomplete_sections(self):
+        from openmlr.tools.writing import _projects
+
+        _projects.clear()
+        _create_project(conv_id=1, title="Test")
+        _set_outline(
+            conv_id=1,
+            outline=[
+                {"id": "s1", "title": "Intro"},
+                {"id": "s2", "title": "Methods"},
+                {"id": "s3", "title": "Results"},
+            ],
+        )
+        result, ok = _write_section(conv_id=1, section_id="s1", content="Introduction text.")
+        assert ok is True
+        assert "Remaining incomplete sections (2)" in result
+        assert "s2" in result
+        assert "s3" in result
+        assert "MUST write all remaining" in result
+        _projects.clear()
+
+    async def test_shows_all_complete_when_done(self):
+        from openmlr.tools.writing import _projects
+
+        _projects.clear()
+        _create_project(conv_id=1, title="Test")
+        _set_outline(conv_id=1, outline=[{"id": "s1", "title": "Intro"}])
+        result, ok = _write_section(conv_id=1, section_id="s1", content="Done.")
+        assert ok is True
+        assert "All sections are now written" in result
+        _projects.clear()
+
+
+class TestGetDraftIncompleteWarning:
+    async def test_draft_includes_incomplete_warning(self):
+        from unittest.mock import AsyncMock, patch
+
+        from openmlr.tools.writing import _projects
+
+        _projects.clear()
+        _create_project(conv_id=1, title="Test")
+        _set_outline(
+            conv_id=1, outline=[{"id": "s1", "title": "Intro"}, {"id": "s2", "title": "Methods"}]
+        )
+        _write_section(conv_id=1, section_id="s1", content="Written.")
+
+        with patch(
+            "openmlr.tools.writing._get_author_info", new_callable=AsyncMock, return_value=None
+        ):
+            draft, ok = await _get_draft(conv_id=1)
+        assert ok is True
+        assert "WARNING" in draft
+        assert "1 section(s) still incomplete" in draft
+        assert "s2 (Methods)" in draft
+        _projects.clear()
+
+    async def test_draft_no_warning_when_complete(self):
+        from unittest.mock import AsyncMock, patch
+
+        from openmlr.tools.writing import _projects
+
+        _projects.clear()
+        _create_project(conv_id=1, title="Test")
+        _set_outline(conv_id=1, outline=[{"id": "s1", "title": "Intro"}])
+        _write_section(conv_id=1, section_id="s1", content="Complete content.")
+
+        with patch(
+            "openmlr.tools.writing._get_author_info", new_callable=AsyncMock, return_value=None
+        ):
+            draft, ok = await _get_draft(conv_id=1)
+        assert ok is True
+        assert "WARNING" not in draft
+        _projects.clear()

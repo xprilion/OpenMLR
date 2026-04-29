@@ -93,6 +93,12 @@ make dev                  # Start dev servers
 
 Open `http://localhost:5173` (Vite dev server with hot reload).
 
+| Service | Port | URL |
+|---------|------|-----|
+| Web UI | 5173 | `http://localhost:5173` |
+| API (Swagger) | 3000 | `http://localhost:3000/docs` |
+| Docs site | 4000 | `http://localhost:4000` (if running `make docs-dev`) |
+
 See [Setup & Installation](/setup) for detailed options.
 
 ---

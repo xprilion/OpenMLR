@@ -156,7 +156,8 @@ async def terminal_websocket(
         if project_uuid:
             project = await ops.get_project_by_uuid(db, project_uuid, user.id)
         else:
-            # Use default project
+            # Legacy fallback — terminal should always receive a project UUID
+            # from the frontend. This path will be removed in a future version.
             from .projects import get_or_create_default_project
 
             project = await get_or_create_default_project(db, user.id)

@@ -25,10 +25,14 @@ The workspace and compute resource are **decoupled**:
 
 ## Creating a Project
 
-1. Click the project selector dropdown in the sidebar
+Projects are **mandatory** -- every conversation must belong to a project. New users create their first project during onboarding (after selecting an LLM provider and model).
+
+To create additional projects:
+
+1. Click the project selector dropdown in the header
 2. Click "New Project"
 3. Enter a name and optional description
-4. A workspace directory is created automatically
+4. A workspace directory is created automatically, and a new conversation is started in the project
 
 ## Workspace Directory Structure
 
@@ -39,7 +43,7 @@ The workspace and compute resource are **decoupled**:
     data/                   # Downloaded datasets
     models/                 # Trained models, checkpoints
     outputs/                # Experiment results, plots, figures
-    papers/                 # Downloaded and parsed papers (.md)
+    papers/                 # Paper drafts (auto-saved by writing tool)
     research/
       searches/             # Saved search results (JSON)
       notes/                # Agent-generated research notes (.md)

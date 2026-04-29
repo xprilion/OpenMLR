@@ -14,9 +14,11 @@ interface Props {
   projectUuid: string | null;
   visible: boolean;
   onToggle: () => void;
+  onConnectionChange?: (connected: boolean) => void;
+  rightOffset?: number;
 }
 
-export function Terminal({ projectUuid, visible, onToggle }: Props) {
+export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, rightOffset = 0 }: Props) {
   const [connected, setConnected] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -94,6 +96,7 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
 
       ws.onopen = () => {
         setConnected(true);
+        onConnectionChange?.(true);
         // Send resize to match current terminal dimensions
         const dims = fitAddonRef.current?.proposeDimensions();
         if (dims) {
@@ -111,12 +114,14 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
 
       ws.onclose = () => {
         setConnected(false);
+        onConnectionChange?.(false);
         term.writeln('\r\n\x1b[90m--- Disconnected ---\x1b[0m');
         wsRef.current = null;
       };
 
       ws.onerror = () => {
         setConnected(false);
+        onConnectionChange?.(false);
       };
 
       // Forward terminal input to WebSocket
@@ -128,8 +133,9 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
 
     } catch {
       setConnected(false);
+      onConnectionChange?.(false);
     }
-  }, [projectUuid, initTerm]);
+  }, [projectUuid, initTerm, onConnectionChange]);
 
   // Connect when visible
   useEffect(() => {
@@ -182,15 +188,7 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
   }, []);
 
   if (!visible) {
-    return (
-      <button
-        className="fixed bottom-4 right-4 z-30 w-10 h-10 rounded-lg bg-surface border border-border flex items-center justify-center text-text-dim hover:text-text hover:border-primary transition-all shadow-md"
-        onClick={onToggle}
-        title="Open terminal"
-      >
-        <TerminalIcon size={18} />
-      </button>
-    );
+    return null;
   }
 
   return (
@@ -198,7 +196,7 @@ export function Terminal({ projectUuid, visible, onToggle }: Props) {
       className={`bg-[#0d0d0d] border-t border-border flex flex-col ${
         maximized ? 'fixed inset-0 z-50' : ''
       }`}
-      style={maximized ? undefined : { height: '280px' }}
+      style={maximized ? undefined : { height: '280px', marginRight: rightOffset }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] border-b border-border shrink-0">

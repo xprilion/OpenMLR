@@ -1,6 +1,6 @@
 [project]
 name = "openmlr"
-version = "0.4.0"
+version = "0.5.0"
 description = "OpenMLR — an ML research intern that reads papers, trains models, and ships code"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -110,6 +110,9 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["openmlr"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["openmlr"]

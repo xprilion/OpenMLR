@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setToken } from '../api';
-import type { Conversation, User, Project } from '../types';
+import type { Conversation, User } from '../types';
 import { APP_VERSION } from '../version';
 import { ConfirmDialog } from './ConfirmDialog';
 import { 
@@ -12,10 +12,7 @@ import {
   Settings, 
   LogOut, 
   Trash2,
-  FolderOpen,
-  ChevronDown,
-  Layers,
-  SlidersHorizontal,
+  Terminal,
 } from 'lucide-react';
 
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
@@ -25,14 +22,13 @@ interface Props {
   currentUuid: string | null;
   user: User | null;
   convStatuses: Record<string, ConvStatus>;
-  projects: Project[];
-  activeProject: Project | null;
+  terminalOpen: boolean;
+  terminalConnected: boolean;
+  terminalSessionCount: number;
   onSwitch: (uuid: string) => void;
   onNew: (mode?: string) => void;
   onDelete: (uuid: string) => void;
-  onSelectProject: (project: Project | null) => void;
-  onNewProject: () => void;
-  onManageProjects?: () => void;
+  onTerminalToggle: () => void;
 }
 
 function groupByDate(conversations: Conversation[]) {
@@ -62,12 +58,28 @@ function ConvIcon({ status }: { status: ConvStatus }) {
   return <span className={`${base} bg-border`} />;
 }
 
-export function Sidebar({ conversations, currentUuid, user, convStatuses, projects, activeProject, onSwitch, onNew, onDelete, onSelectProject, onNewProject, onManageProjects }: Props) {
+function TerminalStatusLabel({ terminalOpen, terminalConnected }: { terminalOpen: boolean; terminalConnected: boolean }) {
+  if (!terminalOpen) {
+    return (
+      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-text-dim bg-bg">
+        Closed
+      </span>
+    );
+  }
+  return (
+    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+      terminalConnected ? 'text-success bg-success/10' : 'text-error bg-error/10'
+    }`}>
+      {terminalConnected ? 'Connected' : 'Disconnected'}
+    </span>
+  );
+}
+
+export function Sidebar({ conversations, currentUuid, user, convStatuses, terminalOpen, terminalConnected, terminalSessionCount, onSwitch, onNew, onDelete, onTerminalToggle }: Props) {
   const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
-  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return conversations;
@@ -77,8 +89,8 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
-  // Non-default projects for the dropdown
-  const userProjects = useMemo(() => projects.filter((p) => !p.is_default), [projects]);
+  // Terminal status dot color for collapsed rail
+  const termDotColor = !terminalOpen ? 'bg-text-dim' : terminalConnected ? 'bg-success' : 'bg-error';
 
   if (collapsed) {
     return (
@@ -96,6 +108,15 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
           title="New chat"
         >
           <Plus size={18} />
+        </button>
+        <div className="flex-1" />
+        <button
+          className="relative w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+          onClick={onTerminalToggle}
+          title={`Terminal${!terminalOpen ? ' (Closed)' : terminalConnected ? ' (Connected)' : ' (Disconnected)'}`}
+        >
+          <Terminal size={18} />
+          <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${termDotColor}`} />
         </button>
       </aside>
     );
@@ -119,69 +140,6 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
           <Plus size={16} />
           <span>New Chat</span>
         </button>
-      </div>
-
-      {/* Project selector */}
-      <div className="relative">
-        <button
-          className="w-full flex items-center gap-2 px-3 py-2 bg-bg border border-border rounded-lg text-sm text-text hover:border-primary transition-colors"
-          onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
-        >
-          <FolderOpen size={14} className="text-primary shrink-0" />
-          <span className="flex-1 truncate text-left">
-            {activeProject ? activeProject.name : 'All Conversations'}
-          </span>
-          <ChevronDown size={14} className={`text-text-dim shrink-0 transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {projectDropdownOpen && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl z-20 max-h-72 overflow-auto">
-            {/* All Conversations */}
-            <button
-              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${!activeProject ? 'text-primary' : 'text-text'}`}
-              onClick={() => { onSelectProject(null); setProjectDropdownOpen(false); }}
-            >
-              <Layers size={14} />
-              All Conversations
-            </button>
-
-            {/* User projects */}
-            {userProjects.map((p) => (
-              <button
-                key={p.uuid}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-surface-hover transition-colors ${
-                  activeProject?.uuid === p.uuid ? 'text-primary bg-primary/5' : 'text-text'
-                }`}
-                onClick={() => { onSelectProject(p); setProjectDropdownOpen(false); }}
-              >
-                <FolderOpen size={14} />
-                <span className="flex-1 truncate">{p.name}</span>
-                {p.conversation_count !== undefined && (
-                  <span className="text-xs text-text-dim">{p.conversation_count}</span>
-                )}
-              </button>
-            ))}
-
-            {/* Actions */}
-            <div className="border-t border-border">
-              <button
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-surface-hover transition-colors"
-                onClick={() => { onNewProject(); setProjectDropdownOpen(false); }}
-              >
-                <Plus size={14} />
-                New Project
-              </button>
-              {userProjects.length > 0 && (
-                <button
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-                  onClick={() => { onManageProjects?.(); setProjectDropdownOpen(false); }}
-                >
-                  <SlidersHorizontal size={14} />
-                  Manage Projects
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Search */}
@@ -235,7 +193,23 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, projec
       </div>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-border flex flex-col gap-1">
+      <div className="pt-3 flex flex-col gap-1.5">
+        {/* Terminal button */}
+        <button
+          className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-text-dim bg-surface-hover/50 hover:bg-surface-hover hover:text-text transition-colors w-full text-left"
+          onClick={onTerminalToggle}
+          title="Toggle terminal"
+        >
+          <Terminal size={16} className="shrink-0" />
+          <span className="flex-1 truncate">Terminal</span>
+          {terminalSessionCount > 0 && (
+            <span className="text-[10px] font-medium bg-bg px-1.5 py-0.5 rounded-full">
+              {terminalSessionCount}
+            </span>
+          )}
+          <TerminalStatusLabel terminalOpen={terminalOpen} terminalConnected={terminalConnected} />
+        </button>
+
         <div className="flex items-center gap-2">
           <button 
             className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"

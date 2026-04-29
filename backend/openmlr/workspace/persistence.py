@@ -298,6 +298,18 @@ class WorkspacePersistence:
         self.save_state(state)
         return state
 
+    # ── Report Storage ─────────────────────────────────────
+
+    def save_report(self, title: str, content: str) -> Path:
+        """Save a task completion report to the workspace."""
+        dir_path = self._ensure_dir(".project-meta", "reports")
+        safe_title = self._sanitize_filename(title)
+        filename = f"{safe_title}.md"
+        filepath = dir_path / filename
+        filepath.write_text(content, encoding="utf-8")
+        log.debug(f"Saved report to {filepath}")
+        return filepath
+
     # ── Plan Storage ─────────────────────────────────────
 
     def save_plan(
