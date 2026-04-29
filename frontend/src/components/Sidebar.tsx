@@ -166,26 +166,24 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
             {group.items.map((conv) => (
               <div
                 key={conv.uuid}
-                role="button"
-                tabIndex={0}
-                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-all ${
+                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all relative ${
                   conv.uuid === currentUuid 
                     ? 'bg-primary/10 text-text' 
                     : 'text-text-dim hover:bg-surface-hover hover:text-text'
                 }`}
-                onClick={() => onSwitch(conv.uuid)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    onSwitch(conv.uuid);
-                  }
-                }}
-                aria-label={`Switch to conversation: ${conv.title}`}
-                aria-pressed={conv.uuid === currentUuid}
               >
+                <button
+                  type="button"
+                  className="absolute inset-0 w-full h-full cursor-pointer"
+                  onClick={() => onSwitch(conv.uuid)}
+                  aria-label={`Switch to conversation: ${conv.title}`}
+                  aria-pressed={conv.uuid === currentUuid}
+                />
                 <ConvIcon status={convStatuses[conv.uuid] || 'idle'} />
                 <span className="flex-1 truncate" title={conv.title}>{conv.title}</span>
                 <button
-                  className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error p-1 rounded transition-all"
+                  type="button"
+                  className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error p-1 rounded transition-all relative z-10"
                   onClick={(e) => {
                     e.stopPropagation();
                     setPendingDelete({ uuid: conv.uuid, title: conv.title });

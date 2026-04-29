@@ -1,6 +1,6 @@
 
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api } from '../../api';
 import type { Provider } from '../../types';
 
@@ -42,6 +42,7 @@ export function ProvidersSettings() {
   const [activeTab, setActiveTab] = useState<TabId>('models');
 
   // Custom provider modal state
+  const customDialogRef = useRef<HTMLDialogElement>(null);
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customForm, setCustomForm] = useState<{
     name: string;
@@ -62,6 +63,26 @@ export function ProvidersSettings() {
   useEffect(() => {
     api.getProviders().then((d) => setProviders(d.providers || [])).catch(() => {});
   }, []);
+
+  // Handle custom provider dialog open/close
+  useEffect(() => {
+    const dialog = customDialogRef.current;
+    if (!dialog) return;
+    
+    if (showCustomModal && !dialog.open) {
+      dialog.showModal();
+    } else if (!showCustomModal && dialog.open) {
+      dialog.close();
+    }
+
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      setShowCustomModal(false);
+    };
+
+    dialog.addEventListener('cancel', handleCancel);
+    return () => dialog.removeEventListener('cancel', handleCancel);
+  }, [showCustomModal]);
 
   // Group providers by tab (a provider can appear in multiple tabs)
   const providersByTab = useMemo(() => {
@@ -314,20 +335,18 @@ export function ProvidersSettings() {
       </button>
 
       {/* Custom Provider Modal */}
-      {showCustomModal && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowCustomModal(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setShowCustomModal(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="custom-provider-title"
-          tabIndex={-1}
-        >
+      <dialog
+        ref={customDialogRef}
+        className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
+        onClick={(e) => {
+          if (e.target === customDialogRef.current) setShowCustomModal(false);
+        }}
+        aria-labelledby="custom-provider-title"
+      >
+        <div className="flex items-center justify-center min-h-full">
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-md flex flex-col shadow-xl p-6"
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
           >
             <h3 id="custom-provider-title" className="text-lg font-semibold text-text mb-4">Add Custom Provider</h3>
 
@@ -411,7 +430,7 @@ export function ProvidersSettings() {
             </div>
           </div>
         </div>
-      )}
+      </dialog>
     </div>
   );
 }

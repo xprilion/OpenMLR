@@ -145,6 +145,23 @@ function ProjectRow({ project, onChanged }: { project: Project; onChanged: () =>
 }
 
 export function ProjectManageModal({ projects, onClose, onChanged }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+    }
+
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      onClose();
+    };
+
+    dialog?.addEventListener('cancel', handleCancel);
+    return () => dialog?.removeEventListener('cancel', handleCancel);
+  }, [onClose]);
+
   // Sort: default first, then alphabetical
   const sorted = [...projects].sort((a, b) => {
     if (a.is_default && !b.is_default) return -1;
@@ -152,25 +169,29 @@ export function ProjectManageModal({ projects, onClose, onChanged }: Props) {
     return a.name.localeCompare(b.name);
   });
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
+    if (e.target === dialogRef.current) {
+      onClose();
+    }
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={onClose}
-      onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      role="dialog"
-      aria-modal="true"
-      tabIndex={-1}
+    <dialog
+      ref={dialogRef}
+      className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+      onClick={handleBackdropClick}
+      aria-labelledby="project-manage-title"
     >
-      <div
-        className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-lg max-h-[70vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
+      <div className="flex items-center justify-center min-h-full">
+        <div
+          className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-lg max-h-[70vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <Layers size={18} className="text-primary" />
-            <h2 className="text-lg font-semibold text-text">Manage Projects</h2>
+            <h2 id="project-manage-title" className="text-lg font-semibold text-text">Manage Projects</h2>
           </div>
           <button
             className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
@@ -195,7 +216,8 @@ export function ProjectManageModal({ projects, onClose, onChanged }: Props) {
         <div className="px-6 py-3 border-t border-border text-xs text-text-dim text-center shrink-0">
           Hover a project to rename or delete. The default project cannot be modified.
         </div>
+        </div>
       </div>
-    </div>
+    </dialog>
   );
 }

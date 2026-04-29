@@ -233,19 +233,15 @@ export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, r
       </div>
 
       {/* xterm.js container */}
-      <div
-        ref={containerRef}
-        className="flex-1 min-h-0 px-1"
-        onClick={() => termRef.current?.focus()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            termRef.current?.focus();
-          }
-        }}
-        tabIndex={0}
-        role="button"
-        aria-label="Click to focus terminal"
-      />
+      <div className="flex-1 min-h-0 px-1 relative">
+        <div ref={containerRef} className="h-full w-full" />
+        <button
+          type="button"
+          className="absolute inset-0 w-full h-full cursor-text bg-transparent"
+          onClick={() => termRef.current?.focus()}
+          aria-label="Click to focus terminal"
+        />
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search, ChevronDown, Check, X, Filter, Save } from 'lucide-react';
 import { api } from '../api';
 import { useNavigate } from 'react-router-dom';
@@ -89,6 +89,7 @@ function LoadingSkeleton() {
 
 export function ModelModal({ currentModel, onModelChange }: Props) {
   const navigate = useNavigate();
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('models');
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -122,6 +123,26 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
     if (!open) return;
     loadData();
   }, [open, loadData]);
+
+  // Handle dialog open/close
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    
+    if (open && !dialog.open) {
+      dialog.showModal();
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
+
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      setOpen(false);
+    };
+
+    dialog.addEventListener('cancel', handleCancel);
+    return () => dialog.removeEventListener('cancel', handleCancel);
+  }, [open]);
 
   // Get only configured providers that are in the models category
   const configuredModelProviders = useMemo(() => {
@@ -248,22 +269,20 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
         <ChevronDown size={14} className="shrink-0" />
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          onClick={() => setOpen(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
-          role="presentation"
-        >
+      <dialog
+        ref={dialogRef}
+        className="fixed bg-transparent p-4 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
+        onClick={(e) => {
+          if (e.target === dialogRef.current) setOpen(false);
+        }}
+        aria-labelledby="model-modal-title"
+      >
+        <div className="flex items-center justify-center min-h-full">
           {/* Fixed-size modal — never changes dimensions between loading and loaded */}
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-lg flex flex-col shadow-xl"
             style={{ height: 'min(80vh, 600px)' }}
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="model-modal-title"
           >
             {/* Tabs */}
             <div className="flex border-b border-border shrink-0">
@@ -460,7 +479,7 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
             </div>
           </div>
         </div>
-      )}
+      </dialog>
     </>
   );
 }
