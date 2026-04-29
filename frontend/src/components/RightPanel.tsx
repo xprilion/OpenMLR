@@ -108,6 +108,12 @@ function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: numbe
   );
 }
 
+function mcpDotColor(server: McpServerStatus): string {
+  if (server.connected) return 'bg-success';
+  if (server.enabled) return 'bg-warning';
+  return 'bg-text-dim';
+}
+
 export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, mcpServers, visible, mobileOpen, projectUuid, fileTreeRefreshKey, onToggle, onMobileClose, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
   const [showBudgetDialog, setShowBudgetDialog] = useState(false);
 
@@ -175,11 +181,7 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
                     !s.enabled ? 'text-text-dim opacity-60' : 'text-text'
                   }`}
                 >
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      s.connected ? 'bg-success' : s.enabled ? 'bg-warning' : 'bg-text-dim'
-                    }`}
-                  />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${mcpDotColor(s)}`} />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium truncate">{s.name}</div>
                     <div className="text-[10px] text-text-dim font-mono truncate">{s.url}</div>
@@ -243,7 +245,7 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
   if (mobileOpen) {
     return (
       <>
-        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onMobileClose} />
+        <button className="fixed inset-0 w-full h-full bg-black/60 z-40 lg:hidden cursor-default" onClick={onMobileClose} aria-label="Close panel" />
         <aside className="fixed inset-y-0 right-0 w-80 bg-surface border-l border-border flex flex-col z-50 lg:hidden animate-[slide-in-right_0.2s_ease-out]">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
             <span className="text-sm font-medium text-text">Details</span>

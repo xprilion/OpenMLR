@@ -324,18 +324,16 @@ export function McpSettings() {
 
       {/* Add/Edit Modal */}
       {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={closeModal}
-          onKeyDown={(e) => e.key === 'Escape' && closeModal()}
-          role="dialog"
-          tabIndex={-1}
+        <dialog
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 open:flex m-0 w-full h-full max-w-none max-h-none border-none"
+          open
+          onClose={closeModal}
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') closeModal(); }}
         >
           <div
             className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-lg mx-4"
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="document"
           >
             {/* Modal header */}
             <div className="px-6 py-4 border-b border-border">
@@ -447,7 +445,7 @@ export function McpSettings() {
               </button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
     </div>
   );

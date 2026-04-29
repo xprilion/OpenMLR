@@ -56,6 +56,40 @@ function ConvIcon({ status }: { status: ConvStatus }) {
   return <span className={`${base} bg-border`} />;
 }
 
+function ConvItem({ conv, isCurrent, status, onSwitch, onDelete }: {
+  conv: Conversation;
+  isCurrent: boolean;
+  status: ConvStatus;
+  onSwitch: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all relative ${
+        isCurrent ? 'bg-primary/10 text-text' : 'text-text-dim hover:bg-surface-hover hover:text-text'
+      }`}
+    >
+      <button
+        type="button"
+        className="absolute inset-0 w-full h-full cursor-pointer"
+        onClick={onSwitch}
+        aria-label={`Switch to conversation: ${conv.title}`}
+        aria-pressed={isCurrent}
+      />
+      <ConvIcon status={status} />
+      <span className="flex-1 truncate" title={conv.title}>{conv.title}</span>
+      <button
+        type="button"
+        className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error p-1 rounded transition-all relative z-10"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="Delete"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+}
+
 export function Sidebar({ conversations, currentUuid, user, convStatuses, mobileOpen, onSwitch, onNew, onDelete, onMobileClose }: Props) {
   const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
@@ -119,35 +153,14 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, mobile
           <div key={group.label} className="mb-3">
             <div className="text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 px-2">{group.label}</div>
             {group.items.map((conv) => (
-              <div
+              <ConvItem
                 key={conv.uuid}
-                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all relative ${
-                  conv.uuid === currentUuid 
-                    ? 'bg-primary/10 text-text' 
-                    : 'text-text-dim hover:bg-surface-hover hover:text-text'
-                }`}
-              >
-                <button
-                  type="button"
-                  className="absolute inset-0 w-full h-full cursor-pointer"
-                  onClick={() => { onSwitch(conv.uuid); if (isMobile) onMobileClose?.(); }}
-                  aria-label={`Switch to conversation: ${conv.title}`}
-                  aria-pressed={conv.uuid === currentUuid}
-                />
-                <ConvIcon status={convStatuses[conv.uuid] || 'idle'} />
-                <span className="flex-1 truncate" title={conv.title}>{conv.title}</span>
-                <button
-                  type="button"
-                  className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error p-1 rounded transition-all relative z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDelete({ uuid: conv.uuid, title: conv.title });
-                  }}
-                  title="Delete"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+                conv={conv}
+                isCurrent={conv.uuid === currentUuid}
+                status={convStatuses[conv.uuid] || 'idle'}
+                onSwitch={() => { onSwitch(conv.uuid); if (isMobile) onMobileClose?.(); }}
+                onDelete={() => setPendingDelete({ uuid: conv.uuid, title: conv.title })}
+              />
             ))}
           </div>
         ))}
@@ -206,9 +219,10 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, mobile
     return (
       <>
         {/* Backdrop */}
-        <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+        <button
+          className="fixed inset-0 w-full h-full bg-black/60 z-40 lg:hidden cursor-default"
           onClick={onMobileClose}
+          aria-label="Close sidebar"
         />
         {/* Drawer */}
         <aside className="fixed inset-y-0 left-0 w-72 bg-surface border-r border-border p-4 flex flex-col gap-4 overflow-hidden z-50 lg:hidden animate-[slide-in-left_0.2s_ease-out]">

@@ -259,14 +259,15 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
   }, [projectUuid, onFileSelect]);
 
   // Auto-refresh every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadDirectory('').then((entries) => {
-        setNodes((prev) => mergeWithPreviousState(entries, prev));
-      });
-    }, 10000);
-    return () => clearInterval(interval);
+  const refreshFiles = useCallback(async () => {
+    const entries = await loadDirectory('');
+    setNodes((prev) => mergeWithPreviousState(entries, prev));
   }, [loadDirectory, mergeWithPreviousState]);
+
+  useEffect(() => {
+    const interval = setInterval(refreshFiles, 10000);
+    return () => clearInterval(interval);
+  }, [refreshFiles]);
 
   if (loading) {
     return (

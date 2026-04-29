@@ -109,13 +109,21 @@ export function ImageViewer({ src, filename }: Props) {
       {/* Image canvas */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing"
+        role="application"
+        tabIndex={0}
+        aria-label={`Image viewer: ${filename}`}
+        className="flex-1 overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing focus:outline-none"
         style={{ background: 'repeating-conic-gradient(#1a1a1a 0% 25%, #0d0d0d 0% 50%) 50% / 20px 20px' }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onKeyDown={(e) => {
+          if (e.key === '+' || e.key === '=') { setZoom((z) => Math.min(z + 0.25, 10)); setFitMode(false); }
+          if (e.key === '-') { setZoom((z) => Math.max(z - 0.25, 0.1)); setFitMode(false); }
+          if (e.key === '0') resetView();
+        }}
       >
         <img
           src={src}

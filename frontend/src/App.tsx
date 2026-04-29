@@ -830,30 +830,29 @@ function ChatUI({
               }`}
               onClick={() => setMainTab('terminal')}
             >
-              Terminal
+              {'Terminal '}
               <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
             </button>
             {/* Closable Image tab */}
             {imageTab && (
-              <button
-                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 group ${
+              <div
+                className={`flex items-center gap-1 px-4 py-2 text-sm font-medium transition-colors group ${
                   mainTab === 'image'
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-text-dim hover:text-text'
                 }`}
-                onClick={() => setMainTab('image')}
               >
-                {imageTab.path.split('/').pop()}
-                <span
+                <button className="truncate" onClick={() => setMainTab('image')}>
+                  {imageTab.path.split('/').pop()}
+                </button>
+                <button
                   className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors opacity-0 group-hover:opacity-100"
-                  onClick={(e) => { e.stopPropagation(); setImageTab(null); if (mainTab === 'image') setMainTab('agent'); }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setImageTab(null); if (mainTab === 'image') setMainTab('agent'); } }}
+                  onClick={() => { setImageTab(null); if (mainTab === 'image') setMainTab('agent'); }}
+                  title="Close image"
                 >
                   &times;
-                </span>
-              </button>
+                </button>
+              </div>
             )}
           </div>
 

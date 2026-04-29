@@ -16,6 +16,7 @@ import re
 import shutil
 import uuid as uuid_mod
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -436,37 +437,72 @@ async def list_files(
     return {"path": path, "entries": entries}
 
 
-async def _get_user_from_token_param(token: str | None, db: AsyncSession) -> User | None:
-    """Resolve a user from a query-string token (for img/binary loads)."""
-    if not token:
-        return None
-    payload = decode_access_token(token)
-    if not payload:
-        return None
-    result = await db.execute(
-        select(User).where(User.id == int(payload["sub"]), User.is_active == True)
+async def _resolve_user(
+    token: str | None,
+    user: User | None,
+    db: AsyncSession,
+) -> User:
+    """Resolve authenticated user from Bearer header or query-string token."""
+    if user is not None:
+        return user
+    if token:
+        payload = decode_access_token(token)
+        if payload:
+            result = await db.execute(
+                select(User).where(User.id == int(payload["sub"]), User.is_active == True)
+            )
+            found = result.scalar_one_or_none()
+            if found:
+                return found
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+
+def _validate_symlink(target: Path, workspace_path: str) -> None:
+    """Reject symlinks that escape the workspace."""
+    if not target.is_symlink():
+        return
+    try:
+        target.resolve().relative_to(Path(workspace_path).resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Symlink points outside workspace")
+
+
+def _try_read_text(target: Path, file_path: str) -> dict | None:
+    """Try to read a file as text. Returns JSON dict or None for binary."""
+    mime, _ = mimetypes.guess_type(str(target))
+    is_text = (
+        mime is None
+        or mime.startswith("text/")
+        or mime in ("application/json", "application/xml", "application/x-yaml")
     )
-    return result.scalar_one_or_none()
+    if not is_text:
+        return None
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+        if len(content) > 500_000:
+            content = content[:500_000] + "\n\n[... truncated at 500KB ...]"
+        return {"path": file_path, "content": content, "size": target.stat().st_size}
+    except Exception:
+        return None
 
 
-@router.get("/{project_uuid}/files/{file_path:path}")
+@router.get(
+    "/{project_uuid}/files/{file_path:path}",
+    responses={401: {"description": "Not authenticated"}},
+)
 async def read_file(
     project_uuid: str,
     file_path: str,
     token: str | None = Query(None),
-    user: User | None = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
+    user: Annotated[User | None, Depends(get_current_user_optional)] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
 ):
     """Read a file from the project workspace.
 
     Supports auth via Bearer header or ?token= query param (for <img> tags).
     """
-    # Fall back to token query param (for image tags that can't set headers)
-    if user is None and token:
-        user = await _get_user_from_token_param(token, db)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    project = await ops.get_project_by_uuid(db, project_uuid, user.id)
+    authed_user = await _resolve_user(token, user, db)
+    project = await ops.get_project_by_uuid(db, project_uuid, authed_user.id)
     if not project or not project.workspace_path:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -474,35 +510,13 @@ async def read_file(
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
     if target.is_dir():
-        return await list_files(project_uuid, file_path, user, db)
+        return await list_files(project_uuid, file_path, authed_user, db)
 
-    # Reject symlinks that point outside workspace
-    if target.is_symlink():
-        try:
-            target.resolve().relative_to(Path(project.workspace_path).resolve())
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Symlink points outside workspace")
+    _validate_symlink(target, project.workspace_path)
 
-    # For text files, return content as JSON
-    mime, _ = mimetypes.guess_type(str(target))
-    is_text = (
-        mime is None
-        or mime.startswith("text/")
-        or mime in ("application/json", "application/xml", "application/x-yaml")
-    )
-
-    if is_text:
-        try:
-            content = target.read_text(encoding="utf-8", errors="replace")
-            if len(content) > 500_000:
-                content = content[:500_000] + "\n\n[... truncated at 500KB ...]"
-            return {
-                "path": file_path,
-                "content": content,
-                "size": target.stat().st_size,
-            }
-        except Exception:
-            pass
+    text_response = _try_read_text(target, file_path)
+    if text_response is not None:
+        return text_response
 
     return FileResponse(str(target), filename=target.name)
 

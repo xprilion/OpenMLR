@@ -1,6 +1,7 @@
 """MCP server management routes — test connections and get status."""
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -22,10 +23,10 @@ class TestRequest(BaseModel):
     params: dict[str, str] | None = None
 
 
-@router.post("/test")
+@router.post("/test", responses={400: {"description": "Invalid URL scheme"}})
 async def test_connection(
     body: TestRequest,
-    user: User = Depends(get_current_user),
+    user: Annotated[User, Depends(get_current_user)],
 ):
     """Test an MCP server connection without saving it."""
     if not body.url.startswith(("http://", "https://")):
@@ -41,8 +42,8 @@ async def test_connection(
 
 @router.get("/status")
 async def get_status(
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get configured MCP servers with their enabled/disabled state."""
     user_settings = await ops.get_all_settings(db, user.id, category="mcp")
