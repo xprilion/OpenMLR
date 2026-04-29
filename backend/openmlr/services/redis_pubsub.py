@@ -95,7 +95,7 @@ class RedisEventBridge:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                raise
         logger.info("Redis event bridge stopped")
 
     def subscribe(self) -> asyncio.Queue:

@@ -144,25 +144,29 @@ async def _local_probe() -> str:
     """Quick local environment probe."""
     import platform
     import shutil
-    import subprocess
 
     lines = [f"OS: {platform.system()} {platform.release()}"]
 
     try:
-        py = subprocess.run(["python3", "--version"], capture_output=True, text=True, timeout=5)
-        lines.append(f"Python: {py.stdout.strip()}")
+        py = await asyncio.create_subprocess_exec(
+            "python3", "--version", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(py.communicate(), timeout=5)
+        lines.append(f"Python: {stdout.decode().strip()}")
     except Exception:
         lines.append("Python: unknown")
 
     try:
-        gpu = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+        gpu = await asyncio.create_subprocess_exec(
+            "nvidia-smi",
+            "--query-gpu=name,memory.total",
+            "--format=csv,noheader",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        stdout, _ = await asyncio.wait_for(gpu.communicate(), timeout=5)
         if gpu.returncode == 0:
-            lines.append(f"GPU: {gpu.stdout.strip()}")
+            lines.append(f"GPU: {stdout.decode().strip()}")
         else:
             lines.append("GPU: not available")
     except Exception:

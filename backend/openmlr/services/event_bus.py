@@ -111,7 +111,7 @@ class EventBus:
             try:
                 await self._redis_bridge_task
             except asyncio.CancelledError:
-                pass
+                raise
             self._redis_bridge_task = None
 
     @property
@@ -130,6 +130,6 @@ async def sse_generator(queue: asyncio.Queue) -> AsyncGenerator[str, None]:
             except TimeoutError:
                 yield ":ping\n\n"
     except asyncio.CancelledError:
-        pass
+        raise
     except GeneratorExit:
         pass

@@ -8,6 +8,7 @@ Provides tools for the agent to interact with the project workspace:
 - Log tool failures
 """
 
+import asyncio
 import json
 import logging
 from contextvars import ContextVar
@@ -185,8 +186,13 @@ async def _workspace_search(query: str) -> tuple[str, bool]:
             try:
                 if os.path.getsize(fpath) > 500_000:
                     continue
-                with open(fpath, encoding="utf-8", errors="ignore") as f:
-                    content = f.read(10000)
+
+                async def read_file(path: str) -> str:
+                    with open(path, encoding="utf-8", errors="ignore") as f:
+                        return f.read(10000)
+
+                loop = asyncio.get_event_loop()
+                content = await loop.run_in_executor(None, read_file, fpath)
                 if query_lower in content.lower():
                     results.append(f"- **{rel_path}** (content match)")
             except Exception:
