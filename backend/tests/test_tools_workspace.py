@@ -1,5 +1,6 @@
 """Tests for workspace agent tools."""
 
+import asyncio
 import os
 import tempfile
 
@@ -179,8 +180,10 @@ class TestWorkspaceTools:
     async def test_search_operation(self, workspace_dir):
         # Create a test file
         test_file = os.path.join(workspace_dir, "code", "test.py")
-        with open(test_file, "w") as f:
-            f.write("import torch\nmodel = TransformerModel()")
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, lambda: open(test_file, "w").write("import torch\nmodel = TransformerModel()")
+        )
 
         result, success = await _handle_workspace(
             operation="search",

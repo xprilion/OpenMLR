@@ -192,15 +192,19 @@ async def terminal_websocket(
     shell = "/bin/bash"
 
     try:
-        proc = subprocess.Popen(
-            [shell, "--norc", "--noprofile"],
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            cwd=workspace_path,
-            env=env,
-            start_new_session=True,
-            close_fds=True,
+        loop = asyncio.get_event_loop()
+        proc = await loop.run_in_executor(
+            None,
+            lambda: subprocess.Popen(
+                [shell, "--norc", "--noprofile"],
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                cwd=workspace_path,
+                env=env,
+                start_new_session=True,
+                close_fds=True,
+            ),
         )
         pid = proc.pid
     except Exception as e:

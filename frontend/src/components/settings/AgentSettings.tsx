@@ -63,8 +63,9 @@ export function AgentSettings() {
       
       <div className="flex flex-col gap-5 mb-8">
         <div>
-          <label className="block text-sm font-medium text-text mb-2">Default Model</label>
+          <label className="block text-sm font-medium text-text mb-2" htmlFor="default-model">Default Model</label>
           <input
+            id="default-model"
             type="text"
             className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
             placeholder="auto-detect (e.g. anthropic/claude-sonnet-4)"
@@ -74,8 +75,9 @@ export function AgentSettings() {
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-text mb-2">Research / Title Model (cheaper)</label>
+          <label className="block text-sm font-medium text-text mb-2" htmlFor="research-model">Research / Title Model (cheaper)</label>
           <input
+            id="research-model"
             type="text"
             className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
             placeholder="auto-detect (e.g. openai/gpt-4o-mini)"

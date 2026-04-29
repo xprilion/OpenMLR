@@ -252,16 +252,23 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
           onClick={() => setOpen(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+          role="presentation"
         >
           {/* Fixed-size modal — never changes dimensions between loading and loaded */}
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-lg flex flex-col shadow-xl"
             style={{ height: 'min(80vh, 600px)' }}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="model-modal-title"
           >
             {/* Tabs */}
             <div className="flex border-b border-border shrink-0">
               <button
+                id="model-modal-title"
                 className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
                   tab === 'models' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
                 }`}

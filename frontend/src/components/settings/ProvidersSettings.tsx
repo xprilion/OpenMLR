@@ -318,17 +318,24 @@ export function ProvidersSettings() {
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
           onClick={() => setShowCustomModal(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setShowCustomModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="custom-provider-title"
+          tabIndex={-1}
         >
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-md flex flex-col shadow-xl p-6"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-text mb-4">Add Custom Provider</h3>
+            <h3 id="custom-provider-title" className="text-lg font-semibold text-text mb-4">Add Custom Provider</h3>
 
             <div className="flex flex-col gap-4">
               <div>
-                <label className="block text-sm text-text-dim mb-1">Display Name</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-name">Display Name</label>
                 <input
+                  id="custom-provider-name"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="e.g. My Organization"
@@ -338,8 +345,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">Provider ID (prefix)</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-id">Provider ID (prefix)</label>
                 <input
+                  id="custom-provider-id"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="e.g. my-org (models will be my-org/model-name)"
@@ -349,8 +357,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">SDK Type</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-sdk">SDK Type</label>
                 <select
+                  id="custom-provider-sdk"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-primary focus:outline-none"
                   value={customForm.sdk_type}
                   onChange={(e) => setCustomForm((f) => ({ ...f, sdk_type: e.target.value as SdkType }))}
@@ -362,8 +371,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">API Base URL</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-base">API Base URL</label>
                 <input
+                  id="custom-provider-base"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="https://api.my-org.com/v1"
@@ -373,8 +383,9 @@ export function ProvidersSettings() {
               </div>
 
               <div>
-                <label className="block text-sm text-text-dim mb-1">API Key</label>
+                <label className="block text-sm text-text-dim mb-1" htmlFor="custom-provider-key">API Key</label>
                 <input
+                  id="custom-provider-key"
                   type="password"
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="sk-..."

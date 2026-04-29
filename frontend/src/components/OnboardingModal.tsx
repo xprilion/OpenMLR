@@ -280,10 +280,11 @@ export function OnboardingModal({ onComplete }: Props) {
                 with files, knowledge graph, and conversation history.
               </p>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="project-name">
                   Project Name <span className="text-error">*</span>
                 </label>
                 <input
+                  id="project-name"
                   type="text"
                   className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
                   placeholder="e.g., Transformer Efficiency Survey"
@@ -294,10 +295,11 @@ export function OnboardingModal({ onComplete }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="project-desc">
                   Description <span className="text-text-dim">(optional)</span>
                 </label>
                 <textarea
+                  id="project-desc"
                   className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors resize-none"
                   rows={3}
                   placeholder="What is this project about?"

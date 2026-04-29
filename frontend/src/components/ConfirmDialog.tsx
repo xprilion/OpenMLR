@@ -39,10 +39,14 @@ export function ConfirmDialog({
     <div 
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
       onClick={onCancel}
+      role="presentation"
     >
       <div 
         className="bg-surface rounded-xl border border-border p-6 max-w-md w-full shadow-xl animate-slide-up"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
       >
         <h3 className="text-lg font-semibold text-text mb-3">{title}</h3>
         <p className="text-text-dim mb-6 leading-relaxed">{message}</p>

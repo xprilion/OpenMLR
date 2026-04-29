@@ -156,10 +156,15 @@ export function ProjectManageModal({ projects, onClose, onChanged }: Props) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
     >
       <div
         className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-lg max-h-[70vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">

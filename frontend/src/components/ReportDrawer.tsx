@@ -28,14 +28,19 @@ export function ReportDrawer({ reportId, title, cachedContent, onClose }: Props)
     <div 
       className="fixed inset-0 bg-black/60 flex justify-end z-50"
       onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      role="presentation"
     >
       <div 
         className="w-full max-w-2xl h-full bg-surface border-l border-border flex flex-col animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="report-drawer-title"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <h3 className="text-lg font-semibold text-text truncate pr-4">{title}</h3>
+          <h3 id="report-drawer-title" className="text-lg font-semibold text-text truncate pr-4">{title}</h3>
           <button 
             className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
             onClick={onClose}

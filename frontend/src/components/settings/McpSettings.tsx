@@ -217,8 +217,9 @@ export function McpSettings() {
             
             <div className="flex flex-col gap-4 mb-5">
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Server Name</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="mcp-server-name">Server Name</label>
                 <input
+                  id="mcp-server-name"
                   type="text"
                   className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
                   placeholder="my-mcp-server"
@@ -228,8 +229,9 @@ export function McpSettings() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Transport</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="mcp-transport">Transport</label>
                 <select
+                  id="mcp-transport"
                   className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text focus:border-primary focus:outline-none"
                   value={editForm.transport}
                   onChange={(e) => setEditForm((f) => ({ 
@@ -244,9 +246,10 @@ export function McpSettings() {
 
               {editForm.transport === 'http' && (
                 <div>
-                  <label className="block text-sm font-medium text-text mb-1.5">Server URL</label>
-                  <input
-                    type="text"
+<label className="block text-sm font-medium text-text mb-1.5" htmlFor="mcp-server-url">Server URL</label>
+                <input
+                  id="mcp-server-url"
+                  type="text"
                     className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
                     placeholder="http://localhost:8080/sse"
                     value={editForm.url || ''}
@@ -258,8 +261,9 @@ export function McpSettings() {
               {editForm.transport === 'stdio' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-text mb-1.5">Command</label>
+                    <label className="block text-sm font-medium text-text mb-1.5" htmlFor="mcp-command">Command</label>
                     <input
+                      id="mcp-command"
                       type="text"
                       className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none"
                       placeholder="npx or uvx or path/to/binary"
@@ -268,8 +272,9 @@ export function McpSettings() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-text mb-1.5">Arguments (one per line)</label>
+                    <label className="block text-sm font-medium text-text mb-1.5" htmlFor="mcp-args">Arguments (one per line)</label>
                     <textarea
+                      id="mcp-args"
                       className="w-full bg-surface border border-border rounded-lg px-4 py-2.5 text-text placeholder-text-dim focus:border-primary focus:outline-none resize-none"
                       placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/path/to/dir"}
                       value={(editForm.args || []).join('\n')}

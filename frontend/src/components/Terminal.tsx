@@ -237,6 +237,14 @@ export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, r
         ref={containerRef}
         className="flex-1 min-h-0 px-1"
         onClick={() => termRef.current?.focus()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            termRef.current?.focus();
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Click to focus terminal"
       />
     </div>
   );
