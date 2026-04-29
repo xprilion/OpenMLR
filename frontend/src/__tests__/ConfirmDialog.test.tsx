@@ -98,7 +98,9 @@ describe('ConfirmDialog', () => {
         onCancel={onCancel}
       />
     );
-    fireEvent.keyDown(window, { key: 'Escape' });
+    // The dialog handles escape via the native cancel event
+    const dialog = document.querySelector('dialog');
+    fireEvent(dialog!, new Event('cancel'));
     expect(onCancel).toHaveBeenCalled();
   });
 

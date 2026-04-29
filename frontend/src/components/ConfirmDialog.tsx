@@ -58,7 +58,6 @@ export function ConfirmDialog({
       <div className="flex items-center justify-center min-h-full">
         <div 
           className="bg-surface rounded-xl border border-border p-6 max-w-md w-full shadow-xl animate-slide-up"
-          onClick={(e) => e.stopPropagation()}
         >
           <h3 id="confirm-dialog-title" className="text-lg font-semibold text-text mb-3">{title}</h3>
           <p className="text-text-dim mb-6 leading-relaxed">{message}</p>

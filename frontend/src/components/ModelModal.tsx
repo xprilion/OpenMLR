@@ -282,7 +282,6 @@ export function ModelModal({ currentModel, onModelChange }: Props) {
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-lg flex flex-col shadow-xl"
             style={{ height: 'min(80vh, 600px)' }}
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Tabs */}
             <div className="flex border-b border-border shrink-0">

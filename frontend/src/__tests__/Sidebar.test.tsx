@@ -93,7 +93,8 @@ describe('Sidebar', () => {
         <Sidebar {...defaultProps} onSwitch={onSwitch} />
       </MemoryRouter>
     );
-    fireEvent.click(screen.getByText('First conversation'));
+    // The conversation item uses an overlay button with aria-label
+    fireEvent.click(screen.getByRole('button', { name: /Switch to conversation: First conversation/i }));
     expect(onSwitch).toHaveBeenCalledWith('conv-1');
   });
 

@@ -346,7 +346,6 @@ export function ProvidersSettings() {
         <div className="flex items-center justify-center min-h-full">
           <div
             className="bg-surface rounded-xl border border-border w-full max-w-md flex flex-col shadow-xl p-6"
-            onClick={(e) => e.stopPropagation()}
           >
             <h3 id="custom-provider-title" className="text-lg font-semibold text-text mb-4">Add Custom Provider</h3>
 

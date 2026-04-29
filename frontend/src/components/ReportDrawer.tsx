@@ -56,7 +56,6 @@ export function ReportDrawer({ reportId, title, cachedContent, onClose }: Props)
       <div className="flex justify-end min-h-full">
         <div 
           className="w-full max-w-2xl h-full bg-surface border-l border-border flex flex-col animate-slide-in-right"
-          onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">

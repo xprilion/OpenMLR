@@ -162,8 +162,9 @@ describe('ModelModal', () => {
 
     fireEvent.click(screen.getByText('Close'));
 
+    const dialog = document.querySelector('dialog');
     await waitFor(() => {
-      expect(screen.queryByText('GPT-4o Mini')).not.toBeInTheDocument();
+      expect(dialog).not.toHaveAttribute('open');
     });
   });
 
@@ -205,12 +206,12 @@ describe('ModelModal', () => {
       expect(screen.getAllByText('GPT-4o').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Find the overlay (the fixed div with bg-black/60)
-    const overlay = document.querySelector('.fixed.inset-0');
-    fireEvent.click(overlay!);
+    // Click on the dialog element itself (backdrop area) to close
+    const dialog = document.querySelector('dialog');
+    fireEvent.click(dialog!);
 
     await waitFor(() => {
-      expect(screen.queryByText('GPT-4o Mini')).not.toBeInTheDocument();
+      expect(dialog).not.toHaveAttribute('open');
     });
   });
 
