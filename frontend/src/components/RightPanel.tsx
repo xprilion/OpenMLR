@@ -108,6 +108,7 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
 
   const done = tasks.filter((t) => t.status === 'completed').length;
   const ctxPct = contextUsage ? Math.round(contextUsage.ratio * 100) : 0;
+  const ctxColor = ctxPct >= 90 ? 'bg-red-500' : ctxPct >= 70 ? 'bg-yellow-500' : 'bg-green-500';
   const budgetUsed = searchBudget?.used ?? 0;
   const budgetMax = searchBudget?.max ?? 25;
   const budgetPct = budgetMax > 0 ? Math.round((budgetUsed / budgetMax) * 100) : 0;

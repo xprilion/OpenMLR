@@ -19,19 +19,19 @@ type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
 
 interface Props {
   readonly conversations: readonly Conversation[];
-  readonly currentUuid: string | null;
-  readonly user: User | null;
-  readonly convStatuses: readonly Record<string, ConvStatus>;
-  readonly terminalOpen: boolean;
-  readonly terminalConnected: boolean;
-  readonly terminalSessionCount: number;
-  readonly onSwitch: (uuid: string) => void;
-  readonly onNew: (mode?: string) => void;
-  readonly onDelete: (uuid: string) => void;
-  readonly onTerminalToggle: () => void;
+  currentUuid: string | null;
+  user: User | null;
+  convStatuses: Record<string, ConvStatus>;
+  terminalOpen: boolean;
+  terminalConnected: boolean;
+  terminalSessionCount: number;
+  onSwitch: (uuid: string) => void;
+  onNew: (mode?: string) => void;
+  onDelete: (uuid: string) => void;
+  onTerminalToggle: () => void;
 }
 
-function groupByDate(conversations: Conversation[]) {
+function groupByDate(conversations: readonly Conversation[]) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 86400000);

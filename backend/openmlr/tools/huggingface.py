@@ -9,8 +9,8 @@ from .http_utils import RateLimitError, fetch_with_retry
 log = logging.getLogger(__name__)
 
 HF_API = "https://huggingface.co"
-HF_RATE_LIMIT_MSG = "HF_RATE_LIMIT_MSG"
-HF_TRUNCATED_MSG = "HF_TRUNCATED_MSG"
+HF_RATE_LIMIT_MSG = "HF rate limit exceeded. Please wait before retrying."
+HF_TRUNCATED_MSG = "Response truncated due to length limits."
 
 
 def _headers() -> dict:
@@ -213,7 +213,7 @@ async def _handle_search_models(
             url, headers=_headers(), params=params, timeout=30, max_retries=3
         )
     except RateLimitError:
-        return "HF_RATE_LIMIT_MSG", False
+        return HF_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"HF search models error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -348,7 +348,7 @@ async def _handle_search_datasets(
             url, headers=_headers(), params=params, timeout=30, max_retries=3
         )
     except RateLimitError:
-        return "HF_RATE_LIMIT_MSG", False
+        return HF_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"HF search datasets error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -387,7 +387,7 @@ async def _handle_dataset_info(
     try:
         resp = await fetch_with_retry(url, headers=_headers(), timeout=30, max_retries=3)
     except RateLimitError:
-        return "HF_RATE_LIMIT_MSG", False
+        return HF_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"HF dataset info error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -454,7 +454,7 @@ async def _handle_read_file(
     try:
         resp = await fetch_with_retry(url, headers=_headers(), timeout=30, max_retries=3)
     except RateLimitError:
-        return "HF_RATE_LIMIT_MSG", False
+        return HF_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"HF read file error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
