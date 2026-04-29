@@ -60,7 +60,7 @@ async def events(request: Request, token: str = None):
                 except TimeoutError:
                     yield ":ping\n\n"
         except asyncio.CancelledError:
-            pass
+            raise
         except GeneratorExit:
             pass
         finally:
@@ -150,7 +150,7 @@ async def get_conversation(
     # Re-generate title if still "New conversation" and has messages
     if conv.title == "New conversation" and msgs:
         msg_dicts = [_msg_dict(m) for m in msgs]
-        asyncio.create_task(
+        _task = asyncio.create_task(
             _auto_title(_sm(request), _bus(request), db, conv.id, conv.uuid, msg_dicts)
         )
 
@@ -408,7 +408,9 @@ async def send_message(
         # Title generation (still async in web process for now)
         if user_count in (1, 3):
             msg_dicts = await _load_messages(db, conv.id)
-            asyncio.create_task(_auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts))
+            _task = asyncio.create_task(
+                _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
+            )
 
         return {"ok": True, "job_id": job.job_id if job else None, "background": True}
 
@@ -443,11 +445,11 @@ async def send_message(
         _wire_persistence(active, db, conv.id)
         active._persist_wired = True
 
-    asyncio.create_task(sm.process_message(conv.id, body.message, mode=body.mode))
+    _task = asyncio.create_task(sm.process_message(conv.id, body.message, mode=body.mode))
 
     if user_count in (1, 3):
         msg_dicts = await _load_messages(db, conv.id)
-        asyncio.create_task(_auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts))
+        _task = asyncio.create_task(_auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts))
 
     return {"ok": True, "background": False}
 
@@ -601,7 +603,9 @@ async def submit_approval(
     if active and active.session.pending_approval:
         from ..agent.loop import _handle_approval
 
-        asyncio.create_task(_handle_approval(active.session, active.tool_router, body.approvals))
+        _task = asyncio.create_task(
+            _handle_approval(active.session, active.tool_router, body.approvals)
+        )
     return {"ok": True}
 
 

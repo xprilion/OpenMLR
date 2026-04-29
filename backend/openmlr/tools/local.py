@@ -373,6 +373,11 @@ async def _direct_exec(command: str, timeout: int, cwd: str) -> tuple[str, bool]
 # ── File tools (host filesystem) ─────────────────────────
 
 
+def _read_file_lines(path: Path) -> list[str]:
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.readlines()
+
+
 async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) -> tuple[str, bool]:
     try:
         target = Path(path).expanduser()
@@ -393,8 +398,8 @@ async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) 
         if not target.exists():
             return f"File not found: {target}", False
 
-        with open(target, encoding="utf-8", errors="replace") as f:
-            all_lines = f.readlines()
+        loop = asyncio.get_event_loop()
+        all_lines = await loop.run_in_executor(None, _read_file_lines, target)
 
         start = max(0, offset - 1)
         end = start + limit

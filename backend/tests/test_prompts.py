@@ -13,7 +13,7 @@ class TestBuildSystemPrompt:
         prompt = build_system_prompt(tool_specs=tools, mode="general", username="tester")
         assert isinstance(prompt, str)
         assert len(prompt) > 0
-        assert "read_file" in prompt or "read_file" in prompt
+        assert "read_file" in prompt
 
     def test_renders_with_username(self):
         tools = [ToolSpec(name="test_tool", description="Test", parameters={"type": "object"})]

@@ -189,7 +189,7 @@ async def _async_process_message(
                     await clear_interrupt(conversation_id)
                     break
         except asyncio.CancelledError:
-            pass
+            raise
         except Exception as e:
             logger.warning(f"Interrupt poll error: {e}")
 
@@ -234,7 +234,7 @@ async def _async_process_message(
         interrupt_task.cancel()
         try:
             await interrupt_task
-        except asyncio.CancelledError:
+        finally:
             pass
 
         # Cleanup

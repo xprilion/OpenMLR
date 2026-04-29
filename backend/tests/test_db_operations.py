@@ -261,7 +261,7 @@ class TestSettingsOperations:
     async def test_set_user_setting_float_value(self, db_session: AsyncSession, test_user):
         await ops.set_user_setting(db_session, test_user.id, "agent", "threshold", 0.85)
         val = await ops.get_user_setting(db_session, test_user.id, "agent", "threshold")
-        assert val == 0.85
+        assert val == pytest.approx(0.85)
 
     async def test_get_user_agent_settings(self, db_session: AsyncSession, test_user):
         await ops.set_user_setting(db_session, test_user.id, "agent", "default_model", "claude")

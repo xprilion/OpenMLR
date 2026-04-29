@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { 
   Circle, 
@@ -42,8 +43,8 @@ function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: numbe
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 1) return;
+    const num = Number.parseInt(value, 10);
+    if (Number.isNaN(num) || num < 1) return;
     setSaving(true);
     try {
       await api.updateSetting('agent', 'paper_search_budget', num);

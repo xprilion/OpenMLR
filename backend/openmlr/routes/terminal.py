@@ -92,9 +92,11 @@ async def _authenticate_ws(token: str | None) -> User | None:
 
 async def _cleanup_process(pid: int, master_fd: int) -> None:
     """Clean up PTY process with SIGKILL escalation to prevent zombies."""
+    loop = asyncio.get_event_loop()
+
     # Close the master fd first
     try:
-        os.close(master_fd)
+        await loop.run_in_executor(None, os.close, master_fd)
     except OSError:
         pass
 
@@ -103,14 +105,14 @@ async def _cleanup_process(pid: int, master_fd: int) -> None:
 
     # Send SIGTERM and wait with timeout
     try:
-        os.kill(pid, signal.SIGTERM)
+        await loop.run_in_executor(None, os.kill, pid, signal.SIGTERM)
     except ProcessLookupError:
         return
 
     # Poll up to 2 seconds for graceful exit
     for _ in range(20):
         try:
-            result, _ = os.waitpid(pid, os.WNOHANG)
+            result, _ = await loop.run_in_executor(None, os.waitpid, pid, os.WNOHANG)
             if result != 0:
                 return  # Process exited
         except ChildProcessError:
@@ -119,8 +121,8 @@ async def _cleanup_process(pid: int, master_fd: int) -> None:
 
     # Escalate to SIGKILL
     try:
-        os.kill(pid, signal.SIGKILL)
-        os.waitpid(pid, 0)  # Blocking wait after SIGKILL
+        await loop.run_in_executor(None, os.kill, pid, signal.SIGKILL)
+        await loop.run_in_executor(None, os.waitpid, pid, 0)  # Blocking wait after SIGKILL
     except (ProcessLookupError, ChildProcessError):
         pass
 

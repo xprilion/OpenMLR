@@ -1019,8 +1019,7 @@ def _extract_arxiv_id(text: str) -> str | None:
 
 def _extract_arxiv_from_ids(ids: dict) -> str | None:
     """Extract arxiv ID from OpenAlex ids dict."""
-    ids.get("openalex", "")
-    doi = ids.get("doi", "")
+    doi = ids.get("openalex", "") or ids.get("doi", "")
     if "arXiv" in doi:
         return _extract_arxiv_id(doi)
     return None
