@@ -76,7 +76,7 @@ class TestValidatePath:
         path = Path("/etc", "passwd")
         resolved, error = _validate_path(path)
         assert error is not None
-        assert "outside workspace" in error
+        assert "outside workspace" in error or "protected system directory" in error
 
     def test_blocked_root_path(self, monkeypatch):
         monkeypatch.setattr("openmlr.tools.local.WORKSPACE_ROOT", "/home/user/projects")
