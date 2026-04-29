@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.5.0
+
+Project-scoped conversations, unified file workspace, Monaco code viewer, TODO approval flow, comprehensive agent guidance, and test infrastructure improvements.
+
+### Project-Scoped Conversations
+- **Mandatory projects** -- Every conversation must belong to a project; the "All Conversations" concept has been removed entirely
+- **Onboarding project creation** -- 3-step onboarding flow: Providers > Model > Create First Project. Users name their project and understand the concept from the start
+- **Orphan cleanup** -- Existing conversations without a project are automatically deleted when the conversation list is loaded
+- **Project selector** -- No more null state; always shows a real project. Dropdown removed the "All" option
+
+### Unified File Workspace
+- **Resources materialized as files** -- PLAN.md, completion reports, and paper drafts are now written as real files to the project workspace (`.project-meta/plans/`, `.project-meta/reports/`, `papers/`) and appear in the Files panel
+- **Resources panel removed** -- The separate Resources section in the right panel has been replaced by the unified FileTree. Tasks tab renamed to Todos and displayed alongside Files as stacked collapsible panels (no more tab buttons)
+- **workspace_files_changed SSE event** -- FileTree auto-refreshes when resources are written to the workspace
+- **File badges** -- Pin icon for PLAN.md, clipboard icon for reports, book icon for paper drafts in the FileTree
+
+### Monaco Code Viewer
+- **Agent/Editor tabs** -- Main content area now has two tabs: Agent (chat) and Editor (read-only code viewer)
+- **Monaco Editor integration** -- VS Code engine (`@monaco-editor/react`) with full syntax highlighting, minimap, line numbers, bracket pair colorization, and word wrap. Supports 15+ languages (Python, TypeScript, JSON, Markdown, YAML, LaTeX, shell, etc.)
+- **Multi-tab file viewer** -- Open multiple files as tabs in the Editor, close individually. Closing the last tab switches back to the Agent tab
+- **FileTree integration** -- Clicking a file in the Files panel opens it in the Editor tab; inline preview removed
+
+### Agent Improvements
+- **Message persistence fix** -- Assistant text that precedes tool calls is now persisted to the database via an `assistant_message` event, surviving page refreshes
+- **Plan-mode research budget** -- Warns after 5+ research tool calls in Plan mode; guides the agent to save comprehensive research for Execute mode tasks
+- **TODO approval in Execute mode** -- Creating or adding tasks in Execute mode requires user approval via a dedicated review UI with current vs. proposed diff view and inline task editing
+- **Blank section enforcement** -- Writing tool warns about incomplete sections after each write; `get_draft` appends a WARNING listing all `[Not yet written]` placeholders
+
+### Workspace Targeting
+- **Project workspace auto-targeting** -- `read`, `write`, `edit`, and `bash` tools automatically target the active project workspace directory. Files created by the agent appear in the Files panel
+- **Workspace context wiring** -- Both inline and Celery worker sessions resolve the project workspace and set context for workspace tools (knowledge graph, notes) and local tools (file operations)
+
+### Comprehensive Agent Guidance
+- **System prompt v7** -- Full rewrite with a Tool Selection Decision Tree, Workspace Structure reference, expanded Code Execution constraints, and strengthened Plan/Execute mode rules
+- **Expanded tool descriptions** -- `bash` (Docker constraints, common patterns), `read` (offset/limit usage), `write` (workspace targeting, anti-pattern for papers), `edit` (find-and-replace semantics), `research` (available tools, iteration limits), `writing` (full workflow, placeholder enforcement), `plan_tool` (enforcement rules, workspace file locations)
+- **Research sub-agent prompt** -- Now lists available tools, constraints (60 iterations, ~190k token budget), stop conditions, error handling guidance, and clarifies that the sub-agent cannot write to the workspace
+
+### Testing & Infrastructure
+- **Pytest hang fix** -- Removed deprecated `event_loop` session fixture, added `_dispose_engine_at_exit` for async engine cleanup, set `asyncio_mode = "auto"` in pytest config. Full backend suite now exits cleanly in ~50s
+- **47 new backend tests** -- Message persistence, research budget, project workspace targeting, incomplete section warnings, orphan cleanup, workspace path resolution, TODO approval Redis helpers, report persistence
+- **22 new frontend tests** -- EditorPanel (12 tests), FileTree (10 tests)
+- **ProjectSelector tests** -- 12 tests verifying no-null project selection
+- **TodoReviewDrawer tests** -- 10 tests for the approval UI
+- **Total: 858 backend + 226 frontend = 1,084 tests**
+
+### Bug Fixes
+- Fixed silent exception swallowing in `_wire_persistence` (now logs errors via `logger.exception`)
+- Fixed inline-mode SSE events missing `conversation_uuid` (prevented cross-conversation event leakage)
+- Fixed `pnpm-lock.yaml` not including `@monaco-editor/react` for Docker builds
+- Fixed `test_list_conversations` and `test_conversations_isolated_by_user` for project-scoped queries
+- Fixed `test_conversations.py` integration tests to create conversations with a project
+
+---
+
 ## v0.4.0
 
 Projects, workspaces, interactive terminal, multi-provider model picker, security hardening, and centralized version management.

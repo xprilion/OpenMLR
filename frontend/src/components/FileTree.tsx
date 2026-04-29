@@ -157,9 +157,6 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<string | null>(null);
-  const [fileLoading, setFileLoading] = useState(false);
 
   const loadDirectory = useCallback(async (path: string = ''): Promise<TreeNode[]> => {
     try {
@@ -240,19 +237,14 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
   }, [loadDirectory]);
 
   const handleSelect = useCallback(async (path: string) => {
-    setSelectedFile(path);
-    setFileLoading(true);
-    setFileContent(null);
     try {
       const data = await api.readFile(projectUuid, path);
       if (data.content !== undefined) {
-        setFileContent(data.content);
         onFileSelect?.(path, data.content);
       }
     } catch {
-      setFileContent(null);
+      // File could not be read (binary, etc.)
     }
-    setFileLoading(false);
   }, [projectUuid, onFileSelect]);
 
   const handleRefresh = useCallback(async () => {
@@ -312,30 +304,6 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
         )}
       </div>
 
-      {/* Selected file preview */}
-      {selectedFile && (
-        <div className="border-t border-border">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-surface-hover">
-            <span className="text-xs text-text-dim truncate">{selectedFile}</span>
-            <button
-              className="w-5 h-5 rounded flex items-center justify-center text-text-dim hover:text-text"
-              onClick={() => { setSelectedFile(null); setFileContent(null); }}
-              title="Close"
-            >
-              x
-            </button>
-          </div>
-          {fileLoading ? (
-            <div className="px-3 py-4 text-xs text-text-dim">Loading...</div>
-          ) : fileContent !== null ? (
-            <pre className="px-3 py-2 text-xs text-text overflow-auto max-h-48 font-mono whitespace-pre-wrap">
-              {fileContent.length > 5000 ? fileContent.slice(0, 5000) + '\n...' : fileContent}
-            </pre>
-          ) : (
-            <div className="px-3 py-4 text-xs text-text-dim">Binary file</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

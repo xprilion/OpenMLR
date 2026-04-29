@@ -6,7 +6,7 @@ import { ProjectSelector } from './components/ProjectSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
-import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project, TodoApprovalPayload } from './types';
+import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project, TodoApprovalPayload, OpenFile } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
@@ -28,6 +28,7 @@ import { AgentSettings } from './components/settings/AgentSettings';
 import { McpSettings } from './components/settings/McpSettings';
 import { ComputeSettings } from './components/settings/ComputeSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
+import { EditorPanel } from './components/EditorPanel';
 
 let msgId = 0;
 const nextId = () => `msg-${++msgId}`;
@@ -40,6 +41,21 @@ function findLastIndex<T>(arr: T[], predicate: (item: T) => boolean): number {
   return -1;
 }
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
+type MainTab = 'agent' | 'editor';
+
+/** Map file extensions to Monaco language IDs. */
+function detectLanguage(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    py: 'python', js: 'javascript', ts: 'typescript', tsx: 'typescript',
+    jsx: 'javascript', json: 'json', md: 'markdown', yaml: 'yaml',
+    yml: 'yaml', toml: 'toml', sh: 'shell', bash: 'shell',
+    html: 'html', css: 'css', sql: 'sql', r: 'r', txt: 'plaintext',
+    csv: 'plaintext', log: 'plaintext', cfg: 'ini', ini: 'ini',
+    tex: 'latex', bib: 'bibtex', xml: 'xml', dockerfile: 'dockerfile',
+  };
+  return map[ext] || 'plaintext';
+}
 
 // ── Login wrapper (reads user from parent) ──────────────
 function LoginRoute({ onAuth }: { onAuth: (u: User) => void }) {
@@ -116,6 +132,9 @@ function ChatUI({
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [todoApprovalPayload, setTodoApprovalPayload] = useState<TodoApprovalPayload | null>(null);
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
+  const [mainTab, setMainTab] = useState<MainTab>('agent');
+  const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
   // Refs to always have current values in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -631,6 +650,31 @@ function ChatUI({
     }
   }, [setCurrentConvStatus]);
 
+  const handleFileOpen = useCallback((path: string, content: string) => {
+    setOpenFiles((prev) => {
+      if (prev.some((f) => f.path === path)) return prev;
+      return [...prev, { path, content, language: detectLanguage(path) }];
+    });
+    setActiveFilePath(path);
+    setMainTab('editor');
+  }, []);
+
+  const handleCloseFile = useCallback((path: string) => {
+    setOpenFiles((prev) => {
+      const next = prev.filter((f) => f.path !== path);
+      // If closing the active file, activate the previous tab or switch to agent
+      if (activeFilePath === path) {
+        if (next.length > 0) {
+          setActiveFilePath(next[next.length - 1].path);
+        } else {
+          setActiveFilePath(null);
+          setMainTab('agent');
+        }
+      }
+      return next;
+    });
+  }, [activeFilePath]);
+
   // Effective processing (combines SSE-driven status with polling fallback)
   const effectiveProcessing = isProcessing || jobProcessing;
   const effectiveTurnActive = agentTurnActive || jobProcessing;
@@ -686,57 +730,99 @@ function ChatUI({
           className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200"
           style={{ paddingRight: rightPanelOpen ? '288px' : '48px' }}
         >
-          {/* Empty state */}
-          {messages.length === 0 && !effectiveProcessing && (
-            <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
-              <div className="relative mb-8">
-                {/* Glow ring behind logo */}
-                <div
-                  className="absolute inset-0 rounded-full animate-[hero-glow_6s_ease-in-out_infinite]"
-                  style={{
-                    background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
-                    transform: 'scale(2.5)',
-                  }}
-                />
-                {/* Floating logo */}
-                <img
-                  src="/logo-512.png"
-                  alt="OpenMLR"
-                  className="relative w-24 h-24 sm:w-32 sm:h-32 select-none pointer-events-none animate-[hero-float_6s_ease-in-out_infinite]"
-                  style={{ opacity: 0.35 }}
-                  draggable={false}
-                />
-              </div>
-              <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
+          {/* Agent / Editor tab bar */}
+          <div className="flex items-center border-b border-border shrink-0 bg-surface">
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                mainTab === 'agent'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab('agent')}
+            >
+              Agent
+            </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                mainTab === 'editor'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab('editor')}
+            >
+              Editor
+              {openFiles.length > 0 && (
+                <span className="ml-1.5 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                  {openFiles.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Agent tab */}
+          {mainTab === 'agent' && (
+            <div className="flex flex-col flex-1 overflow-hidden relative">
+              {/* Empty state */}
+              {messages.length === 0 && !effectiveProcessing && (
+                <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
+                  <div className="relative mb-8">
+                    <div
+                      className="absolute inset-0 rounded-full animate-[hero-glow_6s_ease-in-out_infinite]"
+                      style={{
+                        background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
+                        transform: 'scale(2.5)',
+                      }}
+                    />
+                    <img
+                      src="/logo-512.png"
+                      alt="OpenMLR"
+                      className="relative w-24 h-24 sm:w-32 sm:h-32 select-none pointer-events-none animate-[hero-float_6s_ease-in-out_infinite]"
+                      style={{ opacity: 0.35 }}
+                      draggable={false}
+                    />
+                  </div>
+                  <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
+                </div>
+              )}
+              
+              <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
+              {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
+              {todoApprovalPayload && <TodoReviewDrawer payload={todoApprovalPayload} onDone={() => { 
+                setTodoApprovalPayload(null); 
+                setCurrentConvStatus('processing');
+              }} onClose={() => { setTodoApprovalPayload(null); setCurrentConvStatus('idle'); }} />}
+              {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
+                setQuestionsPayload(null); 
+                setCurrentConvStatus('processing');
+                setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]);
+                if (switchToExecute) setInputMode('execute');
+              }} onClose={() => setQuestionsPayload(null)} />}
+              <InputArea 
+                disabled={effectiveProcessing} 
+                showStop={effectiveTurnActive}
+                mode={inputMode}
+                onModeChange={setInputMode}
+                text={inputText}
+                onTextChange={setInputText}
+                onSend={sendMessage} 
+                onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }} 
+              />
             </div>
           )}
-          
-          <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
-          {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
-          {todoApprovalPayload && <TodoReviewDrawer payload={todoApprovalPayload} onDone={() => { 
-            setTodoApprovalPayload(null); 
-            setCurrentConvStatus('processing');
-          }} onClose={() => { setTodoApprovalPayload(null); setCurrentConvStatus('idle'); }} />}
-          {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
-            setQuestionsPayload(null); 
-            setCurrentConvStatus('processing');
-            setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]);
-            if (switchToExecute) setInputMode('execute');
-          }} onClose={() => setQuestionsPayload(null)} />}
-          <InputArea 
-            disabled={effectiveProcessing} 
-            showStop={effectiveTurnActive}
-            mode={inputMode}
-            onModeChange={setInputMode}
-            text={inputText}
-            onTextChange={setInputText}
-            onSend={sendMessage} 
-            onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }} 
-          />
+
+          {/* Editor tab */}
+          {mainTab === 'editor' && (
+            <EditorPanel
+              openFiles={openFiles}
+              activeFilePath={activeFilePath}
+              onActivateFile={setActiveFilePath}
+              onCloseFile={handleCloseFile}
+            />
+          )}
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} onFileOpen={handleFileOpen} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
       </div>
 
       {/* Terminal panel */}

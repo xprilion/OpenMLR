@@ -12,7 +12,7 @@ The agent has access to built-in tools organized by category. Tool availability 
 | Tool | Description | Plan | Execute |
 |------|-------------|:----:|:-------:|
 | `ask_user` | Ask structured questions (2-4 options + free text per question) | yes | no |
-| `plan_tool` | Create/update task plans, track resources, generate completion reports | yes | yes |
+| `plan_tool` | Create/update task plans, track resources, generate completion reports. In Execute mode, `create` and `add` operations require user approval. | yes | yes |
 
 ## Research Tools
 

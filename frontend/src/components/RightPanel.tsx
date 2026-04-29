@@ -25,6 +25,7 @@ interface Props {
   fileTreeRefreshKey?: number;
   onToggle: () => void;
   onViewReport: (resource: Resource) => void;
+  onFileOpen?: (path: string, content: string) => void;
   onSearchBudgetChange?: (newMax: number) => void;
 }
 
@@ -91,7 +92,7 @@ function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: numbe
   );
 }
 
-export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, visible, projectUuid, fileTreeRefreshKey, onToggle, onViewReport: _onViewReport, onSearchBudgetChange }: Props) {
+export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, visible, projectUuid, fileTreeRefreshKey, onToggle, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
   const [showBudgetDialog, setShowBudgetDialog] = useState(false);
 
   const done = tasks.filter((t) => t.status === 'completed').length;
@@ -216,7 +217,7 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
         {projectUuid && (
           <CollapsiblePanel title="Files" icon={<Files size={12} />}>
             <div className="-mx-4 -mb-3">
-              <FileTree projectUuid={projectUuid} refreshKey={fileTreeRefreshKey} />
+              <FileTree projectUuid={projectUuid} refreshKey={fileTreeRefreshKey} onFileSelect={onFileOpen} />
             </div>
           </CollapsiblePanel>
         )}

@@ -109,6 +109,12 @@ export interface FileNode {
   modified: number;
 }
 
+export interface OpenFile {
+  path: string;
+  content: string;
+  language: string;
+}
+
 // ── Task Plan & Resources ───────────────────────────────
 
 export interface PlanTask {

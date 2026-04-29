@@ -95,6 +95,7 @@ Open `http://localhost:5173` for the UI (Vite with hot module replacement).
 | frontend | :5173 | Vite dev server with HMR (proxies `/api` to backend) |
 | web | :3000 | FastAPI backend with Swagger docs at `/docs` |
 | worker | - | Celery background jobs (auto-restarts on code changes) |
+| docs | :4000 | VitePress docs site (when running `make docs-dev`) |
 | db | :5433 | PostgreSQL 16 |
 | redis | :6380 | Redis 7 |
 
