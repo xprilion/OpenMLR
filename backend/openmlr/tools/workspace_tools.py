@@ -187,12 +187,12 @@ async def _workspace_search(query: str) -> tuple[str, bool]:
                 if os.path.getsize(fpath) > 500_000:
                     continue
 
-                async def read_file(path: str) -> str:
+                def read_file(path: str = fpath) -> str:
                     with open(path, encoding="utf-8", errors="ignore") as f:
                         return f.read(10000)
 
                 loop = asyncio.get_event_loop()
-                content = await loop.run_in_executor(None, read_file, fpath)
+                content = await loop.run_in_executor(None, read_file)
                 if query_lower in content.lower():
                     results.append(f"- **{rel_path}** (content match)")
             except Exception:

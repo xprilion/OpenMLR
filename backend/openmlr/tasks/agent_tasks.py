@@ -234,8 +234,8 @@ async def _async_process_message(
         interrupt_task.cancel()
         try:
             await interrupt_task
-        except asyncio.CancelledError:
-            raise
+        finally:
+            pass
 
         # Cleanup
         try:

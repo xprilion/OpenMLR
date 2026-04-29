@@ -110,9 +110,8 @@ class EventBus:
             self._redis_bridge_task.cancel()
             try:
                 await self._redis_bridge_task
-            except asyncio.CancelledError:
-                raise
-            self._redis_bridge_task = None
+            finally:
+                self._redis_bridge_task = None
 
     @property
     def subscriber_count(self) -> int:
