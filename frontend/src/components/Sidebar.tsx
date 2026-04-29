@@ -18,7 +18,7 @@ import {
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
 
 interface Props {
-  conversations: Conversation[];
+  readonly conversations: readonly Conversation[];
   currentUuid: string | null;
   user: User | null;
   convStatuses: Record<string, ConvStatus>;
@@ -31,7 +31,7 @@ interface Props {
   onTerminalToggle: () => void;
 }
 
-function groupByDate(conversations: Conversation[]) {
+function groupByDate(conversations: readonly Conversation[]) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 86400000);
@@ -90,7 +90,11 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
   // Terminal status dot color for collapsed rail
-  const termDotColor = !terminalOpen ? 'bg-text-dim' : terminalConnected ? 'bg-success' : 'bg-error';
+  const getTermDotColor = (open: boolean, connected: boolean): string => {
+    if (!open) return 'bg-text-dim';
+    return connected ? 'bg-success' : 'bg-error';
+  };
+  const termDotColor = getTermDotColor(terminalOpen, terminalConnected);
 
   if (collapsed) {
     return (

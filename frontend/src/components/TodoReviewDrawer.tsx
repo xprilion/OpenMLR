@@ -9,9 +9,9 @@ interface TodoApprovalPayload {
 }
 
 interface Props {
-  payload: TodoApprovalPayload;
-  onDone: () => void;
-  onClose: () => void;
+  readonly payload: TodoApprovalPayload;
+  readonly onDone: () => void;
+  readonly onClose: () => void;
 }
 
 const statusIcon = (status: string) => {
@@ -171,11 +171,12 @@ export function TodoReviewDrawer({ payload, onDone, onClose }: Props) {
                       autoFocus
                     />
                   ) : (
-                    <span
-                      className={`flex-1 cursor-pointer hover:text-primary transition-colors ${
+                    <button
+                      className={`flex-1 cursor-pointer hover:text-primary transition-colors text-left ${
                         isNew ? 'text-success font-medium' : statusColor(task.status)
                       }`}
                       onClick={() => handleEditStart(i)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEditStart(i)}
                       title="Click to edit"
                     >
                       {task.title}
@@ -184,7 +185,7 @@ export function TodoReviewDrawer({ payload, onDone, onClose }: Props) {
                           new
                         </span>
                       )}
-                    </span>
+                    </button>
                   )}
                   <button
                     className="w-6 h-6 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-error/10 transition-colors shrink-0"

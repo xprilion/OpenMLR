@@ -132,7 +132,7 @@ class TestProjectWorkspace:
         set_project_workspace(str(tmp_path))
         try:
             path = tmp_path / "code" / "train.py"
-            resolved, error = _validate_path(path)
+            _, error = _validate_path(path)
             assert error is None
         finally:
             set_project_workspace(None)
@@ -147,7 +147,7 @@ class TestProjectWorkspace:
         monkeypatch.chdir(project_dir)
         try:
             path = other_dir / "secret.txt"
-            resolved, error = _validate_path(path)
+            _, error = _validate_path(path)
             assert error is not None
             assert "outside workspace" in error
         finally:

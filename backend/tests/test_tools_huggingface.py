@@ -520,7 +520,7 @@ class TestFetchReadme:
     @patch("openmlr.tools.huggingface.fetch_with_retry")
     async def test_fetches_dataset_readme(self, mock_fetch):
         mock_fetch.return_value = _mock_response(text="# My Dataset")
-        result = await _fetch_readme("org/dataset", "dataset")
+        await _fetch_readme("org/dataset", "dataset")
         url = mock_fetch.call_args.args[0]
         assert url == "https://huggingface.co/datasets/org/dataset/resolve/main/README.md"
 

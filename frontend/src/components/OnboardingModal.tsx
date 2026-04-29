@@ -143,14 +143,19 @@ export function OnboardingModal({ onComplete }: Props) {
           </p>
           {/* Step indicator */}
           <div className="flex items-center justify-center gap-2 mt-4">
-            {['providers', 'model', 'project'].map((s, i) => (
-              <div
-                key={s}
-                className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                  s === step ? 'bg-primary' : i < ['providers', 'model', 'project'].indexOf(step) ? 'bg-success' : 'bg-border'
-                }`}
-              />
-            ))}
+            {['providers', 'model', 'project'].map((s, i) => {
+              const getStepColor = (current: string, idx: number, stepVal: string): string => {
+                if (current === stepVal) return 'bg-primary';
+                if (idx < ['providers', 'model', 'project'].indexOf(stepVal)) return 'bg-success';
+                return 'bg-border';
+              };
+              return (
+                <div
+                  key={s}
+                  className={`w-2.5 h-2.5 rounded-full transition-colors ${getStepColor(s, i, step)}`}
+                />
+              );
+            })}
           </div>
         </div>
 

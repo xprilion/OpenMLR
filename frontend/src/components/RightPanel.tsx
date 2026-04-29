@@ -16,13 +16,13 @@ import { CollapsiblePanel } from './CollapsiblePanel';
 import type { PlanTask, Resource, ContextUsage, SearchBudget } from '../types';
 
 interface Props {
-  tasks: PlanTask[];
-  resources: Resource[];
-  contextUsage: ContextUsage | null;
-  searchBudget: SearchBudget | null;
-  visible: boolean;
-  projectUuid: string | null;
-  fileTreeRefreshKey?: number;
+  readonly tasks: readonly PlanTask[];
+  readonly resources: readonly Resource[];
+  readonly contextUsage: ContextUsage | null;
+  readonly searchBudget: SearchBudget | null;
+  readonly visible: boolean;
+  readonly projectUuid: string | null;
+  readonly fileTreeRefreshKey?: number;
   onToggle: () => void;
   onViewReport: (resource: Resource) => void;
   onFileOpen?: (path: string, content: string) => void;
@@ -56,8 +56,19 @@ function SearchBudgetDialog({ currentMax, onSave, onClose }: { currentMax: numbe
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-surface border border-border rounded-xl shadow-2xl p-6 w-80" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      role="dialog"
+      tabIndex={-1}
+    >
+      <div
+        className="bg-surface border border-border rounded-xl shadow-2xl p-6 w-80"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="document"
+      >
         <h3 className="text-sm font-semibold text-text mb-4">Search Budget</h3>
         <p className="text-xs text-text-dim mb-3">
           Set the maximum number of paper searches allowed per session.
@@ -97,7 +108,7 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
 
   const done = tasks.filter((t) => t.status === 'completed').length;
   const ctxPct = contextUsage ? Math.round(contextUsage.ratio * 100) : 0;
-  const ctxColor = ctxPct > 80 ? 'bg-error' : ctxPct > 60 ? 'bg-warning' : 'bg-success';
+  const ctxColor = ctxPct >= 90 ? 'bg-red-500' : ctxPct >= 70 ? 'bg-yellow-500' : 'bg-green-500';
   const budgetUsed = searchBudget?.used ?? 0;
   const budgetMax = searchBudget?.max ?? 25;
   const budgetPct = budgetMax > 0 ? Math.round((budgetUsed / budgetMax) * 100) : 0;

@@ -2,10 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 interface CollapsiblePanelProps {
-  title: string;
-  icon?: ReactNode;
-  badge?: string | number;
-  defaultExpanded?: boolean;
+  readonly title: string;
+  readonly icon?: ReactNode;
+  readonly badge?: string | number;
+  readonly defaultExpanded?: boolean;
   children: ReactNode;
 }
 
