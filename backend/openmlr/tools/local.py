@@ -398,7 +398,8 @@ async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) 
         if not target.exists():
             return f"File not found: {target}", False
 
-        all_lines = await _read_file_lines(target)
+        loop = asyncio.get_event_loop()
+        all_lines = await loop.run_in_executor(None, _read_file_lines, target)
 
         start = max(0, offset - 1)
         end = start + limit
