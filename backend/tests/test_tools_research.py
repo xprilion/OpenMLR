@@ -94,7 +94,7 @@ class TestExecuteResearchTool:
         )
         # This will try to actually call the handler which will fail network-wise,
         # but it should NOT return "not available"
-        result, success = await _execute_research_tool(tc)
+        result, _ = await _execute_research_tool(tc)
         assert "not available" not in result
 
     def test_system_prompt_not_empty(self):

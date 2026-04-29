@@ -275,36 +275,36 @@ class SessionManager:
         self.sessions[conversation_id] = active
         return active
 
+    async def _cleanup_session(self, active) -> None:
+        active.session.cancel()
+        if hasattr(active.session, "pending_answers") and active.session.pending_answers:
+            try:
+                if not active.session.pending_answers.done():
+                    active.session.pending_answers.cancel()
+            except Exception:
+                pass
+        if (
+            hasattr(active.session, "pending_todo_approval")
+            and active.session.pending_todo_approval
+        ):
+            try:
+                if not active.session.pending_todo_approval.done():
+                    active.session.pending_todo_approval.cancel()
+            except Exception:
+                pass
+        try:
+            await active.sandbox_manager.destroy()
+        except Exception:
+            pass
+        try:
+            await active.mcp_manager.disconnect_all()
+        except Exception:
+            pass
+
     async def remove_session(self, conversation_id: int) -> None:
         active = self.sessions.pop(conversation_id, None)
         if active:
-            # Cancel any running agent turn
-            active.session.cancel()
-            # Resolve any pending question/approval futures to unblock the loop
-            if hasattr(active.session, "pending_answers") and active.session.pending_answers:
-                try:
-                    if not active.session.pending_answers.done():
-                        active.session.pending_answers.cancel()
-                except Exception:
-                    pass
-            if (
-                hasattr(active.session, "pending_todo_approval")
-                and active.session.pending_todo_approval
-            ):
-                try:
-                    if not active.session.pending_todo_approval.done():
-                        active.session.pending_todo_approval.cancel()
-                except Exception:
-                    pass
-            try:
-                await active.sandbox_manager.destroy()
-            except Exception:
-                pass
-            # Disconnect MCP servers
-            try:
-                await active.mcp_manager.disconnect_all()
-            except Exception:
-                pass
+            await self._cleanup_session(active)
         if self.current_conversation_id == conversation_id:
             self.current_conversation_id = None
 

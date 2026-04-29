@@ -34,13 +34,15 @@ async def submission_loop(session: Session, tool_router) -> None:
 
 
 async def run_agent_turn(
-    session: Session, tool_router, user_message: str, mode: str = None
+    session: Session, tool_router, user_message: str, mode: str | None = None
 ) -> None:
     """Direct entry point: run one agent turn."""
     await _run_agent(session, tool_router, user_message, mode)
 
 
-async def _run_agent(session: Session, tool_router, user_message: str, mode: str = None) -> None:
+async def _run_agent(
+    session: Session, tool_router, user_message: str, mode: str | None = None
+) -> None:
     """Execute the agentic loop for a user message."""
     session.clear_cancel()
 

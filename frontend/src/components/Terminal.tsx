@@ -11,11 +11,11 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 
 interface Props {
-  projectUuid: string | null;
-  visible: boolean;
-  onToggle: () => void;
-  onConnectionChange?: (connected: boolean) => void;
-  rightOffset?: number;
+  readonly projectUuid: string | null;
+  readonly visible: boolean;
+  readonly onToggle: () => void;
+  readonly onConnectionChange?: (connected: boolean) => void;
+  readonly rightOffset?: number;
 }
 
 export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, rightOffset = 0 }: Props) {

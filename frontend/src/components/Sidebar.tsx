@@ -18,17 +18,17 @@ import {
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
 
 interface Props {
-  conversations: Conversation[];
-  currentUuid: string | null;
-  user: User | null;
-  convStatuses: Record<string, ConvStatus>;
-  terminalOpen: boolean;
-  terminalConnected: boolean;
-  terminalSessionCount: number;
-  onSwitch: (uuid: string) => void;
-  onNew: (mode?: string) => void;
-  onDelete: (uuid: string) => void;
-  onTerminalToggle: () => void;
+  readonly conversations: readonly Conversation[];
+  readonly currentUuid: string | null;
+  readonly user: User | null;
+  readonly convStatuses: readonly Record<string, ConvStatus>;
+  readonly terminalOpen: boolean;
+  readonly terminalConnected: boolean;
+  readonly terminalSessionCount: number;
+  readonly onSwitch: (uuid: string) => void;
+  readonly onNew: (mode?: string) => void;
+  readonly onDelete: (uuid: string) => void;
+  readonly onTerminalToggle: () => void;
 }
 
 function groupByDate(conversations: Conversation[]) {
@@ -90,7 +90,11 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
   // Terminal status dot color for collapsed rail
-  const termDotColor = !terminalOpen ? 'bg-text-dim' : terminalConnected ? 'bg-success' : 'bg-error';
+  const getTermDotColor = (open: boolean, connected: boolean): string => {
+    if (!open) return 'bg-text-dim';
+    return connected ? 'bg-success' : 'bg-error';
+  };
+  const termDotColor = getTermDotColor(terminalOpen, terminalConnected);
 
   if (collapsed) {
     return (

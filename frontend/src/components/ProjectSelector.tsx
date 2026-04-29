@@ -3,11 +3,11 @@ import { FolderOpen, ChevronDown, Plus, SlidersHorizontal } from 'lucide-react';
 import type { Project } from '../types';
 
 interface Props {
-  projects: Project[];
-  activeProject: Project | null;
-  onSelectProject: (project: Project) => void;
-  onNewProject: () => void;
-  onManageProjects: () => void;
+  readonly projects: readonly Project[];
+  readonly activeProject: Project | null;
+  readonly onSelectProject: (project: Project) => void;
+  readonly onNewProject: () => void;
+  readonly onManageProjects: () => void;
 }
 
 export function ProjectSelector({ projects, activeProject, onSelectProject, onNewProject, onManageProjects }: Props) {

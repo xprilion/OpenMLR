@@ -9,6 +9,8 @@ from .http_utils import RateLimitError, fetch_with_retry
 log = logging.getLogger(__name__)
 
 HF_API = "https://huggingface.co"
+HF_RATE_LIMIT_MSG = "HF_RATE_LIMIT_MSG"
+HF_TRUNCATED_MSG = "HF_TRUNCATED_MSG"
 
 
 def _headers() -> dict:
@@ -211,7 +213,7 @@ async def _handle_search_models(
             url, headers=_headers(), params=params, timeout=30, max_retries=3
         )
     except RateLimitError:
-        return "Hugging Face rate limit reached. Try again later or add HF_TOKEN.", False
+        return "HF_RATE_LIMIT_MSG", False
     except Exception as e:
         log.warning(f"HF search models error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -269,7 +271,7 @@ async def _handle_model_info(
     try:
         resp = await fetch_with_retry(url, headers=_headers(), timeout=30, max_retries=3)
     except RateLimitError:
-        return "Hugging Face rate limit reached. Try again later or add HF_TOKEN.", False
+        return HF_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"HF model info error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -280,8 +282,21 @@ async def _handle_model_info(
         return f"Hugging Face API error {resp.status_code}: {resp.text[:500]}", False
 
     data = resp.json()
+    lines = _build_model_info_lines(data, repo_id)
 
-    # Build metadata summary
+    if include_readme:
+        readme_content = await _fetch_readme(repo_id, "model")
+        if readme_content:
+            lines.append(f"\n---\n\n## Model Card\n\n{readme_content}")
+
+    output = "\n".join(lines)
+    if len(output) > 50000:
+        output = output[:50000] + HF_TRUNCATED_MSG
+    return output, True
+
+
+def _build_model_info_lines(data: dict, repo_id: str) -> list[str]:
+    """Build model info lines from API response."""
     lines = [f"# Model: {repo_id}\n"]
     lines.append(f"- **URL**: https://huggingface.co/{repo_id}")
     if data.get("pipeline_tag"):
@@ -306,16 +321,7 @@ async def _handle_model_info(
         if len(siblings) > 30:
             lines.append(f"  ... and {len(siblings) - 30} more")
 
-    # Fetch README / model card
-    if include_readme:
-        readme_content = await _fetch_readme(repo_id, "model")
-        if readme_content:
-            lines.append(f"\n---\n\n## Model Card\n\n{readme_content}")
-
-    output = "\n".join(lines)
-    if len(output) > 50000:
-        output = output[:50000] + "\n\n...[truncated]"
-    return output, True
+    return lines
 
 
 async def _handle_search_datasets(
@@ -342,7 +348,7 @@ async def _handle_search_datasets(
             url, headers=_headers(), params=params, timeout=30, max_retries=3
         )
     except RateLimitError:
-        return "Hugging Face rate limit reached. Try again later or add HF_TOKEN.", False
+        return "HF_RATE_LIMIT_MSG", False
     except Exception as e:
         log.warning(f"HF search datasets error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -381,7 +387,7 @@ async def _handle_dataset_info(
     try:
         resp = await fetch_with_retry(url, headers=_headers(), timeout=30, max_retries=3)
     except RateLimitError:
-        return "Hugging Face rate limit reached. Try again later or add HF_TOKEN.", False
+        return "HF_RATE_LIMIT_MSG", False
     except Exception as e:
         log.warning(f"HF dataset info error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -425,7 +431,7 @@ async def _handle_dataset_info(
 
     output = "\n".join(lines)
     if len(output) > 50000:
-        output = output[:50000] + "\n\n...[truncated]"
+        output = output[:50000] + HF_TRUNCATED_MSG
     return output, True
 
 
@@ -448,7 +454,7 @@ async def _handle_read_file(
     try:
         resp = await fetch_with_retry(url, headers=_headers(), timeout=30, max_retries=3)
     except RateLimitError:
-        return "Hugging Face rate limit reached. Try again later or add HF_TOKEN.", False
+        return "HF_RATE_LIMIT_MSG", False
     except Exception as e:
         log.warning(f"HF read file error: {e}")
         return f"Hugging Face API error: {str(e)[:200]}", False
@@ -495,7 +501,7 @@ async def _handle_read_file(
         output = text
 
     if len(output) > 50000:
-        output = output[:50000] + "\n\n...[truncated]"
+        output = output[:50000] + HF_TRUNCATED_MSG
 
     return f"# {repo_id}/{path}\n\n{output}", True
 
@@ -528,6 +534,6 @@ async def _fetch_readme(repo_id: str, repo_type: str = "model") -> str | None:
             content = content[end + 3 :].strip()
 
     if len(content) > 30000:
-        content = content[:30000] + "\n\n...[truncated]"
+        content = content[:30000] + HF_TRUNCATED_MSG
 
     return content

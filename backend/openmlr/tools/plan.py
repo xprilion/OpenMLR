@@ -14,6 +14,10 @@ from ..db import operations as ops
 
 logger = logging.getLogger("openmlr.tools.plan")
 
+PLAN_DIR = ".project-meta/plans"
+PLAN_FILE = "PLAN.md"
+REPORT_DIR = ".project-meta/reports"
+
 
 def _get_session_factory():
     """Get the correct async session factory for the current context (web or worker)."""
@@ -153,8 +157,8 @@ async def _handle_plan(
             await _emit_resources(session, conv_id, db)
 
             # Write PLAN.md to workspace filesystem
-            await _write_to_workspace(conv_id, "PLAN.md", plan_md, ".project-meta/plans")
-            await _emit_files_changed(session, ".project-meta/plans")
+            await _write_to_workspace(conv_id, PLAN_FILE, plan_md, PLAN_DIR)
+            await _emit_files_changed(session, PLAN_DIR)
 
             return await _format_plan(db, conv_id), True
 
@@ -194,8 +198,8 @@ async def _handle_plan(
             await _emit_resources(session, conv_id, db)
 
             # Write PLAN.md to workspace filesystem
-            await _write_to_workspace(conv_id, "PLAN.md", plan_md, ".project-meta/plans")
-            await _emit_files_changed(session, ".project-meta/plans")
+            await _write_to_workspace(conv_id, PLAN_FILE, plan_md, PLAN_DIR)
+            await _emit_files_changed(session, PLAN_DIR)
 
             return await _format_plan(db, conv_id), True
 
@@ -262,7 +266,7 @@ async def _handle_plan(
             await ops.upsert_plan_resource(db, conv_id, plan_md)
 
             # Write PLAN.md to workspace filesystem
-            await _write_to_workspace(conv_id, "PLAN.md", plan_md, ".project-meta/plans")
+            await _write_to_workspace(conv_id, PLAN_FILE, plan_md, PLAN_DIR)
 
             # ── POST-UPDATE: Generate completion report if task was completed ──
 
@@ -284,9 +288,7 @@ async def _handle_plan(
                 from ..workspace.persistence import WorkspacePersistence
 
                 safe_title = WorkspacePersistence._sanitize_filename(task.title)
-                await _write_to_workspace(
-                    conv_id, f"{safe_title}.md", report, ".project-meta/reports"
-                )
+                await _write_to_workspace(conv_id, f"{safe_title}.md", report, REPORT_DIR)
                 await _emit_files_changed(session, ".project-meta/reports")
 
                 result = await _format_plan(db, conv_id)
@@ -296,7 +298,7 @@ async def _handle_plan(
                 return result, True
 
             await _emit_resources(session, conv_id, db)
-            await _emit_files_changed(session, ".project-meta/plans")
+            await _emit_files_changed(session, PLAN_DIR)
             return await _format_plan(db, conv_id), True
 
         elif operation == "get":
@@ -472,8 +474,8 @@ async def _emit_resources(session, conv_id: int, db):
 
 async def _request_todo_approval(
     session,
-    conv_id: int,
-    db,
+    conv_id: int,  # unused, kept for API compatibility
+    db,  # unused, kept for API compatibility
     change_type: str,
     proposed_tasks: list[dict],
     current_tasks: list[dict] | None = None,

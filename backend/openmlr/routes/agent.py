@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -607,7 +608,7 @@ async def submit_approval(
 @router.post("/todo-approval")
 async def submit_todo_approval(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: Annotated[User, Depends(get_current_user)],
 ):
     """Submit approval/rejection for proposed TODO list changes."""
     body = await request.json()
@@ -622,10 +623,10 @@ async def submit_todo_approval(
         active
         and hasattr(active.session, "pending_todo_approval")
         and active.session.pending_todo_approval
+        and not active.session.pending_todo_approval.done()
     ):
-        if not active.session.pending_todo_approval.done():
-            active.session.pending_todo_approval.set_result(result)
-            return {"ok": True}
+        active.session.pending_todo_approval.set_result(result)
+        return {"ok": True}
 
     # Publish to Redis for background job workers
     try:

@@ -240,7 +240,6 @@ class TestAssistantMessagePersistence:
         tool_call = ToolCall(id="tc1", name="web_search", arguments={"query": "test"})
 
         emitted = []
-        original_emit = session.emit
 
         async def capture_emit(event):
             emitted.append(event)

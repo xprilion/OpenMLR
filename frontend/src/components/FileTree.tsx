@@ -18,9 +18,9 @@ import { api } from '../api';
 import type { FileNode } from '../types';
 
 interface Props {
-  projectUuid: string;
-  refreshKey?: number;
-  onFileSelect?: (path: string, content: string) => void;
+  readonly projectUuid: string;
+  readonly refreshKey?: number;
+  readonly onFileSelect?: (path: string, content: string) => void;
 }
 
 interface TreeNode extends FileNode {
@@ -182,24 +182,27 @@ export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
     });
   }, [projectUuid, loadDirectory]);
 
+  const mergeWithPreviousState = useCallback(
+    (entries: FileNode[], prev: TreeNode[]): TreeNode[] => {
+      const prevMap = new Map(prev.map((n) => [n.path, n]));
+      return entries.map((entry) => {
+        const existing = prevMap.get(entry.path);
+        if (existing && existing.expanded && existing.children) {
+          return { ...entry, expanded: true, children: existing.children };
+        }
+        return entry;
+      });
+    },
+    []
+  );
+
   // Auto-refresh when refreshKey changes (triggered by workspace_files_changed SSE event)
   useEffect(() => {
     if (refreshKey === undefined || refreshKey === 0) return;
-    // Refresh the root directory listing without showing full loading state
     loadDirectory('').then((entries) => {
-      setNodes((prev) => {
-        // Merge: preserve expanded state of existing nodes
-        const prevMap = new Map(prev.map((n) => [n.path, n]));
-        return entries.map((entry) => {
-          const existing = prevMap.get(entry.path);
-          if (existing && existing.expanded && existing.children) {
-            return { ...entry, expanded: true, children: existing.children };
-          }
-          return entry;
-        });
-      });
+      setNodes((prev) => mergeWithPreviousState(entries, prev));
     });
-  }, [refreshKey, loadDirectory]);
+  }, [refreshKey, loadDirectory, mergeWithPreviousState]);
 
   const handleToggle = useCallback(async (path: string) => {
     setNodes((prev) => {

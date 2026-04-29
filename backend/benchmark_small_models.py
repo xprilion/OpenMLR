@@ -61,113 +61,119 @@ def benchmark_model(model_info: dict) -> dict:
     }
 
     try:
-        # Clear memory
-        gc.collect()
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
-
-        initial_memory = get_memory_usage()
-
-        # Load model
-        start_time = time.time()
-        print("  Loading tokenizer and model...")
-
-        tokenizer = AutoTokenizer.from_pretrained(model_info["model_id"])
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        model = AutoModelForCausalLM.from_pretrained(
-            model_info["model_id"],
-            torch_dtype=torch.float16 if torch.backends.mps.is_available() else torch.float32,
-            device_map="auto" if torch.backends.mps.is_available() else None,
-            trust_remote_code=True,
-        )
-
-        # Move to MPS if available
-        if torch.backends.mps.is_available():
-            model = model.to("mps")
-
-        load_time = time.time() - start_time
-        results["load_time"] = load_time
-        results["model_size_mb"] = get_model_size(model)
-        results["memory_usage_gb"] = get_memory_usage() - initial_memory
-
-        print(f"  ✅ Loaded in {load_time:.2f}s")
-        print(f"  📦 Model size: {results['model_size_mb']:.1f} MB")
-        print(f"  🧠 Memory usage: {results['memory_usage_gb']:.2f} GB")
-
-        # Test inference
-        print("  🚀 Running inference tests...")
-
-        for i, prompt in enumerate(TEST_PROMPTS):
-            try:
-                # Tokenize
-                inputs = tokenizer(prompt, return_tensors="pt", padding=True)
-                if torch.backends.mps.is_available():
-                    inputs = {k: v.to("mps") for k, v in inputs.items()}
-
-                # Generate
-                start_time = time.time()
-
-                with torch.no_grad():
-                    outputs = model.generate(
-                        **inputs,
-                        max_new_tokens=50,
-                        do_sample=True,
-                        temperature=0.7,
-                        pad_token_id=tokenizer.eos_token_id,
-                    )
-
-                inference_time = time.time() - start_time
-
-                # Decode output
-                generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-                # Calculate tokens/second
-                new_tokens = len(outputs[0]) - len(inputs["input_ids"][0])
-                tokens_per_sec = new_tokens / inference_time if inference_time > 0 else 0
-
-                results["inference_times"].append(inference_time)
-                results["tokens_per_second"].append(tokens_per_sec)
-                results["outputs"][f"prompt_{i}"] = {
-                    "prompt": prompt,
-                    "output": generated_text,
-                    "inference_time": inference_time,
-                    "tokens_per_sec": tokens_per_sec,
-                }
-
-                print(f"    Prompt {i + 1}: {tokens_per_sec:.1f} tokens/sec")
-
-            except Exception as e:
-                error_msg = f"Error on prompt {i}: {str(e)}"
-                results["errors"].append(error_msg)
-                print(f"    ❌ {error_msg}")
-
-        # Calculate averages
-        if results["inference_times"]:
-            results["avg_inference_time"] = sum(results["inference_times"]) / len(
-                results["inference_times"]
-            )
-            results["avg_tokens_per_second"] = sum(results["tokens_per_second"]) / len(
-                results["tokens_per_second"]
-            )
-
-        print(f"  📊 Average: {results.get('avg_tokens_per_second', 0):.1f} tokens/sec")
-
+        results = _run_benchmark(model_info, results)
     except Exception as e:
         error_msg = f"Failed to load {model_info['name']}: {str(e)}"
         results["errors"].append(error_msg)
         print(f"  ❌ {error_msg}")
 
-    finally:
-        # Cleanup
-        if "model" in locals():
-            del model
-        if "tokenizer" in locals():
-            del tokenizer
-        gc.collect()
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
+    return results
+
+
+def _run_benchmark(model_info: dict, results: dict) -> dict:
+    """Run the actual benchmark logic."""
+    gc.collect()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+
+    initial_memory = get_memory_usage()
+
+    # Load model
+    start_time = time.time()
+    print("  Loading tokenizer and model...")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_info["model_id"])
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_info["model_id"],
+        torch_dtype=torch.float16 if torch.backends.mps.is_available() else torch.float32,
+        device_map="auto" if torch.backends.mps.is_available() else None,
+        trust_remote_code=True,
+    )
+
+    if torch.backends.mps.is_available():
+        model = model.to("mps")
+
+    load_time = time.time() - start_time
+    results["load_time"] = load_time
+    results["model_size_mb"] = get_model_size(model)
+    results["memory_usage_gb"] = get_memory_usage() - initial_memory
+
+    print(f"  ✅ Loaded in {load_time:.2f}s")
+    print(f"  📦 Model size: {results['model_size_mb']:.1f} MB")
+    print(f"  🧠 Memory usage: {results['memory_usage_gb']:.2f} GB")
+
+    # Test inference
+    print("  🚀 Running inference tests...")
+
+    results = _run_inference_tests(model, tokenizer, results)
+
+    # Calculate averages
+    if results["inference_times"]:
+        results["avg_inference_time"] = sum(results["inference_times"]) / len(
+            results["inference_times"]
+        )
+        results["avg_tokens_per_second"] = sum(results["tokens_per_second"]) / len(
+            results["tokens_per_second"]
+        )
+
+    print(f"  📊 Average: {results.get('avg_tokens_per_second', 0):.1f} tokens/sec")
+
+    # Cleanup
+    if "model" in locals():
+        del model
+    if "tokenizer" in locals():
+        del tokenizer
+    gc.collect()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+
+    return results
+
+
+def _run_inference_tests(model, tokenizer, results: dict) -> dict:
+    """Run inference tests on the model."""
+    for i, prompt in enumerate(TEST_PROMPTS):
+        try:
+            inputs = tokenizer(prompt, return_tensors="pt", padding=True)
+            if torch.backends.mps.is_available():
+                inputs = {k: v.to("mps") for k, v in inputs.items()}
+
+            start_time = time.time()
+
+            with torch.no_grad():
+                outputs = model.generate(
+                    **inputs,
+                    max_new_tokens=50,
+                    do_sample=True,
+                    temperature=0.7,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+
+            inference_time = time.time() - start_time
+
+            generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+            new_tokens = len(outputs[0]) - len(inputs["input_ids"][0])
+            tokens_per_sec = new_tokens / inference_time if inference_time > 0 else 0
+
+            results["inference_times"].append(inference_time)
+            results["tokens_per_second"].append(tokens_per_sec)
+            results["outputs"][f"prompt_{i}"] = {
+                "prompt": prompt,
+                "output": generated_text,
+                "inference_time": inference_time,
+                "tokens_per_sec": tokens_per_sec,
+            }
+
+            print(f"    Prompt {i + 1}: {tokens_per_sec:.1f} tokens/sec")
+
+        except Exception as e:
+            error_msg = f"Error on prompt {i}: {str(e)}"
+            results["errors"].append(error_msg)
+            print(f"    ❌ {error_msg}")
 
     return results
 

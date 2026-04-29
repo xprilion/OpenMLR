@@ -3,10 +3,10 @@ import Editor from '@monaco-editor/react';
 import type { OpenFile } from '../types';
 
 interface Props {
-  openFiles: OpenFile[];
-  activeFilePath: string | null;
-  onActivateFile: (path: string) => void;
-  onCloseFile: (path: string) => void;
+  readonly openFiles: readonly OpenFile[];
+  readonly activeFilePath: string | null;
+  readonly onActivateFile: (path: string) => void;
+  readonly onCloseFile: (path: string) => void;
 }
 
 /** Extract just the filename from a full path. */
