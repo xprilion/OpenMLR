@@ -206,10 +206,11 @@ describe('ModelModal', () => {
       expect(screen.getAllByText('GPT-4o').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Click on the dialog element itself (backdrop area) to close
-    const dialog = document.querySelector('dialog');
-    fireEvent.click(dialog!);
+    // Click on the backdrop overlay (the aria-hidden div inside the dialog)
+    const backdrop = document.querySelector('dialog > div[aria-hidden="true"]');
+    fireEvent.click(backdrop!);
 
+    const dialog = document.querySelector('dialog');
     await waitFor(() => {
       expect(dialog).not.toHaveAttribute('open');
     });
