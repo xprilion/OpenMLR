@@ -289,7 +289,7 @@ class TestWorkspacePersistence:
         assert filepath.exists()
         data = json.loads(filepath.read_text())
         assert data["name"] == "train-bert"
-        assert data["result"]["accuracy"] == 0.95
+        assert data["result"]["accuracy"] == pytest.approx(0.95)
 
     def test_state_persistence(self, workspace_dir):
         wp = WorkspacePersistence(workspace_dir)

@@ -25,7 +25,7 @@ class TestAgentConfigDefaults:
         assert AgentConfig().yolo_mode is False
 
     def test_compact_threshold_ratio_default(self):
-        assert AgentConfig().compact_threshold_ratio == 0.90
+        assert AgentConfig().compact_threshold_ratio == pytest.approx(0.90)
 
     def test_untouched_messages_default(self):
         assert AgentConfig().untouched_messages == 5

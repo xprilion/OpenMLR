@@ -280,7 +280,7 @@ class TestComputeCapabilities:
         restored = ComputeCapabilities.from_dict(d)
         assert restored.platform == "test"
         assert restored.cpu_cores == 16
-        assert restored.available_ram_gb == 32.5
+        assert restored.available_ram_gb == pytest.approx(32.5)
         assert len(restored.gpu_info) == 2
         assert restored.docker_available is True
 
