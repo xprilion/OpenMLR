@@ -9,6 +9,7 @@ from ..compute.capabilities import ComputeCapabilities
 @dataclass
 class ExecutionResult:
     """Result of a command execution."""
+
     output: str
     success: bool
     exit_code: int = 0

@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect } from 'react';
 import { X, Server, Monitor, Cloud, TestTube } from 'lucide-react';
 import { api } from '../../api';
@@ -139,7 +141,7 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="add-node-title">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} onKeyDown={(e) => e.key === 'Escape' && onClose()} role="dialog" aria-modal="true" aria-labelledby="add-node-title" tabIndex={-1}>
       <div className="bg-surface rounded-xl border border-border w-full max-w-lg mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 id="add-node-title" className="font-semibold text-text">
@@ -175,8 +177,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
 
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">Name</label>
+            <label className="block text-sm font-medium text-text mb-1.5" htmlFor="node-name">Name</label>
             <input
+              id="node-name"
               type="text"
               required
               placeholder="Workstation"
@@ -191,8 +194,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
             <>
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-text mb-1.5">Host</label>
+                  <label className="block text-sm font-medium text-text mb-1.5" htmlFor="node-host">Host</label>
                   <input
+                    id="node-host"
                     type="text"
                     required
                     placeholder="ml-workstation.local"
@@ -202,18 +206,20 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-text mb-1.5">Port</label>
+                  <label className="block text-sm font-medium text-text mb-1.5" htmlFor="node-port">Port</label>
                   <input
+                    id="node-port"
                     type="number"
                     value={port}
-                    onChange={(e) => setPort(parseInt(e.target.value) || 22)}
+                    onChange={(e) => setPort(Number.parseInt(e.target.value) || 22)}
                     className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-text text-sm focus:border-primary focus:outline-none"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Username</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="node-user">Username</label>
                 <input
+                  id="node-user"
                   type="text"
                   required
                   placeholder="researcher"
@@ -223,8 +229,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">SSH Key</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="node-key">SSH Key</label>
                 <select
+                  id="node-key"
                   value={keyFilename}
                   onChange={(e) => setKeyFilename(e.target.value)}
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-text text-sm focus:border-primary focus:outline-none"
@@ -243,8 +250,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Working Directory</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="node-workdir">Working Directory</label>
                 <input
+                  id="node-workdir"
                   type="text"
                   placeholder="~/openmlr-workspaces"
                   value={workdir}
@@ -276,8 +284,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
           {type === 'modal' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Container Image</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="modal-image">Container Image</label>
                 <input
+                  id="modal-image"
                   type="text"
                   value={modalImage}
                   onChange={(e) => setModalImage(e.target.value)}
@@ -285,8 +294,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">GPU (optional)</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="modal-gpu">GPU (optional)</label>
                 <select
+                  id="modal-gpu"
                   value={modalGpu}
                   onChange={(e) => setModalGpu(e.target.value)}
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-text text-sm focus:border-primary focus:outline-none"
@@ -299,8 +309,9 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Packages (comma-separated)</label>
+                <label className="block text-sm font-medium text-text mb-1.5" htmlFor="modal-packages">Packages (comma-separated)</label>
                 <input
+                  id="modal-packages"
                   type="text"
                   placeholder="torch, transformers, datasets"
                   value={modalPackages}

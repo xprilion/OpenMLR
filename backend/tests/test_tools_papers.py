@@ -96,6 +96,7 @@ class TestBudgetFunctions:
 
     async def test_increment_and_check(self):
         from openmlr.tools.papers import _search_counts
+
         _search_counts.clear()
         _increment_budget()
         info = _get_budget_info()

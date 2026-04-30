@@ -1,0 +1,311 @@
+import { useState, useCallback, useEffect } from 'react';
+import {
+  Folder,
+  FolderOpen,
+  FileText,
+  FileCode,
+  FileJson,
+  Image,
+  ChevronRight,
+  ChevronDown,
+  RefreshCw,
+  AlertCircle,
+  Pin,
+  ClipboardList,
+  BookOpen,
+} from 'lucide-react';
+import { api } from '../api';
+import type { FileNode } from '../types';
+
+interface Props {
+  readonly projectUuid: string;
+  readonly refreshKey?: number;
+  readonly onFileSelect?: (path: string, content: string) => void;
+}
+
+interface TreeNode extends FileNode {
+  children?: TreeNode[];
+  loading?: boolean;
+  expanded?: boolean;
+}
+
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+
+const FILE_ICONS: Record<string, React.ReactNode> = {
+  '.py': <FileCode size={14} className="text-blue-400" />,
+  '.js': <FileCode size={14} className="text-yellow-400" />,
+  '.ts': <FileCode size={14} className="text-blue-500" />,
+  '.tsx': <FileCode size={14} className="text-blue-500" />,
+  '.json': <FileJson size={14} className="text-green-400" />,
+  '.md': <FileText size={14} className="text-text-dim" />,
+  '.txt': <FileText size={14} className="text-text-dim" />,
+  '.yaml': <FileCode size={14} className="text-red-400" />,
+  '.yml': <FileCode size={14} className="text-red-400" />,
+  '.png': <Image size={14} className="text-purple-400" />,
+  '.jpg': <Image size={14} className="text-purple-400" />,
+  '.svg': <Image size={14} className="text-purple-400" />,
+};
+
+/** Get a special badge/icon for generated resource files. */
+function getSpecialBadge(path: string, name: string): React.ReactNode | null {
+  if (name === 'PLAN.md') return <Pin size={10} className="text-primary" />;
+  if (path.includes('.project-meta/reports/') && name.endsWith('.md'))
+    return <ClipboardList size={10} className="text-success" />;
+  if (path.startsWith('papers/') && name.endsWith('.md') && !name.startsWith('.'))
+    return <BookOpen size={10} className="text-warning" />;
+  return null;
+}
+
+function getFileIcon(name: string, isDir: boolean): React.ReactNode {
+  if (isDir) return null; // handled by folder icons
+  const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+  return FILE_ICONS[ext] || <FileText size={14} className="text-text-dim" />;
+}
+
+function formatSize(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return '';
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
+}
+
+function TreeItem({
+  node,
+  depth,
+  onToggle,
+  onSelect,
+}: {
+  node: TreeNode;
+  depth: number;
+  onToggle: (path: string) => void;
+  onSelect: (path: string) => void;
+}) {
+  const badge = getSpecialBadge(node.path, node.name);
+
+  return (
+    <div>
+      <button
+        className={`flex items-center gap-1.5 w-full text-left px-2 py-1 text-sm rounded hover:bg-surface-hover transition-colors group ${
+          node.is_dir ? 'text-text' : 'text-text-dim hover:text-text'
+        }`}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        onClick={() => node.is_dir ? onToggle(node.path) : onSelect(node.path)}
+      >
+        {/* Expand/collapse chevron for directories */}
+        {node.is_dir ? (
+          <span className="shrink-0 text-text-dim">
+            {node.loading ? (
+              <RefreshCw size={12} className="animate-spin" />
+            ) : node.expanded ? (
+              <ChevronDown size={12} />
+            ) : (
+              <ChevronRight size={12} />
+            )}
+          </span>
+        ) : (
+          <span className="w-3 shrink-0" /> // spacer for files
+        )}
+
+        {/* Icon */}
+        <span className="shrink-0">
+          {node.is_dir ? (
+            node.expanded ? <FolderOpen size={14} className="text-primary" /> : <Folder size={14} className="text-primary" />
+          ) : (
+            getFileIcon(node.name, false)
+          )}
+        </span>
+
+        {/* Name */}
+        <span className="truncate flex-1">{node.name}</span>
+
+        {/* Special badge for generated resource files */}
+        {badge && <span className="shrink-0">{badge}</span>}
+
+        {/* Size (for files) */}
+        {!node.is_dir && node.size !== null && (
+          <span className="text-xs text-text-dim shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            {formatSize(node.size)}
+          </span>
+        )}
+      </button>
+
+      {/* Children */}
+      {node.is_dir && node.expanded && node.children && (
+        <div>
+          {node.children.map((child) => (
+            <TreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              onToggle={onToggle}
+              onSelect={onSelect}
+            />
+          ))}
+          {node.children.length === 0 && (
+            <div
+              className="text-xs text-text-dim italic px-2 py-1"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            >
+              (empty)
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function FileTree({ projectUuid, refreshKey, onFileSelect }: Props) {
+  const [nodes, setNodes] = useState<TreeNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDirectory = useCallback(async (path: string = ''): Promise<TreeNode[]> => {
+    try {
+      const data = await api.listFiles(projectUuid, path);
+      return (data.entries || []).map((entry: FileNode) => ({
+        ...entry,
+        expanded: false,
+        children: undefined,
+      }));
+    } catch (err: any) {
+      setError(err.message);
+      return [];
+    }
+  }, [projectUuid]);
+
+  // Initial load
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    loadDirectory('').then((entries) => {
+      setNodes(entries);
+      setLoading(false);
+    });
+  }, [projectUuid, loadDirectory]);
+
+  const mergeWithPreviousState = useCallback(
+    (entries: FileNode[], prev: TreeNode[]): TreeNode[] => {
+      const prevMap = new Map(prev.map((n) => [n.path, n]));
+      return entries.map((entry) => {
+        const existing = prevMap.get(entry.path);
+        if (existing && existing.expanded && existing.children) {
+          return { ...entry, expanded: true, children: existing.children };
+        }
+        return entry;
+      });
+    },
+    []
+  );
+
+  // Auto-refresh when refreshKey changes (triggered by workspace_files_changed SSE event)
+  useEffect(() => {
+    if (refreshKey === undefined || refreshKey === 0) return;
+    loadDirectory('').then((entries) => {
+      setNodes((prev) => mergeWithPreviousState(entries, prev));
+    });
+  }, [refreshKey, loadDirectory, mergeWithPreviousState]);
+
+  const handleToggle = useCallback(async (path: string) => {
+    setNodes((prev) => {
+      const update = (items: TreeNode[]): TreeNode[] =>
+        items.map((item) => {
+          if (item.path === path) {
+            if (item.expanded) {
+              return { ...item, expanded: false };
+            }
+            return { ...item, loading: true, expanded: true };
+          }
+          if (item.children) {
+            return { ...item, children: update(item.children) };
+          }
+          return item;
+        });
+      return update(prev);
+    });
+
+    // Load children
+    const children = await loadDirectory(path);
+    setNodes((prev) => {
+      const update = (items: TreeNode[]): TreeNode[] =>
+        items.map((item) => {
+          if (item.path === path) {
+            return { ...item, loading: false, children };
+          }
+          if (item.children) {
+            return { ...item, children: update(item.children) };
+          }
+          return item;
+        });
+      return update(prev);
+    });
+  }, [loadDirectory]);
+
+  const handleSelect = useCallback(async (path: string) => {
+    const ext = '.' + (path.split('.').pop()?.toLowerCase() || '');
+    if (IMAGE_EXTS.has(ext)) {
+      // For image files, pass through with empty content — the parent handles the URL
+      onFileSelect?.(path, '');
+      return;
+    }
+    try {
+      const data = await api.readFile(projectUuid, path);
+      if (data.content !== undefined) {
+        onFileSelect?.(path, data.content);
+      }
+    } catch {
+      // File could not be read (binary, etc.)
+    }
+  }, [projectUuid, onFileSelect]);
+
+  // Auto-refresh every 10 seconds
+  const refreshFiles = useCallback(async () => {
+    const entries = await loadDirectory('');
+    setNodes((prev) => mergeWithPreviousState(entries, prev));
+  }, [loadDirectory, mergeWithPreviousState]);
+
+  useEffect(() => {
+    const interval = setInterval(refreshFiles, 10000);
+    return () => clearInterval(interval);
+  }, [refreshFiles]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-text-dim text-sm">
+        <RefreshCw size={14} className="animate-spin mr-2" />
+        Loading files...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-4 text-error text-sm">
+        <AlertCircle size={14} />
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Tree */}
+      <div className="flex-1 overflow-auto py-1">
+        {nodes.length === 0 ? (
+          <div className="text-sm text-text-dim px-3 py-4">No files yet</div>
+        ) : (
+          nodes.map((node) => (
+            <TreeItem
+              key={node.path}
+              node={node}
+              depth={0}
+              onToggle={handleToggle}
+              onSelect={handleSelect}
+            />
+          ))
+        )}
+      </div>
+
+    </div>
+  );
+}

@@ -10,6 +10,7 @@ read/write/edit operate on the host filesystem (for project files).
 import asyncio
 import logging
 import os
+from contextvars import ContextVar
 from pathlib import Path
 
 from ..agent.types import ToolSpec
@@ -25,6 +26,30 @@ ALLOW_DIRECT_EXEC = os.environ.get("OPENMLR_ALLOW_DIRECT_EXEC", "false").lower()
 # Security: Base directory for file operations (default: current working directory)
 # Files outside this directory cannot be read/written/edited
 WORKSPACE_ROOT = os.environ.get("OPENMLR_WORKSPACE_ROOT", "")
+
+# Per-async-context project workspace override.  When a project is active its
+# workspace path is injected here so that read/write/edit/bash tools
+# automatically target the project directory (files then appear in the
+# frontend FileTree).
+_project_workspace_var: ContextVar[str | None] = ContextVar("project_workspace", default=None)
+
+
+def set_project_workspace(path: str | None) -> None:
+    """Set the active project workspace for the current async context."""
+    _project_workspace_var.set(path)
+
+
+def _get_effective_root() -> Path:
+    """Return the effective workspace root for file operations.
+
+    Priority: project workspace > WORKSPACE_ROOT env var > cwd.
+    """
+    project_ws = _project_workspace_var.get(None)
+    if project_ws:
+        return Path(project_ws).resolve()
+    if WORKSPACE_ROOT:
+        return Path(WORKSPACE_ROOT).resolve()
+    return Path.cwd().resolve()
 
 
 def _running_in_container() -> bool:
@@ -57,28 +82,44 @@ def _validate_path(path: Path) -> tuple[Path, str | None]:
     """Validate path is within allowed workspace. Returns (resolved_path, error_or_none)."""
     try:
         resolved = path.resolve()
+        effective_root = _get_effective_root()
 
-        # If WORKSPACE_ROOT is set, enforce it
-        if WORKSPACE_ROOT:
-            workspace = Path(WORKSPACE_ROOT).resolve()
-            try:
-                resolved.relative_to(workspace)
-            except ValueError:
-                return resolved, f"Path {resolved} is outside workspace {workspace}"
-        else:
-            # Default: allow paths under current working directory
-            cwd = Path.cwd().resolve()
-            try:
-                resolved.relative_to(cwd)
-            except ValueError:
-                # Also allow paths that are explicitly absolute and exist (for reading configs etc)
-                # But block obvious dangerous paths
-                dangerous_prefixes = ["/etc", "/root", "/var", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc"]
-                for prefix in dangerous_prefixes:
-                    if str(resolved).startswith(prefix):
-                        return resolved, f"Access denied: {resolved} is in a protected system directory"
+        try:
+            resolved.relative_to(effective_root)
+            return resolved, None
+        except ValueError:
+            pass
 
-        return resolved, None
+        # Also allow CWD even when project workspace is active (for read-only
+        # access to project configuration files etc.)
+        cwd = Path.cwd().resolve()
+        try:
+            resolved.relative_to(cwd)
+            return resolved, None
+        except ValueError:
+            pass
+
+        # Block obvious dangerous paths
+        dangerous_prefixes = [
+            "/etc",
+            "/root",
+            "/var",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/boot",
+            "/sys",
+            "/proc",
+        ]
+        for prefix in dangerous_prefixes:
+            if str(resolved).startswith(prefix):
+                return (
+                    resolved,
+                    f"Access denied: {resolved} is in a protected system directory",
+                )
+
+        # If none of the above matched, reject unless under effective root
+        return resolved, f"Path {resolved} is outside workspace {effective_root}"
     except Exception as e:
         return path, f"Path validation error: {e}"
 
@@ -88,16 +129,30 @@ def create_local_tools() -> list[ToolSpec]:
         ToolSpec(
             name="bash",
             description=(
-                "Execute a shell command. When running locally, uses Docker for isolation. "
-                "When running in a containerized deployment, commands run directly in the isolated environment. "
-                "Use for running scripts, installing packages, training models, etc."
+                "Execute a shell command in the project workspace.\n\n"
+                "Commands run in Docker isolation with: 8GB memory limit, 256 process limit, "
+                "read-only root filesystem (/tmp is writable), bridge network.\n\n"
+                "Use for: running scripts, installing packages (pip/conda), training models, "
+                "data processing, system commands.\n\n"
+                "The working directory is the project workspace. Files created here appear "
+                "in the Files tab.\n\n"
+                "Common patterns:\n"
+                "- Install deps: bash(command='pip install torch transformers')\n"
+                "- Run script: bash(command='python train.py --epochs 10')\n"
+                "- Check env: bash(command='python --version && pip list')"
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Shell command to execute"},
-                    "timeout": {"type": "integer", "description": "Timeout in seconds (default 120, max 3600)"},
-                    "workdir": {"type": "string", "description": "Working directory inside container (default /workspace)"},
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default 120, max 3600)",
+                    },
+                    "workdir": {
+                        "type": "string",
+                        "description": "Working directory inside container (default /workspace)",
+                    },
                 },
                 "required": ["command"],
             },
@@ -105,12 +160,22 @@ def create_local_tools() -> list[ToolSpec]:
         ),
         ToolSpec(
             name="read",
-            description="Read a file from the local filesystem with line numbers.",
+            description=(
+                "Read a file from the project workspace with line numbers.\n\n"
+                "Returns up to 2000 lines starting from the given offset. "
+                "Use to inspect code, data files, logs, or configuration.\n"
+                "Relative paths resolve from the project workspace root.\n\n"
+                "For large files use offset/limit:\n"
+                "- read(path='train.py', offset=100, limit=50) reads lines 100-149"
+            ),
             parameters={
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "File path to read"},
-                    "offset": {"type": "integer", "description": "Start line (1-indexed, default 1)"},
+                    "offset": {
+                        "type": "integer",
+                        "description": "Start line (1-indexed, default 1)",
+                    },
                     "limit": {"type": "integer", "description": "Max lines (default 2000)"},
                 },
                 "required": ["path"],
@@ -119,7 +184,14 @@ def create_local_tools() -> list[ToolSpec]:
         ),
         ToolSpec(
             name="write",
-            description="Write content to a file. Creates parent directories if needed.",
+            description=(
+                "Write content to a file in the project workspace. Creates parent "
+                "directories automatically.\n\n"
+                "Use for: source code, configuration files, scripts, data files.\n"
+                "Do NOT use for academic papers — use the 'writing' tool instead.\n\n"
+                "Relative paths resolve from the project workspace root. "
+                "Written files appear in the Files tab immediately."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
@@ -132,14 +204,23 @@ def create_local_tools() -> list[ToolSpec]:
         ),
         ToolSpec(
             name="edit",
-            description="Edit a file by replacing a specific string with another.",
+            description=(
+                "Edit an existing file by replacing a specific string with another.\n\n"
+                "Provide the exact string to find (old_string) and its replacement "
+                "(new_string). Use replace_all=true to replace all occurrences.\n\n"
+                "If old_string matches multiple times and replace_all is false, the "
+                "edit fails — provide more surrounding context to make it unique."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "File path to edit"},
                     "old_string": {"type": "string", "description": "Exact string to find"},
                     "new_string": {"type": "string", "description": "Replacement string"},
-                    "replace_all": {"type": "boolean", "description": "Replace all occurrences (default false)"},
+                    "replace_all": {
+                        "type": "boolean",
+                        "description": "Replace all occurrences (default false)",
+                    },
                 },
                 "required": ["path", "old_string", "new_string"],
             },
@@ -150,11 +231,13 @@ def create_local_tools() -> list[ToolSpec]:
 
 # ── Docker bash ──────────────────────────────────────────
 
+
 async def _docker_available() -> bool:
     """Check if Docker is running."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker", "info",
+            "docker",
+            "info",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -164,9 +247,11 @@ async def _docker_available() -> bool:
         return False
 
 
-async def _handle_bash(command: str, timeout: int = 120, workdir: str = None, **kwargs) -> tuple[str, bool]:
+async def _handle_bash(
+    command: str, timeout: int = 120, workdir: str = None, **kwargs
+) -> tuple[str, bool]:
     timeout = min(int(timeout), 3600)
-    cwd = workdir or os.getcwd()
+    cwd = workdir or str(_get_effective_root())
 
     # If we're already running inside a container, execute directly
     # The container itself provides isolation, so no need for Docker-in-Docker
@@ -180,7 +265,9 @@ async def _handle_bash(command: str, timeout: int = 120, workdir: str = None, **
     else:
         # Fallback to direct execution only if explicitly allowed
         if ALLOW_DIRECT_EXEC:
-            logger.warning(f"Docker unavailable, falling back to direct host execution for: {command[:100]}")
+            logger.warning(
+                f"Docker unavailable, falling back to direct host execution for: {command[:100]}"
+            )
             output, success = await _direct_exec(command, timeout, cwd)
             warning = "[WARNING: Docker not available — running directly on host]\n\n"
             return warning + output, success
@@ -188,27 +275,39 @@ async def _handle_bash(command: str, timeout: int = 120, workdir: str = None, **
             return (
                 "Docker is not available and direct host execution is disabled for security.\n"
                 "Please ensure Docker is running, or set OPENMLR_ALLOW_DIRECT_EXEC=true to enable fallback.",
-                False
+                False,
             )
 
 
-async def _docker_exec(command: str, timeout: int, host_cwd: str, workdir: str = None) -> tuple[str, bool]:
+async def _docker_exec(
+    command: str, timeout: int, host_cwd: str, workdir: str = None
+) -> tuple[str, bool]:
     """Run command in a Docker container with workspace mount."""
     container_workdir = workdir or "/workspace"
 
     # Security: Use bridge network (default) instead of host network
     # This isolates container networking from the host
     docker_cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{host_cwd}:/workspace",
-        "-w", container_workdir,
-        "--memory", "8g",
-        "--pids-limit", "256",  # Prevent fork bombs
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{host_cwd}:/workspace",
+        "-w",
+        container_workdir,
+        "--memory",
+        "8g",
+        "--pids-limit",
+        "256",  # Prevent fork bombs
         "--read-only",  # Read-only root filesystem
-        "--tmpfs", "/tmp:rw,noexec,nosuid,size=1g",  # Writable /tmp
-        "--security-opt", "no-new-privileges:true",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=1g",  # Writable /tmp
+        "--security-opt",
+        "no-new-privileges:true",
         DOCKER_IMAGE,
-        "bash", "-c", command,
+        "bash",
+        "-c",
+        command,
     ]
 
     try:
@@ -273,11 +372,17 @@ async def _direct_exec(command: str, timeout: int, cwd: str) -> tuple[str, bool]
 
 # ── File tools (host filesystem) ─────────────────────────
 
+
+def _read_file_lines(path: Path) -> list[str]:
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.readlines()
+
+
 async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) -> tuple[str, bool]:
     try:
         target = Path(path).expanduser()
         if not target.is_absolute():
-            target = Path.cwd() / target
+            target = _get_effective_root() / target
 
         # Security: Validate path is within allowed workspace
         target, error = _validate_path(target)
@@ -286,18 +391,22 @@ async def _handle_read(path: str, offset: int = 1, limit: int = 2000, **kwargs) 
 
         if target.is_dir():
             entries = sorted(target.iterdir())
-            return "\n".join(f"{e.name}{'/' if e.is_dir() else ''}" for e in entries) or "(empty directory)", True
+            return "\n".join(
+                f"{e.name}{'/' if e.is_dir() else ''}" for e in entries
+            ) or "(empty directory)", True
 
         if not target.exists():
             return f"File not found: {target}", False
 
-        with open(target, encoding="utf-8", errors="replace") as f:
-            all_lines = f.readlines()
+        loop = asyncio.get_event_loop()
+        all_lines = await loop.run_in_executor(None, _read_file_lines, target)
 
         start = max(0, offset - 1)
         end = start + limit
         selected = all_lines[start:end]
-        result = "\n".join(f"{i}: {line.rstrip()}" for i, line in enumerate(selected, start=start + 1))
+        result = "\n".join(
+            f"{i}: {line.rstrip()}" for i, line in enumerate(selected, start=start + 1)
+        )
         total = len(all_lines)
         if end < total:
             result += f"\n\n[Showing lines {start + 1}-{min(end, total)} of {total}]"
@@ -321,7 +430,7 @@ async def _handle_write(path: str = "", content: str = "", **kwargs) -> tuple[st
     try:
         target = Path(path).expanduser()
         if not target.is_absolute():
-            target = Path.cwd() / target
+            target = _get_effective_root() / target
 
         # Security: Validate path is within allowed workspace
         target, error = _validate_path(target)
@@ -335,11 +444,13 @@ async def _handle_write(path: str = "", content: str = "", **kwargs) -> tuple[st
         return f"Error writing: {str(e)}", False
 
 
-async def _handle_edit(path: str, old_string: str, new_string: str, replace_all: bool = False, **kwargs) -> tuple[str, bool]:
+async def _handle_edit(
+    path: str, old_string: str, new_string: str, replace_all: bool = False, **kwargs
+) -> tuple[str, bool]:
     try:
         target = Path(path).expanduser()
         if not target.is_absolute():
-            target = Path.cwd() / target
+            target = _get_effective_root() / target
 
         # Security: Validate path is within allowed workspace
         target, error = _validate_path(target)
@@ -356,7 +467,11 @@ async def _handle_edit(path: str, old_string: str, new_string: str, replace_all:
         if count > 1 and not replace_all:
             return f"Found {count} matches. Use replace_all=true or provide more context.", False
 
-        new_content = content.replace(old_string, new_string) if replace_all else content.replace(old_string, new_string, 1)
+        new_content = (
+            content.replace(old_string, new_string)
+            if replace_all
+            else content.replace(old_string, new_string, 1)
+        )
         target.write_text(new_content, encoding="utf-8")
         return f"Replaced {count if replace_all else 1} occurrence(s) in {target}", True
     except Exception as e:

@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Menu, PanelRightOpen } from 'lucide-react';
 import { ComputeSelector } from './components/ComputeSelector';
+import { ProjectSelector } from './components/ProjectSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
-import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget } from './types';
+import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project, TodoApprovalPayload, OpenFile, McpServerStatus } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
@@ -15,14 +16,20 @@ import { LoginPage } from './components/LoginPage';
 import { QuestionDrawer } from './components/QuestionDrawer';
 import { RightPanel } from './components/RightPanel';
 import { ReportDrawer } from './components/ReportDrawer';
+import { TodoReviewDrawer } from './components/TodoReviewDrawer';
 import { AuthGuard } from './components/AuthGuard';
 import { OnboardingModal } from './components/OnboardingModal';
+import { Terminal } from './components/Terminal';
+import { ProjectModal } from './components/ProjectModal';
+import { ProjectManageModal } from './components/ProjectManageModal';
 import { SettingsPage } from './components/SettingsPage';
 import { ProvidersSettings } from './components/settings/ProvidersSettings';
 import { AgentSettings } from './components/settings/AgentSettings';
 import { McpSettings } from './components/settings/McpSettings';
 import { ComputeSettings } from './components/settings/ComputeSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
+import { EditorPanel } from './components/EditorPanel';
+import { ImageViewer } from './components/ImageViewer';
 
 let msgId = 0;
 const nextId = () => `msg-${++msgId}`;
@@ -35,6 +42,28 @@ function findLastIndex<T>(arr: T[], predicate: (item: T) => boolean): number {
   return -1;
 }
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
+type MainTab = 'agent' | 'editor' | 'terminal' | 'image';
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+
+function isImageFile(path: string): boolean {
+  const ext = '.' + (path.split('.').pop()?.toLowerCase() || '');
+  return IMAGE_EXTENSIONS.has(ext);
+}
+
+/** Map file extensions to Monaco language IDs. */
+function detectLanguage(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    py: 'python', js: 'javascript', ts: 'typescript', tsx: 'typescript',
+    jsx: 'javascript', json: 'json', md: 'markdown', yaml: 'yaml',
+    yml: 'yaml', toml: 'toml', sh: 'shell', bash: 'shell',
+    html: 'html', css: 'css', sql: 'sql', r: 'r', txt: 'plaintext',
+    csv: 'plaintext', log: 'plaintext', cfg: 'ini', ini: 'ini',
+    tex: 'latex', bib: 'bibtex', xml: 'xml', dockerfile: 'dockerfile',
+  };
+  return map[ext] || 'plaintext';
+}
 
 // ── Login wrapper (reads user from parent) ──────────────
 function LoginRoute({ onAuth }: { onAuth: (u: User) => void }) {
@@ -103,19 +132,52 @@ function ChatUI({
   const [inputText, setInputText] = useState('');
   const [computeNodes, setComputeNodes] = useState<any[]>([]);
   const [activeCompute, setActiveCompute] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showManageProjects, setShowManageProjects] = useState(false);
+  const [terminalConnected, setTerminalConnected] = useState(false);
+  const [todoApprovalPayload, setTodoApprovalPayload] = useState<TodoApprovalPayload | null>(null);
+  const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
+  const [mainTab, setMainTab] = useState<MainTab>('agent');
+  const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [imageTab, setImageTab] = useState<{ path: string; url: string } | null>(null);
+  const [mcpServers, setMcpServers] = useState<McpServerStatus[]>([]);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
-  // Ref to always have current conv UUID in SSE callback (avoids stale closure)
+  // Refs to always have current values in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
   currentConvUuidRef.current = currentConvUuid;
+  const activeProjectRef = useRef<Project | null>(activeProject);
+  activeProjectRef.current = activeProject;
+
+  // Sequence counter to discard stale switchConv responses after rapid switching
+  const switchSeqRef = useRef(0);
+  // Timer ref so pending reload timeouts can be cleared on conversation switch
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard against concurrent/duplicate message sends
+  const sendingRef = useRef(false);
+  // Debounce timer for reloadConversationMessages
+  const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Derived per-conversation processing state ─────────
   const currentStatus = currentConvUuid ? (convStatuses[currentConvUuid] || 'idle') : 'idle';
   const isProcessing = currentStatus === 'processing';
   const agentTurnActive = currentStatus !== 'idle';
 
-  const loadConversations = useCallback(async () => {
-    try { 
-      const data = await api.listConversations();
+  const loadConversations = useCallback(async (project?: Project | null) => {
+    // Use the ref value when called without args (from SSE callbacks etc.)
+    const proj = project !== undefined ? project : activeProjectRef.current;
+    try {
+      let data;
+      if (proj?.uuid) {
+        data = await api.listProjectConversations(proj.uuid);
+      } else {
+        // No project selected — return empty. All conversations must belong to a project.
+        return [];
+      }
       setConversations(data.conversations || []); 
       return data.conversations || [];
     } catch { 
@@ -132,6 +194,24 @@ function ChatUI({
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const data = await api.listProjects();
+      setProjects(data.projects || []);
+    } catch {
+      setProjects([]);
+    }
+  }, []);
+
+  const loadMcpServers = useCallback(async () => {
+    try {
+      const data = await api.getMcpStatus();
+      setMcpServers(data.servers || []);
+    } catch {
+      setMcpServers([]);
+    }
+  }, []);
+
   const loadActiveCompute = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversationCompute(uuid);
@@ -141,11 +221,30 @@ function ChatUI({
     }
   }, []);
 
-  // Initial load - load conversations and activate the correct one
+  // Initial load - load projects first, then conversations for the active project
   useEffect(() => { 
     const init = async () => {
-      await loadComputeNodes();
-      const convs = await loadConversations();
+      const [, projData] = await Promise.all([
+        loadComputeNodes(),
+        api.listProjects().catch(() => ({ projects: [] })),
+        loadMcpServers(),
+      ]);
+      const allProjects: Project[] = projData.projects || [];
+      setProjects(allProjects);
+
+      // If no projects exist, the user needs to create one.
+      // The OnboardingModal or ProjectModal will handle this — don't proceed.
+      if (allProjects.length === 0) {
+        setShowProjectModal(true);
+        return;
+      }
+
+      // Auto-select the first project if none is active
+      const proj = allProjects[0];
+      setActiveProject(proj);
+
+      // Load conversations for this project
+      const convs = await loadConversations(proj);
       
       // If URL has a conversation UUID, load it directly
       if (routeUuid) {
@@ -153,10 +252,10 @@ function ChatUI({
         return;
       }
       
-      // If no conversations exist, create one automatically
+      // If no conversations exist for this project, create one
       if (convs.length === 0) {
         try {
-          const data = await api.createConversation();
+          const data = await api.createConversation(undefined, undefined, undefined, proj.uuid);
           const conv = data.conversation;
           setConversations([conv]);
           setCurrentConvUuid(conv.uuid);
@@ -174,6 +273,25 @@ function ChatUI({
     init();
   }, []);
 
+  // Reload conversations when activeProject changes and auto-select the first
+  useEffect(() => {
+    if (!activeProject) return;
+    loadConversations(activeProject).then((convs) => {
+      if (convs.length > 0) {
+        const first = convs[0];
+        setCurrentConvUuid(first.uuid);
+        navigate(`/${first.uuid}`, { replace: true });
+        switchConv(first.uuid);
+      } else {
+        // No conversations in this project — clear state
+        setCurrentConvUuid(null);
+        setMessages([]);
+        setTasks([]);
+        setResources([]);
+      }
+    });
+  }, [activeProject, loadConversations]);
+
   // Handle navigation to a different conversation via URL change
   useEffect(() => {
     if (routeUuid && routeUuid !== currentConvUuid) {
@@ -189,14 +307,20 @@ function ChatUI({
   }, []);
 
   const switchConv = async (uuid: string) => {
+    // Increment sequence counter; any in-flight switch with an older seq is stale
+    const seq = ++switchSeqRef.current;
+    // Cancel any pending reload timer from a previous conversation's job_complete
+    if (reloadTimerRef.current) { clearTimeout(reloadTimerRef.current); reloadTimerRef.current = null; }
     try {
       await api.switchConversation(uuid);
+      if (seq !== switchSeqRef.current) return; // stale — a newer switch started
       const data = await api.getConversation(uuid);
+      if (seq !== switchSeqRef.current) return; // stale — a newer switch started
       setCurrentConvUuid(uuid);
       // Only update model if conversation has one explicitly set; don't overwrite the user's sticky model
       if (data.conversation?.model) setModel(data.conversation.model);
       setContextUsage(null); setSearchBudget(null);
-      setApprovalEvent(null); setQuestionsPayload(null);
+      setApprovalEvent(null); setQuestionsPayload(null); setTodoApprovalPayload(null);
       
       // Load persisted tasks and resources from database
       setTasks(data.tasks?.map((t: any) => ({ title: t.title, status: t.status })) || []);
@@ -221,23 +345,28 @@ function ChatUI({
       }) || []);
 
       // Load active compute for this conversation
-      await loadActiveCompute(uuid);
+      if (seq === switchSeqRef.current) await loadActiveCompute(uuid);
     } catch { /* */ }
   };
 
-  const handleSwitchConversation = async (uuid: string) => {
+  const handleSwitchConversation = (uuid: string) => {
+    // Only navigate; the routeUuid useEffect will trigger switchConv,
+    // avoiding the previous double-call race condition
     navigate(`/${uuid}`, { replace: true });
-    await switchConv(uuid);
   };
 
   const handleNewConversation = async () => {
+    if (!activeProject) {
+      setShowProjectModal(true);
+      return;
+    }
     try {
-      const data = await api.createConversation();
+      const data = await api.createConversation(undefined, undefined, undefined, activeProject.uuid);
       const conv = data.conversation;
       setConversations((prev) => [conv, ...prev]);
       setCurrentConvUuid(conv.uuid);
       setMessages([]); setTasks([]); setResources([]); setContextUsage(null); setSearchBudget(null);
-      setApprovalEvent(null); setQuestionsPayload(null);
+      setApprovalEvent(null); setQuestionsPayload(null); setTodoApprovalPayload(null);
       if (conv.model) setModel(conv.model);
       // Load default compute for new conversation
       await loadActiveCompute(conv.uuid);
@@ -252,7 +381,7 @@ function ChatUI({
       setConvStatuses((prev) => { const n = { ...prev }; delete n[uuid]; return n; });
       if (currentConvUuid === uuid) {
         setCurrentConvUuid(null); setMessages([]); setTasks([]); setResources([]);
-        setApprovalEvent(null); setQuestionsPayload(null);
+        setApprovalEvent(null); setQuestionsPayload(null); setTodoApprovalPayload(null);
         setActiveCompute(null);
         navigate('/', { replace: true });
       }
@@ -271,10 +400,12 @@ function ChatUI({
     } catch { /* */ }
   }, [currentConvUuid, loadActiveCompute]);
 
-  // Helper to reload messages from DB for a given conversation
-  const reloadConversationMessages = useCallback(async (uuid: string) => {
+  // Helper to reload messages from DB for a given conversation (raw, no debounce)
+  const _doReloadMessages = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversation(uuid);
+      // Guard: only apply if this is still the active conversation
+      if (uuid !== currentConvUuidRef.current) return;
       if (data.messages) {
         setMessages(data.messages.map((m: any) => {
           if (m.role === 'tool') {
@@ -291,6 +422,15 @@ function ChatUI({
       }
     } catch { /* ignore */ }
   }, []);
+
+  // Debounced version: collapses rapid successive reloads into one (300ms window)
+  const reloadConversationMessages = useCallback((uuid: string) => {
+    if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current);
+    reloadDebounceRef.current = setTimeout(() => {
+      reloadDebounceRef.current = null;
+      _doReloadMessages(uuid);
+    }, 300);
+  }, [_doReloadMessages]);
 
   // ── Auto-compact when context usage > 90% ─────────────
   const lastCompactRef = useRef<number>(0);
@@ -452,11 +592,15 @@ function ChatUI({
         break;
       }
       case 'resources_update': setResources(data?.resources || []); setRightPanelOpen(true); break;
+      case 'workspace_files_changed': setFileTreeRefreshKey((k) => k + 1); break;
       case 'context_usage': if (data) setContextUsage(data as ContextUsage); break;
       case 'search_budget': if (data) setSearchBudget(data as SearchBudget); break;
       case 'approval_required': setApprovalEvent(event); setCurrentConvStatus('waiting_approval'); break;
+      case 'todo_approval_required': setTodoApprovalPayload(data as TodoApprovalPayload); setCurrentConvStatus('waiting_approval'); break;
       case 'turn_complete':
-        setApprovalEvent(null);
+        setApprovalEvent(null); setTodoApprovalPayload(null);
+        // Cancel any pending job_complete reload — SSE events already updated state
+        if (reloadTimerRef.current) { clearTimeout(reloadTimerRef.current); reloadTimerRef.current = null; }
         setMessages((prev) => {
           const c = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
           const last = c[c.length - 1];
@@ -492,7 +636,7 @@ function ChatUI({
             setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Job failed: ${error}` }]);
           }
           if (status === 'completed' && uuid) {
-            setTimeout(() => reloadConversationMessages(uuid), 500);
+            reloadTimerRef.current = setTimeout(() => { reloadTimerRef.current = null; reloadConversationMessages(uuid); }, 500);
           }
         }
         loadConversations();
@@ -534,13 +678,53 @@ function ChatUI({
   }, [currentConvUuid, jobProcessing, connected]);
 
   const sendMessage = useCallback(async (text: string, mode: string) => {
+    // Prevent concurrent/duplicate sends
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setInputText('');
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text, metadata: { tool: mode } }]);
     setCurrentConvStatus('processing');
-    try { await api.sendMessage(text, mode); } catch (err: any) {
+    try {
+      await api.sendMessage(text, mode);
+    } catch (err: any) {
       setCurrentConvStatus('idle');
       setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Failed to send: ${err.message}` }]);
+    } finally {
+      sendingRef.current = false;
     }
   }, [setCurrentConvStatus]);
+
+  const handleFileOpen = useCallback((path: string, content: string) => {
+    // Images open in a dedicated Image tab
+    if (isImageFile(path) && activeProject?.uuid) {
+      const url = api.fileUrl(activeProject.uuid, path);
+      setImageTab({ path, url });
+      setMainTab('image');
+      return;
+    }
+    setOpenFiles((prev) => {
+      if (prev.some((f) => f.path === path)) return prev;
+      return [...prev, { path, content, language: detectLanguage(path) }];
+    });
+    setActiveFilePath(path);
+    setMainTab('editor');
+  }, [activeProject]);
+
+  const handleCloseFile = useCallback((path: string) => {
+    setOpenFiles((prev) => {
+      const next = prev.filter((f) => f.path !== path);
+      // If closing the active file, activate the previous tab or switch to agent
+      if (activeFilePath === path) {
+        if (next.length > 0) {
+          setActiveFilePath(next[next.length - 1].path);
+        } else {
+          setActiveFilePath(null);
+          setMainTab('agent');
+        }
+      }
+      return next;
+    });
+  }, [activeFilePath]);
 
   // Effective processing (combines SSE-driven status with polling fallback)
   const effectiveProcessing = isProcessing || jobProcessing;
@@ -555,14 +739,29 @@ function ChatUI({
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-6 h-14 bg-surface border-b border-border shrink-0 gap-2 sm:gap-4">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Mobile sidebar toggle */}
+          <button
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors md:hidden"
+            onClick={() => setMobileSidebarOpen(true)}
+            title="Open sidebar"
+          >
+            <Menu size={20} />
+          </button>
           <img src="/logo-64.png" alt="OpenMLR" className="w-7 h-7 sm:w-8 sm:h-8" />
-          <span className="font-bold text-base sm:text-lg text-primary tracking-tight">OpenMLR</span>
+          <span className="font-bold text-base sm:text-lg text-primary tracking-tight max-sm:hidden">OpenMLR</span>
           <span 
             className={`w-2 h-2 rounded-full transition-colors duration-300 ${connected ? 'bg-success' : 'bg-error'}`} 
             title={connected ? 'Connected' : 'Disconnected'}
           />
         </div>
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+          <ProjectSelector
+            projects={projects}
+            activeProject={activeProject}
+            onSelectProject={setActiveProject}
+            onNewProject={() => setShowProjectModal(true)}
+            onManageProjects={() => setShowManageProjects(true)}
+          />
           <ComputeSelector
             currentNode={activeCompute}
             nodes={computeNodes}
@@ -570,6 +769,14 @@ function ChatUI({
           />
           <ModelModal currentModel={modelLabel} onModelChange={setModel} />
           <CopyModelButton model={model} />
+          {/* Mobile right panel toggle */}
+          <button
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors lg:hidden"
+            onClick={() => setMobileRightOpen(true)}
+            title="Open panel"
+          >
+            <PanelRightOpen size={18} />
+          </button>
         </div>
       </header>
 
@@ -578,62 +785,174 @@ function ChatUI({
         <Sidebar
           conversations={conversations} currentUuid={currentConvUuid} user={user}
           convStatuses={convStatuses}
+          mobileOpen={mobileSidebarOpen}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
+          onMobileClose={() => setMobileSidebarOpen(false)}
         />
         
         <div 
-          className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200"
-          style={{ paddingRight: rightPanelOpen ? '288px' : undefined }}
+          className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200 main-content-area"
+          style={{ paddingRight: rightPanelOpen ? '289px' : '49px' }}
         >
-          {/* Empty state */}
-          {messages.length === 0 && !effectiveProcessing && (
-            <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12 relative overflow-hidden">
-              {/* Large embossed background text */}
-              <div 
-                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none px-2"
-                aria-hidden="true"
-              >
-                <span 
-                  className="text-[4rem] xs:text-[6rem] sm:text-[10rem] md:text-[14rem] lg:text-[18rem] xl:text-[20rem] font-black tracking-tighter whitespace-nowrap animate-[emboss-pulse_4s_ease-in-out_infinite]"
-                  style={{
-                    color: 'transparent',
-                    WebkitTextStroke: '1px rgba(59, 130, 246, 0.12)',
-                    textShadow: '0 0 60px rgba(59, 130, 246, 0.08), 0 0 120px rgba(59, 130, 246, 0.04)',
-                  }}
-                >
-                  OpenMLR
+          {/* Agent / Editor / Terminal tab bar */}
+          <div className="flex items-center border-b border-border shrink-0 bg-surface">
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                mainTab === 'agent'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab('agent')}
+            >
+              Agent
+            </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                mainTab === 'editor'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab('editor')}
+            >
+              Editor
+              {openFiles.length > 0 && (
+                <span className="ml-1.5 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                  {openFiles.length}
                 </span>
+              )}
+            </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                mainTab === 'terminal'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab('terminal')}
+            >
+              {'Terminal '}
+              <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
+            </button>
+            {/* Closable Image tab */}
+            {imageTab && (
+              <div
+                className={`flex items-center gap-1 px-4 py-2 text-sm font-medium transition-colors group ${
+                  mainTab === 'image'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-text-dim hover:text-text'
+                }`}
+              >
+                <button className="truncate" onClick={() => setMainTab('image')}>
+                  {imageTab.path.split('/').pop()}
+                </button>
+                <button
+                  className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={() => { setImageTab(null); if (mainTab === 'image') setMainTab('agent'); }}
+                  title="Close image"
+                >
+                  &times;
+                </button>
               </div>
-              {/* Foreground prompt */}
-              <p className="text-lg sm:text-xl text-text-dim z-10">What would you like to research?</p>
+            )}
+          </div>
+
+          {/* Agent tab */}
+          {mainTab === 'agent' && (
+            <div className="flex flex-col flex-1 overflow-hidden relative">
+              {/* Empty state */}
+              {messages.length === 0 && !effectiveProcessing && (
+                <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
+                  <div className="relative mb-8">
+                    <div
+                      className="absolute inset-0 rounded-full animate-[hero-glow_6s_ease-in-out_infinite]"
+                      style={{
+                        background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
+                        transform: 'scale(2.5)',
+                      }}
+                    />
+                    <img
+                      src="/logo-512.png"
+                      alt="OpenMLR"
+                      className="relative w-24 h-24 sm:w-32 sm:h-32 select-none pointer-events-none animate-[hero-float_6s_ease-in-out_infinite]"
+                      style={{ opacity: 0.35 }}
+                      draggable={false}
+                    />
+                  </div>
+                  <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
+                </div>
+              )}
+              
+              <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
+              {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
+              {todoApprovalPayload && <TodoReviewDrawer payload={todoApprovalPayload} onDone={() => { 
+                setTodoApprovalPayload(null); 
+                setCurrentConvStatus('processing');
+              }} onClose={() => { setTodoApprovalPayload(null); setCurrentConvStatus('idle'); }} />}
+              {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
+                setQuestionsPayload(null); 
+                setCurrentConvStatus('processing');
+                setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]);
+                if (switchToExecute) setInputMode('execute');
+              }} onClose={() => setQuestionsPayload(null)} />}
+              <InputArea 
+                disabled={effectiveProcessing} 
+                showStop={effectiveTurnActive}
+                mode={inputMode}
+                onModeChange={setInputMode}
+                text={inputText}
+                onTextChange={setInputText}
+                onSend={sendMessage} 
+                onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }} 
+              />
             </div>
           )}
-          
-          <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
-          {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
-          {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary) => { 
-            setQuestionsPayload(null); 
-            setCurrentConvStatus('processing');
-            setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]); 
-          }} onClose={() => setQuestionsPayload(null)} />}
-          <InputArea 
-            disabled={effectiveProcessing} 
-            showStop={effectiveTurnActive}
-            mode={inputMode}
-            onModeChange={setInputMode}
-            text={inputText}
-            onTextChange={setInputText}
-            onSend={sendMessage} 
-            onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }} 
-          />
+
+          {/* Editor tab */}
+          {mainTab === 'editor' && (
+            <EditorPanel
+              openFiles={openFiles}
+              activeFilePath={activeFilePath}
+              onActivateFile={setActiveFilePath}
+              onCloseFile={handleCloseFile}
+            />
+          )}
+
+          {/* Terminal tab */}
+          {mainTab === 'terminal' && (
+            <Terminal
+              projectUuid={activeProject?.uuid || null}
+              visible={mainTab === 'terminal'}
+              onConnectionChange={setTerminalConnected}
+            />
+          )}
+
+          {/* Image tab */}
+          {mainTab === 'image' && imageTab && (
+            <ImageViewer
+              src={imageTab.url}
+              filename={imageTab.path.split('/').pop() || 'image'}
+            />
+          )}
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} mcpServers={mcpServers} visible={rightPanelOpen} mobileOpen={mobileRightOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onMobileClose={() => setMobileRightOpen(false)} onViewReport={(r) => setViewingReport(r)} onFileOpen={handleFileOpen} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
       </div>
       
       {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
+      {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={async (p) => { 
+        setProjects((prev) => [p, ...prev]); 
+        setActiveProject(p);
+        // Auto-create a first conversation in the new project
+        try {
+          const data = await api.createConversation(undefined, undefined, undefined, p.uuid);
+          const conv = data.conversation;
+          setConversations([conv]);
+          setCurrentConvUuid(conv.uuid);
+          navigate(`/${conv.uuid}`, { replace: true });
+        } catch { /* */ }
+      }} />}
+      {showManageProjects && <ProjectManageModal projects={projects} onClose={() => setShowManageProjects(false)} onChanged={() => { loadProjects(); }} />}
     </div>
   );
 }
@@ -656,9 +975,14 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  const handleOnboardingComplete = useCallback((selectedModel: string) => {
+  const handleOnboardingComplete = useCallback((selectedModel: string, project?: Project) => {
     setModel(selectedModel);
     setNeedsOnboarding(false);
+    // If onboarding created a project, reload to pick it up
+    if (project) {
+      // Force a full page reload to reinitialize with the new project
+      window.location.reload();
+    }
   }, []);
 
   return (
@@ -670,8 +994,7 @@ export default function App() {
 
         {/* Protected routes */}
         <Route element={<AuthGuard onAuth={handleAuth} user={user} />}>
-          <Route path="/" element={<ChatUI user={user!} model={model} setModel={setModel} />} />
-          <Route path="/:uuid" element={<ChatUI user={user!} model={model} setModel={setModel} />} />
+          <Route path="/:uuid?" element={<ChatUI user={user!} model={model} setModel={setModel} />} />
           <Route path="/settings" element={<SettingsPage />}>
             <Route index element={<Navigate to="providers" replace />} />
             <Route path="providers" element={<ProvidersSettings />} />

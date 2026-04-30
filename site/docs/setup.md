@@ -62,7 +62,7 @@ External ports are mapped to non-standard ports to avoid conflicts with local se
 
 ## Docker Development
 
-Development mode with live reload. Code changes are reflected immediately.
+Development mode with live reload. Code changes are reflected immediately — both backend and frontend.
 
 ### Setup
 
@@ -74,7 +74,9 @@ make dev-up
 # or: docker compose up -d
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:5173` for the UI (Vite with hot module replacement).
+
+`http://localhost:3000` serves the backend API with interactive **Swagger docs** at `/docs`.
 
 ### Commands
 
@@ -86,12 +88,23 @@ Open `http://localhost:3000`.
 | `make dev-clean` | Stop and remove volumes |
 | `make dev-build` | Rebuild dev images |
 
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| frontend | :5173 | Vite dev server with HMR (proxies `/api` to backend) |
+| web | :3000 | FastAPI backend with Swagger docs at `/docs` |
+| worker | - | Celery background jobs (auto-restarts on code changes) |
+| docs | :4000 | VitePress docs site (when running `make docs-dev`) |
+| db | :5433 | PostgreSQL 16 |
+| redis | :6380 | Redis 7 |
+
 ### How it works
 
 The default `docker-compose.yml` is configured for development:
-- Mounts `backend/` into the container
-- Runs uvicorn with `--reload`
-- Uses `watchmedo` for worker auto-restart on code changes
+- **Frontend**: Vite dev server with hot module replacement on port 5173. Edits to `.tsx`/`.ts` files reflect instantly in the browser. Proxies `/api`, `/health`, and `/events` to the backend.
+- **Backend**: Mounts `backend/` into the container, runs uvicorn with `--reload`. In dev mode (`DEV_MODE=true`), Swagger UI is served at `/docs` and the stale static frontend is not served.
+- **Worker**: Uses `watchmedo` for auto-restart on code changes.
 
 ---
 
@@ -139,10 +152,10 @@ Do **not** create a virtual environment at the project root. The backend manages
 
 | Server | Port | Description |
 |--------|------|-------------|
-| Backend | 3000 | FastAPI with auto-reload |
-| Frontend | 5173 | Vite with HMR |
+| Backend | 3000 | FastAPI API + Swagger docs at `/docs` (when `DEV_MODE=true`) |
+| Frontend | 5173 | Vite with HMR (proxies `/api` to backend) |
 
-The Vite dev server proxies `/api` requests to the backend.
+Open `http://localhost:5173` for the UI. The Vite dev server proxies `/api`, `/health`, and `/events` requests to the backend.
 
 ### With background jobs
 

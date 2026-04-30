@@ -9,6 +9,7 @@ from typing import Any
 @dataclass
 class ToolCall:
     """A tool call requested by the LLM."""
+
     id: str
     name: str
     arguments: dict[str, Any]
@@ -17,6 +18,7 @@ class ToolCall:
 @dataclass
 class ToolSpec:
     """Specification for an agent tool."""
+
     name: str
     description: str
     parameters: dict[str, Any]  # JSON Schema
@@ -27,6 +29,7 @@ class ToolSpec:
 @dataclass
 class Message:
     """A message in the conversation context."""
+
     role: str  # "system", "user", "assistant", "tool"
     content: str
     tool_calls: list[ToolCall] | None = None
@@ -37,16 +40,19 @@ class Message:
 @dataclass(kw_only=True)
 class AgentEvent:
     """Event emitted by the agent loop for SSE streaming."""
+
     event_type: str
     data: dict[str, Any] | None = None
 
     def to_sse(self) -> str:
         import json
+
         return f"data: {json.dumps({'event_type': self.event_type, 'data': self.data})}\n\n"
 
 
 class OpType(str, Enum):
     """Operation types submitted to the agent loop."""
+
     USER_INPUT = "user_input"
     EXEC_APPROVAL = "exec_approval"
     COMPACT = "compact"
@@ -58,6 +64,7 @@ class OpType(str, Enum):
 @dataclass
 class Submission:
     """A submission to the agent loop."""
+
     op: OpType
     data: Any = None
 
@@ -65,6 +72,7 @@ class Submission:
 @dataclass
 class LLMResult:
     """Result of an LLM call."""
+
     content: str
     tool_calls: list[ToolCall]
     finish_reason: str

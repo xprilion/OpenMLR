@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 OPENALEX_API = "https://api.openalex.org"
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1"
 CROSSREF_API = "https://api.crossref.org"
-ARXIV_API = "http://export.arxiv.org/api/query"
+ARXIV_API = "https://export.arxiv.org/api/query"
 AR5IV_BASE = "https://ar5iv.labs.arxiv.org/html"
 PWC_API = "https://paperswithcode.com/api/v1"
 
@@ -72,8 +72,17 @@ def create_papers_tool() -> ToolSpec:
                 "operation": {
                     "type": "string",
                     "enum": [
-                        "search", "arxiv_search", "semantic_search", "trending", "details", "read_paper",
-                        "citations", "recommend", "find_code", "find_datasets", "author_papers",
+                        "search",
+                        "arxiv_search",
+                        "semantic_search",
+                        "trending",
+                        "details",
+                        "read_paper",
+                        "citations",
+                        "recommend",
+                        "find_code",
+                        "find_datasets",
+                        "author_papers",
                     ],
                     "description": (
                         "Operation to perform: "
@@ -126,22 +135,36 @@ def create_papers_tool() -> ToolSpec:
 _search_counts: dict[int, int] = {}  # session hash -> count
 _BUDGET_DEFAULT = 25
 
+
 def _check_budget(session=None) -> tuple[bool, str]:
     """Check if search budget allows another API call. Returns (ok, message)."""
     key = id(session) if session else 0
     count = _search_counts.get(key, 0)
-    budget = session.config.paper_search_budget if session and hasattr(session, 'config') else _BUDGET_DEFAULT
+    budget = (
+        session.config.paper_search_budget
+        if session and hasattr(session, "config")
+        else _BUDGET_DEFAULT
+    )
     if count >= budget:
-        return False, f"Search budget exhausted ({count}/{budget} calls). Ask the user before continuing."
+        return (
+            False,
+            f"Search budget exhausted ({count}/{budget} calls). Ask the user before continuing.",
+        )
     return True, ""
+
 
 def _increment_budget(session=None):
     key = id(session) if session else 0
     _search_counts[key] = _search_counts.get(key, 0) + 1
 
+
 def _get_budget_info(session=None) -> dict:
     key = id(session) if session else 0
-    budget = session.config.paper_search_budget if session and hasattr(session, 'config') else _BUDGET_DEFAULT
+    budget = (
+        session.config.paper_search_budget
+        if session and hasattr(session, "config")
+        else _BUDGET_DEFAULT
+    )
     return {"used": _search_counts.get(key, 0), "max": budget}
 
 
@@ -158,7 +181,18 @@ async def _handle_papers(
     **kwargs,
 ) -> tuple[str, bool]:
     # Budget check for API-calling operations
-    api_ops = {"search", "arxiv_search", "semantic_search", "trending", "details", "citations", "recommend", "find_code", "find_datasets", "author_papers"}
+    api_ops = {
+        "search",
+        "arxiv_search",
+        "semantic_search",
+        "trending",
+        "details",
+        "citations",
+        "recommend",
+        "find_code",
+        "find_datasets",
+        "author_papers",
+    }
     if operation in api_ops:
         ok, msg = _check_budget(session)
         if not ok:
@@ -167,10 +201,13 @@ async def _handle_papers(
         # Emit budget update
         if session:
             from ..agent.types import AgentEvent
-            await session.emit(AgentEvent(
-                event_type="search_budget",
-                data=_get_budget_info(session),
-            ))
+
+            await session.emit(
+                AgentEvent(
+                    event_type="search_budget",
+                    data=_get_budget_info(session),
+                )
+            )
 
     handlers = {
         "search": lambda: _search(query, year_from, year_to, limit, source),
@@ -196,7 +233,10 @@ async def _handle_papers(
 
 # ── Search (OpenAlex with S2 fallback) ────────────────────────────────────
 
-async def _search(query: str, year_from: int = None, year_to: int = None, limit: int = 10, source: str = "auto") -> tuple[str, bool]:
+
+async def _search(
+    query: str, year_from: int = None, year_to: int = None, limit: int = 10, source: str = "auto"
+) -> tuple[str, bool]:
     if not query:
         return "Provide a 'query' for search.", False
 
@@ -219,7 +259,9 @@ async def _search(query: str, year_from: int = None, year_to: int = None, limit:
     return "Invalid source specified", False
 
 
-async def _openalex_search(query: str, year_from: int = None, year_to: int = None, limit: int = 10) -> tuple[str, bool]:
+async def _openalex_search(
+    query: str, year_from: int = None, year_to: int = None, limit: int = 10
+) -> tuple[str, bool]:
     """Search using OpenAlex API with retry logic."""
     params = _get_openalex_params({"search": query, "per_page": min(limit, 50)})
 
@@ -254,7 +296,9 @@ async def _openalex_search(query: str, year_from: int = None, year_to: int = Non
     total = r.json().get("meta", {}).get("count", len(works))
     lines = [f"Found {total} papers for '{query}' (via OpenAlex):\n"]
     for i, w in enumerate(works, 1):
-        authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3])
+        authors = ", ".join(
+            a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3]
+        )
         if len(w.get("authorships", [])) > 3:
             authors += " et al."
         doi = (w.get("doi") or "").replace("https://doi.org/", "")
@@ -270,7 +314,10 @@ async def _openalex_search(query: str, year_from: int = None, year_to: int = Non
 
 # ── arXiv Search ────────────────────────────────────
 
-async def _arxiv_search(query: str, year_from: int = None, year_to: int = None, limit: int = 10) -> tuple[str, bool]:
+
+async def _arxiv_search(
+    query: str, year_from: int = None, year_to: int = None, limit: int = 10
+) -> tuple[str, bool]:
     """Search arXiv papers directly. Great for ML/CS/Physics preprints."""
     if not query:
         return "Provide a 'query' for search.", False
@@ -367,7 +414,10 @@ async def _arxiv_search(query: str, year_from: int = None, year_to: int = None, 
 
 # ── Semantic Scholar Search ────────────────────────────────────
 
-async def _semantic_scholar_search(query: str, year_from: int = None, year_to: int = None, limit: int = 10) -> tuple[str, bool]:
+
+async def _semantic_scholar_search(
+    query: str, year_from: int = None, year_to: int = None, limit: int = 10
+) -> tuple[str, bool]:
     """Search using Semantic Scholar API with retry logic."""
     if not query:
         return "Provide a 'query' for search.", False
@@ -400,13 +450,19 @@ async def _semantic_scholar_search(query: str, year_from: int = None, year_to: i
             max_retries=3,
         )
     except RateLimitError:
-        return "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     except Exception as e:
         log.warning(f"Semantic Scholar search error: {e}")
         return f"Semantic Scholar error: {str(e)[:200]}", False
 
     if r.status_code == 429:
-        return "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     if r.status_code != 200:
         return f"Semantic Scholar error {r.status_code}: {r.text[:300]}", False
 
@@ -441,12 +497,15 @@ async def _semantic_scholar_search(query: str, year_from: int = None, year_to: i
 
 # ── Trending (OpenAlex) ──────────────────────────────────
 
+
 async def _trending(query: str = None, limit: int = 10) -> tuple[str, bool]:
-    params = _get_openalex_params({
-        "sort": "cited_by_count:desc",
-        "filter": "from_publication_date:2024-01-01",
-        "per_page": min(limit, 50),
-    })
+    params = _get_openalex_params(
+        {
+            "sort": "cited_by_count:desc",
+            "filter": "from_publication_date:2024-01-01",
+            "per_page": min(limit, 50),
+        }
+    )
     if query:
         params["search"] = query
 
@@ -472,7 +531,9 @@ async def _trending(query: str = None, limit: int = 10) -> tuple[str, bool]:
 
     lines = [f"Trending papers{f' on: {query}' if query else ''}:\n"]
     for i, w in enumerate(works, 1):
-        authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3])
+        authors = ", ".join(
+            a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3]
+        )
         lines.append(
             f"{i}. **{w.get('title', 'Untitled')}** ({w.get('publication_year', '?')})\n"
             f"   {authors}  |  {w.get('cited_by_count', 0)} citations\n"
@@ -481,6 +542,7 @@ async def _trending(query: str = None, limit: int = 10) -> tuple[str, bool]:
 
 
 # ── Details (OpenAlex + CrossRef) ─────────────────────────
+
 
 async def _details(paper_id: str) -> tuple[str, bool]:
     if not paper_id:
@@ -511,7 +573,9 @@ async def _details(paper_id: str) -> tuple[str, bool]:
         return f"Paper not found: {paper_id}", False
 
     w = r.json()
-    authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or []))
+    authors = ", ".join(
+        a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])
+    )
     doi = (w.get("doi") or "").replace("https://doi.org/", "")
     oa_url = (w.get("open_access") or {}).get("oa_url", "")
     arxiv_id = _extract_arxiv_from_ids(w.get("ids", {}))
@@ -555,8 +619,12 @@ async def _crossref_details(doi: str) -> tuple[str, bool]:
 
     w = r.json().get("message", {})
     title = (w.get("title") or ["Untitled"])[0]
-    authors = ", ".join(f"{a.get('given', '')} {a.get('family', '')}" for a in (w.get("author") or []))
-    year = (w.get("published-print") or w.get("published-online") or {}).get("date-parts", [[None]])[0][0]
+    authors = ", ".join(
+        f"{a.get('given', '')} {a.get('family', '')}" for a in (w.get("author") or [])
+    )
+    year = (w.get("published-print") or w.get("published-online") or {}).get(
+        "date-parts", [[None]]
+    )[0][0]
 
     lines = [
         f"# {title}",
@@ -570,6 +638,7 @@ async def _crossref_details(doi: str) -> tuple[str, bool]:
 
 
 # ── Read Paper (ArXiv HTML via ar5iv) ─────────────────────
+
 
 async def _read_paper(paper_id: str, section: str = None) -> tuple[str, bool]:
     if not paper_id:
@@ -594,6 +663,7 @@ async def _read_paper(paper_id: str, section: str = None) -> tuple[str, bool]:
         return f"Failed to fetch paper HTML (status {r.status_code}).", False
 
     from bs4 import BeautifulSoup
+
     soup = BeautifulSoup(r.text, "lxml")
     sections = _parse_sections(soup)
 
@@ -620,6 +690,7 @@ async def _read_paper(paper_id: str, section: str = None) -> tuple[str, bool]:
 
 # ── Citations (OpenAlex) ──────────────────────────────────
 
+
 async def _citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
     if not paper_id:
         return "Provide a 'paper_id'.", False
@@ -645,7 +716,9 @@ async def _citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
     w = r.json()
     ref_ids = w.get("referenced_works", [])[:limit]
-    lines = [f"## References ({len(w.get('referenced_works', []))} total, showing {len(ref_ids)})\n"]
+    lines = [
+        f"## References ({len(w.get('referenced_works', []))} total, showing {len(ref_ids)})\n"
+    ]
 
     # Batch-fetch referenced works
     if ref_ids:
@@ -671,11 +744,13 @@ async def _citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
     try:
         r3 = await fetch_with_retry(
             f"{OPENALEX_API}/works",
-            params=_get_openalex_params({
-                "filter": f"cites:{oa_id}",
-                "sort": "cited_by_count:desc",
-                "per_page": limit,
-            }),
+            params=_get_openalex_params(
+                {
+                    "filter": f"cites:{oa_id}",
+                    "sort": "cited_by_count:desc",
+                    "per_page": limit,
+                }
+            ),
             timeout=20,
             max_retries=2,
         )
@@ -692,6 +767,7 @@ async def _citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
 
 # ── Recommendations (OpenAlex related_works) ──────────────
+
 
 async def _recommend(paper_id: str, limit: int = 10) -> tuple[str, bool]:
     if not paper_id:
@@ -736,7 +812,9 @@ async def _recommend(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
     lines = ["## Related Papers\n"]
     for i, w in enumerate(r2.json().get("results", []), 1):
-        authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3])
+        authors = ", ".join(
+            a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3]
+        )
         lines.append(
             f"{i}. **{w.get('title', 'Untitled')}** ({w.get('publication_year', '?')})\n"
             f"   {authors}  |  {w.get('cited_by_count', 0)} citations\n"
@@ -745,6 +823,7 @@ async def _recommend(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
 
 # ── Find Code (Papers With Code) ─────────────────────────
+
 
 async def _find_code(query: str) -> tuple[str, bool]:
     if not query:
@@ -781,6 +860,7 @@ async def _find_code(query: str) -> tuple[str, bool]:
 
 # ── Find Datasets (Papers With Code) ─────────────────────
 
+
 async def _find_datasets(query: str) -> tuple[str, bool]:
     if not query:
         return "Provide a query.", False
@@ -815,6 +895,7 @@ async def _find_datasets(query: str) -> tuple[str, bool]:
 
 # ── Author Papers (Semantic Scholar) ─────────────────────
 
+
 async def _author_papers(author_query: str, limit: int = 10) -> tuple[str, bool]:
     """Find papers by a specific author using Semantic Scholar."""
     if not author_query:
@@ -833,13 +914,19 @@ async def _author_papers(author_query: str, limit: int = 10) -> tuple[str, bool]
             max_retries=3,
         )
     except RateLimitError:
-        return "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     except Exception as e:
         log.warning(f"Semantic Scholar author search error: {e}")
         return f"Author search error: {str(e)[:200]}", False
 
     if r.status_code == 429:
-        return "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     if r.status_code != 200:
         return f"Author search error {r.status_code}: {r.text[:300]}", False
 
@@ -867,7 +954,10 @@ async def _author_papers(author_query: str, limit: int = 10) -> tuple[str, bool]
             max_retries=3,
         )
     except RateLimitError:
-        return "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     except Exception as e:
         log.warning(f"Semantic Scholar author papers error: {e}")
         return f"Error fetching author papers: {str(e)[:200]}", False
@@ -904,6 +994,7 @@ async def _author_papers(author_query: str, limit: int = 10) -> tuple[str, bool]
 
 # ── Helpers ───────────────────────────────────────────────
 
+
 def _to_openalex_id(paper_id: str) -> str:
     """Convert various IDs to OpenAlex lookup format."""
     if paper_id.startswith("W") or paper_id.startswith("https://openalex.org/"):
@@ -917,10 +1008,10 @@ def _to_openalex_id(paper_id: str) -> str:
 
 
 def _extract_arxiv_id(text: str) -> str | None:
-    match = re.search(r'(\d{4}\.\d{4,5}(?:v\d+)?)', text)
+    match = re.search(r"(\d{4}\.\d{4,5}(?:v\d+)?)", text)
     if match:
         return match.group(1)
-    match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5}(?:v\d+)?)', text)
+    match = re.search(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5}(?:v\d+)?)", text)
     if match:
         return match.group(1)
     return None
@@ -928,8 +1019,7 @@ def _extract_arxiv_id(text: str) -> str | None:
 
 def _extract_arxiv_from_ids(ids: dict) -> str | None:
     """Extract arxiv ID from OpenAlex ids dict."""
-    ids.get("openalex", "")
-    doi = ids.get("doi", "")
+    doi = ids.get("openalex", "") or ids.get("doi", "")
     if "arXiv" in doi:
         return _extract_arxiv_id(doi)
     return None
@@ -955,11 +1045,13 @@ def _parse_sections(soup) -> list[dict]:
 
     abstract = soup.find("div", class_="ltx_abstract")
     if abstract:
-        sections.append({
-            "title": "Abstract",
-            "text": abstract.get_text(strip=True).replace("Abstract", "", 1).strip(),
-            "level": 2,
-        })
+        sections.append(
+            {
+                "title": "Abstract",
+                "text": abstract.get_text(strip=True).replace("Abstract", "", 1).strip(),
+                "level": 2,
+            }
+        )
 
     for heading in soup.find_all(["h2", "h3", "h4"]):
         level = int(heading.name[1])

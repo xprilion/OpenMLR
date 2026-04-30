@@ -1,8 +1,13 @@
-"""Tests for ToolRouter — registration, dispatch, mode filtering."""
+"""Tests for ToolRouter — registration, dispatch, mode filtering, research budget."""
 
 import pytest
 
-from openmlr.tools.registry import MODE_TOOL_RESTRICTIONS, ToolRouter
+from openmlr.tools.registry import (
+    _PLAN_RESEARCH_LIMIT,
+    _RESEARCH_TOOLS,
+    MODE_TOOL_RESTRICTIONS,
+    ToolRouter,
+)
 
 pytestmark = pytest.mark.asyncio
 from openmlr.agent.types import ToolSpec
@@ -119,7 +124,9 @@ class TestToolDispatch:
             return "ok", True
 
         tool = ToolSpec(
-            name="strict", description="Needs arg", parameters={"type": "object"},
+            name="strict",
+            description="Needs arg",
+            parameters={"type": "object"},
             handler=handler,
         )
         router.register(tool)
@@ -169,9 +176,9 @@ class TestModeFiltering:
         allowed, msg = router.is_tool_allowed("ask_user")
         assert allowed is True
 
-    async def test_plan_mode_allows_read_file(self, router):
+    async def test_plan_mode_allows_read(self, router):
         router.set_mode("plan")
-        allowed, msg = router.is_tool_allowed("read_file")
+        allowed, msg = router.is_tool_allowed("read")
         assert allowed is True
 
     async def test_execute_mode_blocks_ask_user(self, router):
@@ -227,8 +234,151 @@ class TestModeRestrictionsConfig:
     async def test_plan_allowed_includes_ask_user(self):
         assert "ask_user" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
 
-    async def test_plan_allowed_includes_read_file(self):
-        assert "read_file" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+    async def test_plan_allowed_includes_read_tool(self):
+        assert "read" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
 
     async def test_execute_blocked_includes_ask_user(self):
         assert "ask_user" in MODE_TOOL_RESTRICTIONS["execute"]["blocked"]
+
+    async def test_plan_allowed_includes_hf_tools(self):
+        plan_allowed = MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+        assert "hf_search_models" in plan_allowed
+        assert "hf_model_info" in plan_allowed
+        assert "hf_search_datasets" in plan_allowed
+        assert "hf_dataset_info" in plan_allowed
+        assert "hf_read_file" in plan_allowed
+
+    async def test_plan_allowed_includes_read(self):
+        """The local 'read' tool should be allowed in plan mode for context gathering."""
+        assert "read" in MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+
+    async def test_plan_blocks_execution_tools(self):
+        """Execution tools must NOT be in the plan allowlist."""
+        plan_allowed = MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+        assert "bash" not in plan_allowed
+        assert "write" not in plan_allowed
+        assert "edit" not in plan_allowed
+        assert "writing" not in plan_allowed
+        assert "research" not in plan_allowed
+        assert "sandbox_exec" not in plan_allowed
+        assert "sandbox_create" not in plan_allowed
+        assert "compute_select" not in plan_allowed
+        assert "compute_sync_up" not in plan_allowed
+        assert "compute_sync_down" not in plan_allowed
+
+    async def test_plan_allowlist_has_no_phantom_entries(self):
+        """Every entry in the plan allowlist must match a real registered tool."""
+        from openmlr.tools.registry import create_tool_router
+
+        router = create_tool_router()
+        plan_allowed = MODE_TOOL_RESTRICTIONS["plan"]["allowed"]
+        registered_names = set(router.tools.keys())
+        for tool_name in plan_allowed:
+            assert tool_name in registered_names, (
+                f"Plan allowlist contains phantom tool '{tool_name}' "
+                f"that is not registered in the ToolRouter"
+            )
+
+
+class TestPlanModeResearchBudget:
+    """Tests for the plan-mode research call budget and warning system."""
+
+    async def test_research_tools_constant_not_empty(self):
+        assert len(_RESEARCH_TOOLS) > 0
+        assert "web_search" in _RESEARCH_TOOLS
+        assert "papers" in _RESEARCH_TOOLS
+
+    async def test_budget_limit_positive(self):
+        assert _PLAN_RESEARCH_LIMIT > 0
+
+    async def test_counter_resets_on_mode_switch(self, router):
+        router.set_mode("plan")
+        router._plan_research_calls = 10
+        router.set_mode("execute")
+        assert router._plan_research_calls == 0
+
+    async def test_counter_not_reset_on_same_mode(self, router):
+        router.set_mode("plan")
+        router._plan_research_calls = 5
+        router.set_mode("plan")
+        assert router._plan_research_calls == 5
+
+    async def test_research_call_increments_counter(self, router):
+        """Calling a research tool in plan mode increments the counter."""
+
+        async def research_handler(**kwargs):
+            return "results", True
+
+        research_tool = ToolSpec(
+            name="web_search",
+            description="Search",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("plan")
+        assert router._plan_research_calls == 0
+
+        await router.call_tool("web_search", {})
+        assert router._plan_research_calls == 1
+
+    async def test_budget_warning_appended_after_limit(self, router):
+        """After exceeding the limit, a warning should be appended to tool output."""
+
+        async def research_handler(**kwargs):
+            return "search results here", True
+
+        research_tool = ToolSpec(
+            name="papers",
+            description="Papers",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("plan")
+        router._plan_research_calls = _PLAN_RESEARCH_LIMIT  # at limit
+
+        output, success = await router.call_tool("papers", {})
+        assert success is True
+        assert "PLAN MODE RESEARCH BUDGET" in output
+        assert "search results here" in output
+
+    async def test_no_warning_under_limit(self, router):
+        """Under the limit, no warning should be appended."""
+
+        async def research_handler(**kwargs):
+            return "search results here", True
+
+        research_tool = ToolSpec(
+            name="papers",
+            description="Papers",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("plan")
+        router._plan_research_calls = 0
+
+        output, success = await router.call_tool("papers", {})
+        assert success is True
+        assert "PLAN MODE RESEARCH BUDGET" not in output
+
+    async def test_no_budget_tracking_in_execute_mode(self, router):
+        """Research budget should not apply in execute mode."""
+
+        async def research_handler(**kwargs):
+            return "results", True
+
+        research_tool = ToolSpec(
+            name="web_search",
+            description="Search",
+            parameters={"type": "object", "properties": {}},
+            handler=research_handler,
+        )
+        router.register(research_tool)
+        router.set_mode("execute")
+        router._plan_research_calls = 100  # way over limit
+
+        output, success = await router.call_tool("web_search", {})
+        assert success is True
+        assert "PLAN MODE RESEARCH BUDGET" not in output

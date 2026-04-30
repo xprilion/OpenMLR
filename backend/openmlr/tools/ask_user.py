@@ -29,17 +29,29 @@ def create_ask_user_tool() -> ToolSpec:
                     "items": {
                         "type": "object",
                         "properties": {
-                            "id": {"type": "string", "description": "Unique question ID (e.g. q1, q2)"},
+                            "id": {
+                                "type": "string",
+                                "description": "Unique question ID (e.g. q1, q2)",
+                            },
                             "question": {"type": "string", "description": "The question text"},
-                            "allow_text": {"type": "boolean", "description": "Allow typing a custom answer (default true)"},
+                            "allow_text": {
+                                "type": "boolean",
+                                "description": "Allow typing a custom answer (default true)",
+                            },
                             "options": {
                                 "type": "array",
                                 "description": "2-4 options to choose from",
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "label": {"type": "string", "description": "Short option label"},
-                                        "description": {"type": "string", "description": "Explanation of this option"},
+                                        "label": {
+                                            "type": "string",
+                                            "description": "Short option label",
+                                        },
+                                        "description": {
+                                            "type": "string",
+                                            "description": "Explanation of this option",
+                                        },
                                     },
                                     "required": ["label"],
                                 },
@@ -54,8 +66,8 @@ def create_ask_user_tool() -> ToolSpec:
                 },
                 "suggest_mode": {
                     "type": "string",
-                    "description": "If confident, suggest the user switch to this mode after answering (e.g. 'research', 'write')",
-                    "enum": ["research", "write"],
+                    "description": "If the plan is ready and the user should start executing, set this to 'execute' to suggest switching to Execute mode after answering.",
+                    "enum": ["execute"],
                 },
             },
             "required": ["questions"],
@@ -84,17 +96,22 @@ async def _handle_ask_user(
         if len(opts) < 2:
             return f"Question '{q.get('id', '?')}' needs at least 2 options.", False
         if len(opts) > 4:
-            return f"Question '{q.get('id', '?')}' has {len(opts)} options. Max is 4 — split into multiple questions.", False
+            return (
+                f"Question '{q.get('id', '?')}' has {len(opts)} options. Max is 4 — split into multiple questions.",
+                False,
+            )
 
     # Emit the questions event
-    await session.emit(AgentEvent(
-        event_type="questions",
-        data={
-            "questions": questions,
-            "context": context,
-            "suggest_mode": suggest_mode,
-        },
-    ))
+    await session.emit(
+        AgentEvent(
+            event_type="questions",
+            data={
+                "questions": questions,
+                "context": context,
+                "suggest_mode": suggest_mode,
+            },
+        )
+    )
 
     answers = None
 
@@ -103,6 +120,7 @@ async def _handle_ask_user(
         import os
 
         from ..services.redis_pubsub import wait_for_answers
+
         if os.environ.get("USE_BACKGROUND_JOBS", "").lower() in ("true", "1", "yes"):
             answers = await wait_for_answers(session.conversation_id, timeout=300)
     except Exception:
@@ -132,6 +150,8 @@ async def _handle_ask_user(
         lines.append(f"- {q.get('question', '')}: **{answer}**")
 
     if suggest_mode:
-        lines.append(f"\n[Agent suggested switching to {suggest_mode} mode after this planning phase.]")
+        lines.append(
+            f"\n[Agent suggested switching to {suggest_mode} mode after this planning phase.]"
+        )
 
     return "\n".join(lines), True

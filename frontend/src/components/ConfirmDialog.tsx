@@ -19,54 +19,68 @@ export function ConfirmDialog({
   onCancel,
   danger = false,
 }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+    }
+
     // Focus cancel button by default for safety
     cancelRef.current?.focus();
 
-    // Handle escape key
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onCancel();
-      }
+    // Handle escape key via dialog's native cancel event
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      onCancel();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    dialog?.addEventListener('cancel', handleCancel);
+    return () => dialog?.removeEventListener('cancel', handleCancel);
   }, [onCancel]);
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-      onClick={onCancel}
+    <dialog
+      ref={dialogRef}
+      className="fixed bg-transparent p-0 m-0 max-w-none max-h-none w-full h-full backdrop:bg-black/60"
+      aria-labelledby="confirm-dialog-title"
     >
+      {/* Backdrop overlay for click-to-close */}
       <div 
-        className="bg-surface rounded-xl border border-border p-6 max-w-md w-full shadow-xl animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-text mb-3">{title}</h3>
-        <p className="text-text-dim mb-6 leading-relaxed">{message}</p>
-        
-        <div className="flex gap-3">
-          <button
-            ref={cancelRef}
-            className="flex-1 py-2.5 px-4 rounded-lg border border-border text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-            onClick={onCancel}
-          >
-            {cancelLabel}
-          </button>
-          <button
-            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-white transition-colors ${
-              danger 
-                ? 'bg-error hover:opacity-90' 
-                : 'bg-primary hover:bg-primary-hover'
-            }`}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </button>
+        className="fixed inset-0" 
+        onClick={onCancel}
+        aria-hidden="true"
+      />
+      <div className="flex items-center justify-center min-h-full p-4 relative">
+        <div 
+          className="bg-surface rounded-xl border border-border p-6 max-w-md w-full shadow-xl animate-slide-up"
+        >
+          <h3 id="confirm-dialog-title" className="text-lg font-semibold text-text mb-3">{title}</h3>
+          <p className="text-text-dim mb-6 leading-relaxed">{message}</p>
+          
+          <div className="flex gap-3">
+            <button
+              ref={cancelRef}
+              className="flex-1 py-2.5 px-4 rounded-lg border border-border text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+              onClick={onCancel}
+            >
+              {cancelLabel}
+            </button>
+            <button
+              className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-white transition-colors ${
+                danger 
+                  ? 'bg-error hover:opacity-90' 
+                  : 'bg-primary hover:bg-primary-hover'
+              }`}
+              onClick={onConfirm}
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -16,21 +16,50 @@ RESEARCH_SYSTEM_PROMPT = """You are a research sub-agent for OpenMLR. Your job i
 research a topic using the tools available to you. You have independent context
 that won't affect the main conversation.
 
+## Available Tools
+
+You can use ONLY these read-only tools:
+- **web_search**: General web search for docs, blog posts, tutorials
+- **papers**: Academic paper search (OpenAlex, arXiv, Semantic Scholar, Citations, etc.)
+- **github_read_file**: Read specific files from GitHub repos
+- **github_find_examples**: Search code patterns across GitHub
+- **hf_search_models**: Search Hugging Face models
+- **hf_read_file**: Read files from Hugging Face repos
+
+You CANNOT write files, run code, modify the knowledge graph, or save notes.
+The parent agent will save your findings after you return them.
+
+## Constraints
+
+- Maximum 60 tool calls (iterations)
+- Token budget: ~190k tokens — stop and synthesize before hitting the limit
+- If an API call fails, try an alternative source (e.g., arXiv instead of OpenAlex)
+- Do NOT keep retrying the same failed call
+
 ## Research Protocol
 
-1. Start broad: search for papers, docs, and code examples
-2. Go deep: read key papers section by section, crawl citation graphs
-3. Cross-reference: compare methodologies across papers
-4. Synthesize: create structured summaries with recipe tables
+1. **Start broad**: search for papers, docs, and code examples (3-5 searches)
+2. **Go deep**: read key papers section by section, crawl citation graphs
+3. **Cross-reference**: compare methodologies across papers
+4. **Synthesize**: create structured summaries with recipe tables
+
+## When to Stop
+
+Stop researching and synthesize when ANY of these are true:
+- You have found 8+ relevant papers with clear methodology details
+- You have used 40+ tool calls
+- You are getting diminishing returns (same papers appearing repeatedly)
+- You have enough information to answer the original question
 
 ## Output Format
 
-When done, provide a structured summary:
-- Key findings (bulleted list)
-- Recipe table if applicable:
+Provide a structured summary with:
+- **Key findings** (bulleted list, most important first)
+- **Recipe table** if applicable:
   | Paper | Result | Dataset | Method | Key Insight |
-- Recommended approach with citations
-- Links to relevant code/repos
+- **Recommended approach** with citations
+- **Links** to relevant code repos and implementations
+- **Open questions** that could not be resolved
 
 Be thorough but concise. Focus on actionable information."""
 
@@ -39,10 +68,18 @@ def create_research_tool() -> ToolSpec:
     return ToolSpec(
         name="research",
         description=(
-            "Spawn an independent research sub-agent that searches docs, papers, "
-            "and code without affecting the main conversation context. "
-            "Use for deep dives into topics, literature surveys, "
-            "finding implementations, etc. Returns structured findings."
+            "Spawn an independent research sub-agent for deep investigation.\n\n"
+            "The sub-agent has its own context window and can make up to 60 tool "
+            "calls using: web_search, papers, github_read_file, github_find_examples, "
+            "hf_search_models, hf_read_file.\n\n"
+            "Use when you need:\n"
+            "- Comprehensive literature review (10+ papers)\n"
+            "- Deep analysis of a specific methodology\n"
+            "- Cross-referencing multiple papers' approaches\n"
+            "- Finding and comparing code implementations\n\n"
+            "Do NOT use for quick lookups — use papers/web_search directly instead.\n"
+            "The sub-agent returns structured findings; save important ones via "
+            "workspace knowledge_add and plan_tool add_resource."
         ),
         parameters={
             "type": "object",
@@ -63,7 +100,9 @@ def create_research_tool() -> ToolSpec:
     )
 
 
-async def _handle_research(query: str, focus: str = "general", session=None, **kwargs) -> tuple[str, bool]:
+async def _handle_research(
+    query: str, focus: str = "general", session=None, **kwargs
+) -> tuple[str, bool]:
     """Execute research sub-agent with independent context."""
 
     # Get read-only tool subset for the sub-agent
@@ -79,7 +118,10 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
     # Independent context
     messages = [
         {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
-        {"role": "user", "content": f"Research the following topic thoroughly:\n\n{query}\n\nFocus: {focus}"},
+        {
+            "role": "user",
+            "content": f"Research the following topic thoroughly:\n\n{query}\n\nFocus: {focus}",
+        },
     ]
 
     # Generate a parent ID for grouping sub-agent events
@@ -89,15 +131,17 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
     # Emit sub-agent start
     if session:
-        await session.emit(AgentEvent(
-            event_type="sub_agent_start",
-            data={
-                "agent_type": "research",
-                "description": f"Research: {query[:100]}",
-                "parent_tool_call_id": parent_tc_id,
-                "focus": focus,
-            },
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="sub_agent_start",
+                data={
+                    "agent_type": "research",
+                    "description": f"Research: {query[:100]}",
+                    "parent_tool_call_id": parent_tc_id,
+                    "focus": focus,
+                },
+            )
+        )
 
     accumulated_content = ""
 
@@ -107,7 +151,9 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
             result = await LLMProvider.generate(messages, config, research_tools)
 
             # Check for doom loop
-            doom_messages = [Message(role=m["role"], content=m.get("content", "")) for m in messages]
+            doom_messages = [
+                Message(role=m["role"], content=m.get("content", "")) for m in messages
+            ]
             doom_msg = detect_doom_loop(doom_messages)
             if doom_msg:
                 messages.append({"role": "system", "content": doom_msg})
@@ -119,18 +165,20 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
                 break
 
             # Add assistant message with tool calls
-            messages.append({
-                "role": "assistant",
-                "content": result.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.name, "arguments": tc.arguments},
-                    }
-                    for tc in result.tool_calls
-                ],
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": result.content,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {"name": tc.name, "arguments": tc.arguments},
+                        }
+                        for tc in result.tool_calls
+                    ],
+                }
+            )
 
             # Execute tools and emit granular events
             for tc in result.tool_calls:
@@ -138,49 +186,59 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
                 # Emit sub-agent tool call
                 if session:
-                    await session.emit(AgentEvent(
-                        event_type="sub_agent_tool_call",
-                        data={
-                            "parent_tool_call_id": parent_tc_id,
-                            "tool": tc.name,
-                            "tool_call_id": tc.id,
-                            "args": json.dumps(tc.arguments)[:200] if isinstance(tc.arguments, dict) else str(tc.arguments)[:200],
-                        },
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="sub_agent_tool_call",
+                            data={
+                                "parent_tool_call_id": parent_tc_id,
+                                "tool": tc.name,
+                                "tool_call_id": tc.id,
+                                "args": json.dumps(tc.arguments)[:200]
+                                if isinstance(tc.arguments, dict)
+                                else str(tc.arguments)[:200],
+                            },
+                        )
+                    )
 
                 output, success = await _execute_research_tool(tc)
-                messages.append({
-                    "role": "tool",
-                    "content": output[:10000],
-                    "tool_call_id": tc.id,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": output[:10000],
+                        "tool_call_id": tc.id,
+                    }
+                )
 
                 # Emit sub-agent tool output
                 if session:
-                    await session.emit(AgentEvent(
-                        event_type="sub_agent_tool_output",
-                        data={
-                            "parent_tool_call_id": parent_tc_id,
-                            "tool_call_id": tc.id,
-                            "tool": tc.name,
-                            "output": output[:500],
-                            "success": success,
-                        },
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="sub_agent_tool_output",
+                            data={
+                                "parent_tool_call_id": parent_tc_id,
+                                "tool_call_id": tc.id,
+                                "tool": tc.name,
+                                "output": output[:500],
+                                "success": success,
+                            },
+                        )
+                    )
 
     except Exception as e:
         duration = time.time() - start_time
         if session:
-            await session.emit(AgentEvent(
-                event_type="sub_agent_end",
-                data={
-                    "parent_tool_call_id": parent_tc_id,
-                    "tool_count": tool_count,
-                    "duration_seconds": round(duration, 1),
-                    "summary": f"Error: {str(e)}",
-                    "success": False,
-                },
-            ))
+            await session.emit(
+                AgentEvent(
+                    event_type="sub_agent_end",
+                    data={
+                        "parent_tool_call_id": parent_tc_id,
+                        "tool_count": tool_count,
+                        "duration_seconds": round(duration, 1),
+                        "summary": f"Error: {str(e)}",
+                        "success": False,
+                    },
+                )
+            )
         return f"Research sub-agent error: {str(e)}", False
 
     if not accumulated_content:
@@ -190,16 +248,18 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 
     # Emit sub-agent end with stats
     if session:
-        await session.emit(AgentEvent(
-            event_type="sub_agent_end",
-            data={
-                "parent_tool_call_id": parent_tc_id,
-                "tool_count": tool_count,
-                "duration_seconds": round(duration, 1),
-                "summary": accumulated_content[:500],
-                "success": True,
-            },
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="sub_agent_end",
+                data={
+                    "parent_tool_call_id": parent_tc_id,
+                    "tool_count": tool_count,
+                    "duration_seconds": round(duration, 1),
+                    "summary": accumulated_content[:500],
+                    "success": True,
+                },
+            )
+        )
 
     return accumulated_content, True
 
@@ -207,40 +267,61 @@ async def _handle_research(query: str, focus: str = "general", session=None, **k
 def _get_research_tool_specs() -> list[dict]:
     """Get the read-only tool subset for research."""
     from .github import create_github_tools
+    from .huggingface import create_huggingface_tools
     from .papers import create_papers_tool
     from .search import create_search_tools
 
     tools = []
     for spec in create_search_tools():
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": spec.name,
-                "description": spec.description,
-                "parameters": spec.parameters,
-            },
-        })
-
-    papers = create_papers_tool()
-    tools.append({
-        "type": "function",
-        "function": {
-            "name": papers.name,
-            "description": papers.description,
-            "parameters": papers.parameters,
-        },
-    })
-
-    for spec in create_github_tools():
-        if spec.name in ("github_read_file", "github_find_examples"):
-            tools.append({
+        tools.append(
+            {
                 "type": "function",
                 "function": {
                     "name": spec.name,
                     "description": spec.description,
                     "parameters": spec.parameters,
                 },
-            })
+            }
+        )
+
+    papers = create_papers_tool()
+    tools.append(
+        {
+            "type": "function",
+            "function": {
+                "name": papers.name,
+                "description": papers.description,
+                "parameters": papers.parameters,
+            },
+        }
+    )
+
+    for spec in create_github_tools():
+        if spec.name in ("github_read_file", "github_find_examples"):
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": spec.name,
+                        "description": spec.description,
+                        "parameters": spec.parameters,
+                    },
+                }
+            )
+
+    # Hugging Face tools for ML research (model discovery + file reading)
+    for spec in create_huggingface_tools():
+        if spec.name in ("hf_search_models", "hf_read_file"):
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": spec.name,
+                        "description": spec.description,
+                        "parameters": spec.parameters,
+                    },
+                }
+            )
 
     return tools
 
@@ -248,6 +329,8 @@ def _get_research_tool_specs() -> list[dict]:
 async def _execute_research_tool(tc: ToolCall) -> tuple[str, bool]:
     """Execute a tool call for the research sub-agent."""
     from .github import _handle_find_examples, _handle_read_file
+    from .huggingface import _handle_read_file as _hf_handle_read_file
+    from .huggingface import _handle_search_models as _hf_handle_search_models
     from .papers import _handle_papers
     from .search import _handle_web_search
 
@@ -256,6 +339,8 @@ async def _execute_research_tool(tc: ToolCall) -> tuple[str, bool]:
         "papers": _handle_papers,
         "github_read_file": _handle_read_file,
         "github_find_examples": _handle_find_examples,
+        "hf_search_models": _hf_handle_search_models,
+        "hf_read_file": _hf_handle_read_file,
     }
 
     handler = handlers.get(tc.name)

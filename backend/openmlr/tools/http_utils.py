@@ -16,13 +16,17 @@ T = TypeVar("T")
 
 class RateLimitError(Exception):
     """Raised when rate limit is hit."""
+
     def __init__(self, retry_after: float | None = None):
         self.retry_after = retry_after
-        super().__init__(f"Rate limit hit, retry after {retry_after}s" if retry_after else "Rate limit hit")
+        super().__init__(
+            f"Rate limit hit, retry after {retry_after}s" if retry_after else "Rate limit hit"
+        )
 
 
 class APIError(Exception):
     """Raised for non-retryable API errors."""
+
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
         self.message = message
@@ -72,7 +76,7 @@ async def fetch_with_retry(
 
     for attempt in range(max_retries + 1):
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
                 response = await client.request(
                     method,
                     url,
@@ -90,8 +94,14 @@ async def fetch_with_retry(
                 if response.status_code == 429:
                     retry_after = _parse_retry_after(response)
                     if attempt < max_retries:
-                        delay = retry_after if retry_after else _calculate_delay(attempt, base_delay, max_delay)
-                        log.warning(f"Rate limit hit for {url}, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries + 1})")
+                        delay = (
+                            retry_after
+                            if retry_after
+                            else _calculate_delay(attempt, base_delay, max_delay)
+                        )
+                        log.warning(
+                            f"Rate limit hit for {url}, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries + 1})"
+                        )
                         await asyncio.sleep(delay)
                         continue
                     raise RateLimitError(retry_after)
@@ -100,7 +110,9 @@ async def fetch_with_retry(
                 if response.status_code in retry_statuses:
                     if attempt < max_retries:
                         delay = _calculate_delay(attempt, base_delay, max_delay)
-                        log.warning(f"Server error {response.status_code} for {url}, retrying in {delay:.1f}s")
+                        log.warning(
+                            f"Server error {response.status_code} for {url}, retrying in {delay:.1f}s"
+                        )
                         await asyncio.sleep(delay)
                         continue
 
@@ -133,7 +145,7 @@ async def fetch_with_retry(
 
 def _calculate_delay(attempt: int, base_delay: float, max_delay: float) -> float:
     """Calculate exponential backoff delay with jitter."""
-    delay = min(base_delay * (2 ** attempt), max_delay)
+    delay = min(base_delay * (2**attempt), max_delay)
     # Add jitter (±25%)
     jitter = delay * 0.25 * (random.random() * 2 - 1)
     return max(0.1, delay + jitter)
@@ -160,6 +172,7 @@ def with_retry(
 
     The decorated function should raise RateLimitError or APIError for retryable errors.
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
@@ -171,7 +184,11 @@ def with_retry(
                 except RateLimitError as e:
                     last_exception = e
                     if attempt < max_retries:
-                        delay = e.retry_after if e.retry_after else _calculate_delay(attempt, base_delay, max_delay)
+                        delay = (
+                            e.retry_after
+                            if e.retry_after
+                            else _calculate_delay(attempt, base_delay, max_delay)
+                        )
                         log.warning(f"Rate limit in {func.__name__}, retrying in {delay:.1f}s")
                         await asyncio.sleep(delay)
                         continue
@@ -190,4 +207,5 @@ def with_retry(
             raise RuntimeError("Unexpected retry loop exit")
 
         return wrapper
+
     return decorator

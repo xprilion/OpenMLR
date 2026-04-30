@@ -94,7 +94,7 @@ class RedisEventBridge:
             self._task.cancel()
             try:
                 await self._task
-            except asyncio.CancelledError:
+            finally:
                 pass
         logger.info("Redis event bridge stopped")
 
@@ -212,4 +212,41 @@ async def wait_for_answers(conversation_id: int, timeout: float = 300) -> dict |
         return None  # timeout
     except Exception as e:
         logger.warning(f"Failed to wait for answers from Redis: {e}")
+        return None
+
+
+# ── TODO approval relay for background jobs ──────────────
+
+TODO_APPROVAL_KEY_PREFIX = "openmlr:todo_approval:"
+
+
+async def publish_todo_approval(conversation_id: int, result: dict) -> None:
+    """Publish TODO approval/rejection to Redis for the background worker."""
+    try:
+        client = await get_redis()
+        key = f"{TODO_APPROVAL_KEY_PREFIX}{conversation_id}"
+        await client.set(key, json.dumps(result), ex=600)
+        await client.publish(f"{TODO_APPROVAL_KEY_PREFIX}notify", str(conversation_id))
+    except Exception as e:
+        logger.warning(f"Failed to publish todo approval to Redis: {e}")
+
+
+async def wait_for_todo_approval(conversation_id: int, timeout: float = 300) -> dict | None:
+    """Wait for TODO approval from Redis. Used by background worker's plan_tool."""
+    try:
+        client = await get_redis()
+        key = f"{TODO_APPROVAL_KEY_PREFIX}{conversation_id}"
+
+        elapsed = 0.0
+        while elapsed < timeout:
+            data = await client.get(key)
+            if data:
+                await client.delete(key)
+                return json.loads(data)
+            await asyncio.sleep(1.0)
+            elapsed += 1.0
+
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to wait for todo approval from Redis: {e}")
         return None

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -29,14 +30,17 @@ def _bus(request: Request):
 
 # ── SSE Events ───────────────────────────────────────────
 
+
 @router.get("/events")
 async def events(request: Request, token: str = None):
     """SSE event stream. Uses raw StreamingResponse for immediate flushing."""
     if token:
         from ..auth.security import decode_access_token
+
         payload = decode_access_token(token)
         if not payload:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(status_code=401, content={"error": "Invalid token"})
 
     event_bus = _bus(request)
@@ -45,6 +49,7 @@ async def events(request: Request, token: str = None):
 
     async def _stream():
         import json
+
         try:
             while True:
                 try:
@@ -55,7 +60,7 @@ async def events(request: Request, token: str = None):
                 except TimeoutError:
                     yield ":ping\n\n"
         except asyncio.CancelledError:
-            pass
+            raise
         except GeneratorExit:
             pass
         finally:
@@ -92,11 +97,15 @@ async def events_test(request: Request):
 
 # ── Conversations ────────────────────────────────────────
 
+
 @router.get("/conversations")
 async def list_conversations(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Clean up orphan conversations (no project) on every list call.
+    # This handles the migration from pre-project-required era.
+    await ops.delete_orphan_conversations(db, user.id)
     convs = await ops.get_conversations(db, user.id)
     return {"conversations": [_conv_dict(c) for c in convs]}
 
@@ -108,8 +117,21 @@ async def create_conversation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Conversations must belong to a project
+    project_id = None
+    if body.project_uuid:
+        project = await ops.get_project_by_uuid(db, body.project_uuid, user.id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        project_id = project.id
+
     conv = await ops.create_conversation(
-        db, user.id, title=body.title, model=body.model, mode=body.mode,
+        db,
+        user.id,
+        title=body.title,
+        model=body.model,
+        mode=body.mode,
+        project_id=project_id,
     )
     _sm(request).current_conversation_id = conv.id
     return {"conversation": _conv_dict(conv)}
@@ -128,7 +150,7 @@ async def get_conversation(
     # Re-generate title if still "New conversation" and has messages
     if conv.title == "New conversation" and msgs:
         msg_dicts = [_msg_dict(m) for m in msgs]
-        asyncio.create_task(
+        _task = asyncio.create_task(
             _auto_title(_sm(request), _bus(request), db, conv.id, conv.uuid, msg_dicts)
         )
 
@@ -159,6 +181,7 @@ async def delete_conversation(
     # Cancel any running background jobs for this conversation
     try:
         from ..services.job_manager import get_job_manager
+
         job_manager = get_job_manager()
         active_jobs = await job_manager.get_active_jobs(db, conv.id)
         for job_info in active_jobs:
@@ -194,10 +217,14 @@ async def switch_conversation(
     effective_model = conv.model or user_agent_settings.get("default_model")
 
     active = await sm.get_or_create_session(
-        conv.id, conv.uuid,
-        model=effective_model, mode=conv.mode or "general",
-        existing_messages=msg_dicts, username=user.display_name or user.username,
-        user_id=user.id, db=db,
+        conv.id,
+        conv.uuid,
+        model=effective_model,
+        mode=conv.mode or "general",
+        existing_messages=msg_dicts,
+        username=user.display_name or user.username,
+        user_id=user.id,
+        db=db,
     )
     sm.current_conversation_id = conv.id
 
@@ -208,6 +235,7 @@ async def switch_conversation(
 
 
 # ── Per-Conversation Compute ─────────────────────────────
+
 
 @router.get("/conversations/{uuid}/compute")
 async def get_conversation_compute(
@@ -331,6 +359,33 @@ async def clear_conversation_compute(
 
 # ── Messaging ────────────────────────────────────────────
 
+
+# In-memory set of recently seen request IDs (with TTL-based eviction)
+_recent_request_ids: dict[str, float] = {}
+_REQUEST_ID_TTL = 30.0  # seconds
+
+
+def _check_and_record_request_id(request_id: str | None) -> bool:
+    """Return True if this request_id is a duplicate. Records new IDs."""
+    import time
+
+    if not request_id:
+        return False  # No idempotency key — allow through
+
+    now = time.monotonic()
+
+    # Evict expired entries (keep the dict small)
+    expired = [k for k, t in _recent_request_ids.items() if now - t > _REQUEST_ID_TTL]
+    for k in expired:
+        _recent_request_ids.pop(k, None)
+
+    if request_id in _recent_request_ids:
+        return True  # Duplicate
+
+    _recent_request_ids[request_id] = now
+    return False
+
+
 @router.post("/message")
 async def send_message(
     body: MessageSend,
@@ -339,6 +394,10 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     from ..services.job_manager import USE_BACKGROUND_JOBS, get_job_manager
+
+    # Reject duplicate requests (idempotency guard)
+    if _check_and_record_request_id(body.request_id):
+        return {"ok": True, "duplicate": True}
 
     sm = _sm(request)
     event_bus = _bus(request)
@@ -349,12 +408,12 @@ async def send_message(
     user_default_model = user_agent_settings.get("default_model")
 
     if not sm.current_conversation_id:
-        # Create conversation with user's default model
-        conv = await ops.create_conversation(db, user.id, model=user_default_model)
-        sm.current_conversation_id = conv.id
-    else:
-        conv = await ops.get_conversation_by_id(db, sm.current_conversation_id)
+        raise HTTPException(
+            status_code=400,
+            detail="No active conversation. Create a conversation first.",
+        )
 
+    conv = await ops.get_conversation_by_id(db, sm.current_conversation_id)
     if not conv:
         raise HTTPException(status_code=400, detail="No active conversation")
 
@@ -379,7 +438,7 @@ async def send_message(
         # Title generation (still async in web process for now)
         if user_count in (1, 3):
             msg_dicts = await _load_messages(db, conv.id)
-            asyncio.create_task(
+            _task = asyncio.create_task(
                 _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
             )
 
@@ -401,10 +460,14 @@ async def send_message(
         history = None
 
     active = await sm.get_or_create_session(
-        conv.id, conv.uuid,
-        model=effective_model, mode=conv.mode or "general",
-        existing_messages=history, username=user.display_name or user.username,
-        user_id=user.id, db=db,
+        conv.id,
+        conv.uuid,
+        model=effective_model,
+        mode=conv.mode or "general",
+        existing_messages=history,
+        username=user.display_name or user.username,
+        user_id=user.id,
+        db=db,
     )
 
     # Wire DB persistence once per session
@@ -412,18 +475,17 @@ async def send_message(
         _wire_persistence(active, db, conv.id)
         active._persist_wired = True
 
-    asyncio.create_task(sm.process_message(conv.id, body.message, mode=body.mode))
+    _task = asyncio.create_task(sm.process_message(conv.id, body.message, mode=body.mode))
 
     if user_count in (1, 3):
         msg_dicts = await _load_messages(db, conv.id)
-        asyncio.create_task(
-            _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
-        )
+        _task = asyncio.create_task(_auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts))
 
     return {"ok": True, "background": False}
 
 
 # ── Agent controls ───────────────────────────────────────
+
 
 @router.get("/jobs/{job_id}")
 async def get_job_status(
@@ -433,6 +495,7 @@ async def get_job_status(
 ):
     """Get the status of a background job."""
     from ..services.job_manager import get_job_manager
+
     job_manager = get_job_manager()
     status = await job_manager.get_job_status(db, job_id)
     if not status:
@@ -448,6 +511,7 @@ async def get_conversation_jobs(
 ):
     """Get all active jobs for a conversation."""
     from ..services.job_manager import get_job_manager
+
     conv = await _get_conv_or_404(db, uuid, user.id)
     job_manager = get_job_manager()
     jobs = await job_manager.get_active_jobs(db, conv.id)
@@ -462,10 +526,13 @@ async def cancel_job(
 ):
     """Cancel a queued job."""
     from ..services.job_manager import get_job_manager
+
     job_manager = get_job_manager()
     success = await job_manager.cancel_job(db, job_id)
     if not success:
-        raise HTTPException(status_code=400, detail="Cannot cancel job (may be running or completed)")
+        raise HTTPException(
+            status_code=400, detail="Cannot cancel job (may be running or completed)"
+        )
     return {"ok": True}
 
 
@@ -476,6 +543,7 @@ async def get_report(
 ):
     """Get a completion report by ID."""
     from ..tools.plan import get_report_content
+
     content = await get_report_content(report_id)
     if not content:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -494,7 +562,7 @@ async def submit_answers(
 
     # Try in-process session first (inline mode)
     active = _sm(request).get_current_session()
-    if active and hasattr(active.session, 'pending_answers') and active.session.pending_answers:
+    if active and hasattr(active.session, "pending_answers") and active.session.pending_answers:
         if not active.session.pending_answers.done():
             active.session.pending_answers.set_result(answers)
             return {"ok": True}
@@ -502,6 +570,7 @@ async def submit_answers(
     # Publish to Redis for background job workers
     try:
         from ..services.redis_pubsub import publish_answers
+
         sm = _sm(request)
         if sm.current_conversation_id:
             await publish_answers(sm.current_conversation_id, answers)
@@ -529,11 +598,13 @@ async def interrupt(
     conv_id = sm.current_conversation_id
     if conv_id:
         from ..services.redis_pubsub import publish_interrupt
+
         await publish_interrupt(conv_id)
 
         # Also try to revoke active Celery tasks for this conversation
         try:
             from ..services.job_manager import USE_BACKGROUND_JOBS, get_job_manager
+
             if USE_BACKGROUND_JOBS:
                 job_manager = get_job_manager()
                 active_jobs = await job_manager.get_active_jobs(db, conv_id)
@@ -561,9 +632,46 @@ async def submit_approval(
     active = _sm(request).get_current_session()
     if active and active.session.pending_approval:
         from ..agent.loop import _handle_approval
-        asyncio.create_task(
+
+        _task = asyncio.create_task(
             _handle_approval(active.session, active.tool_router, body.approvals)
         )
+    return {"ok": True}
+
+
+@router.post("/todo-approval")
+async def submit_todo_approval(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+):
+    """Submit approval/rejection for proposed TODO list changes."""
+    body = await request.json()
+    approved = body.get("approved", False)
+    tasks = body.get("tasks")  # optional modified task list
+
+    result = {"approved": approved, "tasks": tasks}
+
+    # Try in-process session first (inline mode)
+    active = _sm(request).get_current_session()
+    if (
+        active
+        and hasattr(active.session, "pending_todo_approval")
+        and active.session.pending_todo_approval
+        and not active.session.pending_todo_approval.done()
+    ):
+        active.session.pending_todo_approval.set_result(result)
+        return {"ok": True}
+
+    # Publish to Redis for background job workers
+    try:
+        from ..services.redis_pubsub import publish_todo_approval
+
+        sm = _sm(request)
+        if sm.current_conversation_id:
+            await publish_todo_approval(sm.current_conversation_id, result)
+    except Exception as e:
+        logger.warning(f"Failed to relay todo approval via Redis: {e}")
+
     return {"ok": True}
 
 
@@ -572,6 +680,7 @@ async def undo(request: Request, user: User = Depends(get_current_user)):
     active = _sm(request).get_current_session()
     if active:
         from ..agent.loop import _undo
+
         await _undo(active.session)
     return {"ok": True}
 
@@ -581,6 +690,7 @@ async def compact(request: Request, user: User = Depends(get_current_user)):
     active = _sm(request).get_current_session()
     if active:
         from ..agent.loop import _compact
+
         await _compact(active.session)
     return {"ok": True}
 
@@ -600,13 +710,23 @@ async def switch_model(
     # Persist as the user's sticky default model
     await ops.set_user_setting(db, user.id, "agent", "default_model", body.model)
 
-    await _bus(request).broadcast(
-        AgentEvent(event_type="model_info", data={"model": body.model})
-    )
+    # Update recent models list (max 10, deduplicated, most recent first)
+    agent_settings = await ops.get_user_agent_settings(db, user.id)
+    recent = agent_settings.get("recent_models", [])
+    if not isinstance(recent, list):
+        recent = []
+    # Remove existing entry and prepend
+    recent = [m for m in recent if m != body.model]
+    recent.insert(0, body.model)
+    recent = recent[:10]
+    await ops.set_user_setting(db, user.id, "agent", "recent_models", recent)
+
+    await _bus(request).broadcast(AgentEvent(event_type="model_info", data={"model": body.model}))
     return {"ok": True}
 
 
 # ── Helpers ──────────────────────────────────────────────
+
 
 async def _get_conv_or_404(db, uuid: str, user_id: int):
     conv = await ops.get_conversation_by_uuid(db, uuid)
@@ -649,13 +769,20 @@ def _wire_persistence(active, db, conv_id: int):
             if event.event_type == "assistant_message" and event.data and event.data.get("content"):
                 await ops.add_message(db, conv_id, "assistant", event.data["content"])
             elif event.event_type == "tool_output" and event.data:
-                await ops.add_message(db, conv_id, "tool", event.data.get("output", ""), {
-                    "tool": event.data.get("tool"),
-                    "tool_call_id": event.data.get("tool_call_id"),
-                    "success": event.data.get("success"),
-                })
+                await ops.add_message(
+                    db,
+                    conv_id,
+                    "tool",
+                    event.data.get("output", ""),
+                    {
+                        "tool": event.data.get("tool"),
+                        "tool_call_id": event.data.get("tool_call_id"),
+                        "success": event.data.get("success"),
+                    },
+                )
         except Exception:
-            pass
+            logger.exception("Failed to persist message to DB (event_type=%s)", event.event_type)
+
     active.session.on_event(_persist)
 
 

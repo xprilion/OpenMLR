@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, Play } from 'lucide-react';
 import { api } from '../api';
 import type { QuestionsPayload } from '../types';
 
 interface Props {
   payload: QuestionsPayload;
-  onDone: (summary: string, suggestedMode?: string) => void;
+  onDone: (summary: string, switchToExecute?: boolean) => void;
   onClose: () => void;
 }
 
@@ -45,12 +45,12 @@ export function QuestionDrawer({ payload, onDone, onClose }: Props) {
     }
   };
 
-  const submit = async () => {
+  const doSubmit = async (switchToExecute: boolean) => {
     setSubmitting(true);
     try {
       await api.submitAnswers(answers);
       const lines = questions.map((q) => `${q.question} → ${answers[q.id]}`);
-      onDone(lines.join('\n'), suggest_mode || undefined);
+      onDone(lines.join('\n'), switchToExecute);
     } catch { /* */ }
     finally { setSubmitting(false); }
   };
@@ -147,14 +147,30 @@ export function QuestionDrawer({ payload, onDone, onClose }: Props) {
             </button>
           )}
           {allAnswered && (
-            <button 
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary-hover transition-all disabled:opacity-50"
-              onClick={submit} 
-              disabled={submitting}
-            >
-              <Send size={16} />
-              {submitting ? 'Submitting...' : suggest_mode ? `Submit & ${suggest_mode}` : 'Submit'}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Submit: stays in current mode */}
+              <button 
+                className="flex items-center gap-2 px-5 py-2.5 bg-surface-hover text-text border border-border rounded-lg font-medium hover:bg-surface transition-all disabled:opacity-50"
+                onClick={() => doSubmit(false)} 
+                disabled={submitting}
+              >
+                <Send size={16} />
+                {submitting ? 'Submitting...' : 'Submit'}
+              </button>
+              {/* Submit & Execute: submits answers AND switches to execute mode */}
+              <button 
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all disabled:opacity-50 ${
+                  suggest_mode === 'execute'
+                    ? 'bg-primary text-white hover:bg-primary-hover ring-2 ring-primary/30'
+                    : 'bg-primary text-white hover:bg-primary-hover'
+                }`}
+                onClick={() => doSubmit(true)} 
+                disabled={submitting}
+              >
+                <Play size={16} fill="currentColor" />
+                {submitting ? 'Submitting...' : 'Submit & Execute'}
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -71,6 +71,7 @@ class TestConversationCreate:
         assert c.title == "New conversation"
         assert c.model is None
         assert c.mode == "general"
+        assert c.project_uuid is None
 
     def test_custom(self):
         c = ConversationCreate(title="Research Q1", model="gpt-4o", mode="research")
@@ -78,15 +79,29 @@ class TestConversationCreate:
         assert c.model == "gpt-4o"
         assert c.mode == "research"
 
+    def test_with_project_uuid(self):
+        c = ConversationCreate(title="Test", project_uuid="abc-123-def")
+        assert c.project_uuid == "abc-123-def"
+
+    def test_project_uuid_defaults_to_none(self):
+        c = ConversationCreate()
+        assert c.project_uuid is None
+
 
 class TestConversationResponse:
     def test_creation(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
         c = ConversationResponse(
-            id=1, uuid="abc-def", title="Test Conv", model="gpt-4o",
-            mode="general", user_message_count=5,
-            created_at=now, updated_at=now,
+            id=1,
+            uuid="abc-def",
+            title="Test Conv",
+            model="gpt-4o",
+            mode="general",
+            user_message_count=5,
+            created_at=now,
+            updated_at=now,
         )
         assert c.id == 1
         assert c.uuid == "abc-def"
@@ -96,6 +111,7 @@ class TestConversationResponse:
 class TestMessageResponse:
     def test_creation(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
         m = MessageResponse(id=1, role="user", content="Hello", metadata=None, created_at=now)
         assert m.id == 1
@@ -104,18 +120,28 @@ class TestMessageResponse:
 
     def test_with_metadata(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
-        m = MessageResponse(id=2, role="assistant", content="Hi", metadata={"tool": "search"}, created_at=now)
+        m = MessageResponse(
+            id=2, role="assistant", content="Hi", metadata={"tool": "search"}, created_at=now
+        )
         assert m.metadata == {"tool": "search"}
 
 
 class TestConversationDetail:
     def test_creation(self):
         from datetime import datetime
+
         now = datetime.now(UTC)
         conv = ConversationResponse(
-            id=1, uuid="x", title="C", model=None, mode="general",
-            user_message_count=0, created_at=now, updated_at=now,
+            id=1,
+            uuid="x",
+            title="C",
+            model=None,
+            mode="general",
+            user_message_count=0,
+            created_at=now,
+            updated_at=now,
         )
         msgs = [MessageResponse(id=1, role="user", content="Hi", metadata=None, created_at=now)]
         cd = ConversationDetail(conversation=conv, messages=msgs)
@@ -129,9 +155,25 @@ class TestMessageSend:
         assert m.message == "Hello world"
         assert m.mode is None
 
-    def test_with_mode(self):
-        m = MessageSend(message="Research this", mode="research")
-        assert m.mode == "research"
+    def test_with_plan_mode(self):
+        m = MessageSend(message="Plan this", mode="plan")
+        assert m.mode == "plan"
+
+    def test_with_execute_mode(self):
+        m = MessageSend(message="Do this", mode="execute")
+        assert m.mode == "execute"
+
+    def test_rejects_invalid_mode(self):
+        with pytest.raises(ValidationError):
+            MessageSend(message="test", mode="research")
+
+    def test_rejects_arbitrary_mode(self):
+        with pytest.raises(ValidationError):
+            MessageSend(message="test", mode="anything_else")
+
+    def test_allows_null_mode(self):
+        m = MessageSend(message="test", mode=None)
+        assert m.mode is None
 
 
 class TestApprovalRequest:

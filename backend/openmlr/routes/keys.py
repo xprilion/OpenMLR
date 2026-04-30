@@ -52,6 +52,7 @@ async def create_key(
 
     # Prevent path traversal in filename
     from pathlib import Path as PyPath
+
     safe_filename = PyPath(filename).name
     if not safe_filename or safe_filename.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -86,8 +87,13 @@ async def create_key(
         raise HTTPException(status_code=400, detail="action must be 'upload' or 'generate'")
 
     key = await ops.create_ssh_key(
-        db, user.id, safe_filename, meta["fingerprint"],
-        meta["algorithm"], meta["public_key"], body.get("comment"),
+        db,
+        user.id,
+        safe_filename,
+        meta["fingerprint"],
+        meta["algorithm"],
+        meta["public_key"],
+        body.get("comment"),
     )
 
     return {
@@ -112,6 +118,7 @@ async def delete_key(
     """Delete an SSH key and its public counterpart."""
     # Sanitize filename to prevent path traversal
     from pathlib import Path as PyPath
+
     safe_filename = PyPath(filename).name
     if not safe_filename or safe_filename != filename or safe_filename.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -124,8 +131,7 @@ async def delete_key(
     if dependent_nodes:
         node_names = ", ".join(n.name for n in dependent_nodes)
         raise HTTPException(
-            status_code=409,
-            detail=f"Cannot delete key: used by compute nodes: {node_names}"
+            status_code=409, detail=f"Cannot delete key: used by compute nodes: {node_names}"
         )
 
     deleted_db = await ops.delete_ssh_key(db, user.id, filename)

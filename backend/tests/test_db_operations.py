@@ -18,7 +18,9 @@ class TestConversationOperations:
         assert conv.mode == "general"
 
     async def test_create_conversation_with_model(self, db_session: AsyncSession, test_user):
-        conv = await ops.create_conversation(db_session, test_user.id, model="gpt-4o", mode="coding")
+        conv = await ops.create_conversation(
+            db_session, test_user.id, model="gpt-4o", mode="coding"
+        )
         assert conv.model == "gpt-4o"
         assert conv.mode == "coding"
 
@@ -26,9 +28,22 @@ class TestConversationOperations:
         convs = await ops.get_conversations(db_session, test_user.id)
         assert convs == []
 
-    async def test_get_conversations(self, db_session: AsyncSession, test_user):
-        await ops.create_conversation(db_session, test_user.id, title="Conv 1")
-        await ops.create_conversation(db_session, test_user.id, title="Conv 2")
+    async def test_get_conversations_excludes_orphans(self, db_session: AsyncSession, test_user):
+        """Conversations without a project_id should not be returned."""
+        # Create orphan conversation (no project)
+        await ops.create_conversation(db_session, test_user.id, title="Orphan")
+        convs = await ops.get_conversations(db_session, test_user.id)
+        assert len(convs) == 0  # Orphans are filtered out
+
+    async def test_get_conversations_with_project(self, db_session: AsyncSession, test_user):
+        """Conversations with a project_id should be returned."""
+        project = await ops.create_project(db_session, test_user.id, "Test Project", "test-project")
+        await ops.create_conversation(
+            db_session, test_user.id, title="Conv 1", project_id=project.id
+        )
+        await ops.create_conversation(
+            db_session, test_user.id, title="Conv 2", project_id=project.id
+        )
         convs = await ops.get_conversations(db_session, test_user.id)
         assert len(convs) == 2
         assert convs[0].title == "Conv 2"  # most recent first
@@ -87,12 +102,21 @@ class TestConversationOperations:
         # Create another user
         from openmlr.auth.security import hash_password
         from openmlr.db.models import User
+
         user2 = User(username="user2", password_hash=hash_password("pwd"), is_active=True)
         db_session.add(user2)
         await db_session.flush()
 
-        await ops.create_conversation(db_session, test_user.id, title="User 1 Conv")
-        await ops.create_conversation(db_session, user2.id, title="User 2 Conv")
+        # Both users need projects for conversations to be visible
+        proj1 = await ops.create_project(db_session, test_user.id, "P1", "p1")
+        proj2 = await ops.create_project(db_session, user2.id, "P2", "p2")
+
+        await ops.create_conversation(
+            db_session, test_user.id, title="User 1 Conv", project_id=proj1.id
+        )
+        await ops.create_conversation(
+            db_session, user2.id, title="User 2 Conv", project_id=proj2.id
+        )
 
         convs_u1 = await ops.get_conversations(db_session, test_user.id)
         convs_u2 = await ops.get_conversations(db_session, user2.id)
@@ -100,6 +124,53 @@ class TestConversationOperations:
         assert len(convs_u2) == 1
         assert convs_u1[0].title == "User 1 Conv"
         assert convs_u2[0].title == "User 2 Conv"
+
+
+class TestDeleteOrphanConversations:
+    async def test_deletes_orphan_conversations(self, db_session: AsyncSession, test_user):
+        """Conversations with project_id=NULL should be deleted."""
+        await ops.create_conversation(db_session, test_user.id, title="Orphan 1")
+        await ops.create_conversation(db_session, test_user.id, title="Orphan 2")
+        count = await ops.delete_orphan_conversations(db_session, test_user.id)
+        assert count == 2
+
+    async def test_preserves_project_conversations(self, db_session: AsyncSession, test_user):
+        """Conversations with a project_id should NOT be deleted."""
+        proj = await ops.create_project(db_session, test_user.id, "P", "p")
+        await ops.create_conversation(
+            db_session, test_user.id, title="Has Project", project_id=proj.id
+        )
+        await ops.create_conversation(db_session, test_user.id, title="No Project")
+        count = await ops.delete_orphan_conversations(db_session, test_user.id)
+        assert count == 1
+        convs = await ops.get_conversations(db_session, test_user.id)
+        assert len(convs) == 1
+        assert convs[0].title == "Has Project"
+
+    async def test_no_orphans_returns_zero(self, db_session: AsyncSession, test_user):
+        count = await ops.delete_orphan_conversations(db_session, test_user.id)
+        assert count == 0
+
+
+class TestGetProjectWorkspaceForConversation:
+    async def test_returns_workspace_path(self, db_session: AsyncSession, test_user):
+        proj = await ops.create_project(
+            db_session, test_user.id, "P", "p", workspace_path="/tmp/test-ws"
+        )
+        conv = await ops.create_conversation(
+            db_session, test_user.id, title="C", project_id=proj.id
+        )
+        path = await ops.get_project_workspace_for_conversation(db_session, conv.id)
+        assert path == "/tmp/test-ws"
+
+    async def test_returns_none_for_orphan(self, db_session: AsyncSession, test_user):
+        conv = await ops.create_conversation(db_session, test_user.id, title="Orphan")
+        path = await ops.get_project_workspace_for_conversation(db_session, conv.id)
+        assert path is None
+
+    async def test_returns_none_for_nonexistent_conv(self, db_session: AsyncSession):
+        path = await ops.get_project_workspace_for_conversation(db_session, 9999)
+        assert path is None
 
 
 class TestMessageOperations:
@@ -116,7 +187,10 @@ class TestMessageOperations:
 
     async def test_add_message_with_metadata(self, db_session: AsyncSession):
         msg = await ops.add_message(
-            db_session, self.conv.id, "assistant", "Done",
+            db_session,
+            self.conv.id,
+            "assistant",
+            "Done",
             metadata={"tool": "search", "duration": 1.5},
         )
         assert msg.meta == {"tool": "search", "duration": 1.5}
@@ -187,7 +261,7 @@ class TestSettingsOperations:
     async def test_set_user_setting_float_value(self, db_session: AsyncSession, test_user):
         await ops.set_user_setting(db_session, test_user.id, "agent", "threshold", 0.85)
         val = await ops.get_user_setting(db_session, test_user.id, "agent", "threshold")
-        assert val == 0.85
+        assert val == pytest.approx(0.85)
 
     async def test_get_user_agent_settings(self, db_session: AsyncSession, test_user):
         await ops.set_user_setting(db_session, test_user.id, "agent", "default_model", "claude")
@@ -214,12 +288,20 @@ class TestTaskOperations:
         assert result[1].order_index == 1
 
     async def test_upsert_tasks_replace(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "Old Task"},
-        ])
-        result = await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "New Task"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "Old Task"},
+            ],
+        )
+        result = await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "New Task"},
+            ],
+        )
         assert len(result) == 1
         assert result[0].title == "New Task"
 
@@ -228,28 +310,40 @@ class TestTaskOperations:
         assert tasks == []
 
     async def test_get_tasks(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "T1", "status": "pending", "priority": "high"},
-            {"title": "T2", "status": "completed"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "T1", "status": "pending", "priority": "high"},
+                {"title": "T2", "status": "completed"},
+            ],
+        )
         tasks = await ops.get_conversation_tasks(db_session, self.conv.id)
         assert len(tasks) == 2
         assert tasks[0].title == "T1"
         assert tasks[0].priority == "high"
 
     async def test_update_task_status(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "Do this", "status": "pending"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "Do this", "status": "pending"},
+            ],
+        )
         ok = await ops.update_task_status(db_session, self.conv.id, 0, "completed")
         assert ok is True
         tasks = await ops.get_conversation_tasks(db_session, self.conv.id)
         assert tasks[0].status == "completed"
 
     async def test_update_task_status_out_of_range(self, db_session: AsyncSession):
-        await ops.upsert_conversation_tasks(db_session, self.conv.id, [
-            {"title": "Only one"},
-        ])
+        await ops.upsert_conversation_tasks(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "Only one"},
+            ],
+        )
         ok = await ops.update_task_status(db_session, self.conv.id, 5, "completed")
         assert ok is False
 
@@ -261,8 +355,11 @@ class TestResourceOperations:
 
     async def test_add_resource(self, db_session: AsyncSession):
         res = await ops.add_conversation_resource(
-            db_session, self.conv.id,
-            title="Paper 1", resource_type="paper", url="https://example.com",
+            db_session,
+            self.conv.id,
+            title="Paper 1",
+            resource_type="paper",
+            url="https://example.com",
         )
         assert res.id is not None
         assert res.title == "Paper 1"
@@ -270,24 +367,37 @@ class TestResourceOperations:
         assert res.url == "https://example.com"
 
     async def test_get_resources(self, db_session: AsyncSession):
-        await ops.add_conversation_resource(db_session, self.conv.id, title="R1", resource_type="doc")
-        await ops.add_conversation_resource(db_session, self.conv.id, title="R2", resource_type="code")
+        await ops.add_conversation_resource(
+            db_session, self.conv.id, title="R1", resource_type="doc"
+        )
+        await ops.add_conversation_resource(
+            db_session, self.conv.id, title="R2", resource_type="code"
+        )
         resources = await ops.get_conversation_resources(db_session, self.conv.id)
         assert len(resources) == 2
 
     async def test_get_resource_by_id(self, db_session: AsyncSession):
         res = await ops.add_conversation_resource(
-            db_session, self.conv.id, title="Test", resource_type="doc",
+            db_session,
+            self.conv.id,
+            title="Test",
+            resource_type="doc",
         )
         found = await ops.get_resource_by_id(db_session, res.resource_id)
         assert found is not None
         assert found.title == "Test"
 
     async def test_upsert_resources_replace(self, db_session: AsyncSession):
-        await ops.add_conversation_resource(db_session, self.conv.id, title="Old", resource_type="doc")
-        result = await ops.upsert_conversation_resources(db_session, self.conv.id, [
-            {"title": "New", "type": "doc"},
-        ])
+        await ops.add_conversation_resource(
+            db_session, self.conv.id, title="Old", resource_type="doc"
+        )
+        result = await ops.upsert_conversation_resources(
+            db_session,
+            self.conv.id,
+            [
+                {"title": "New", "type": "doc"},
+            ],
+        )
         assert len(result) == 1
         assert result[0].title == "New"
 
@@ -304,7 +414,10 @@ class TestResourceOperations:
 
     async def test_upsert_paper_resource(self, db_session: AsyncSession):
         res = await ops.upsert_paper_resource(
-            db_session, self.conv.id, "My Paper", "## Abstract\nContent",
+            db_session,
+            self.conv.id,
+            "My Paper",
+            "## Abstract\nContent",
         )
         assert res.title == "My Paper"
         assert res.type == "paper"
@@ -312,8 +425,11 @@ class TestResourceOperations:
 
     async def test_upsert_resource_create(self, db_session: AsyncSession):
         res = await ops.upsert_resource(
-            db_session, self.conv.id,
-            resource_id="custom-id", title="Custom", resource_type="report",
+            db_session,
+            self.conv.id,
+            resource_id="custom-id",
+            title="Custom",
+            resource_type="report",
             content="Report content",
         )
         assert res.resource_id == "custom-id"
@@ -321,12 +437,20 @@ class TestResourceOperations:
 
     async def test_upsert_resource_update(self, db_session: AsyncSession):
         await ops.upsert_resource(
-            db_session, self.conv.id,
-            resource_id="rid", title="Old Title", resource_type="doc", content="Old",
+            db_session,
+            self.conv.id,
+            resource_id="rid",
+            title="Old Title",
+            resource_type="doc",
+            content="Old",
         )
         res = await ops.upsert_resource(
-            db_session, self.conv.id,
-            resource_id="rid", title="New Title", resource_type="doc", content="New",
+            db_session,
+            self.conv.id,
+            resource_id="rid",
+            title="New Title",
+            resource_type="doc",
+            content="New",
         )
         assert res.title == "New Title"
         assert res.content == "New"
@@ -339,7 +463,10 @@ class TestAgentJobOperations:
 
     async def test_create_agent_job(self, db_session: AsyncSession):
         job = await ops.create_agent_job(
-            db_session, self.conv.id, self.conv.user_id, "Process this",
+            db_session,
+            self.conv.id,
+            self.conv.user_id,
+            "Process this",
         )
         assert job.job_id is not None
         assert job.status == "queued"
@@ -347,7 +474,10 @@ class TestAgentJobOperations:
 
     async def test_get_agent_job(self, db_session: AsyncSession):
         job = await ops.create_agent_job(
-            db_session, self.conv.id, self.conv.user_id, "Test",
+            db_session,
+            self.conv.id,
+            self.conv.user_id,
+            "Test",
         )
         found = await ops.get_agent_job(db_session, job.job_id)
         assert found is not None

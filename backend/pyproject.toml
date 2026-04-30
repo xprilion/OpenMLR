@@ -1,6 +1,6 @@
 [project]
 name = "openmlr"
-version = "0.3.0"
+version = "0.5.0"
 description = "OpenMLR — an ML research intern that reads papers, trains models, and ships code"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sse-starlette>=2.0.0",
+    "python-multipart>=0.0.18",
 
     # Database
     "sqlalchemy[asyncio]>=2.0.0",
@@ -38,9 +39,15 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.0",
 
+    # Knowledge graph (workspace persistence)
+    "networkx>=3.0",
+
     # Background jobs
     "celery>=5.4.0",
     "redis>=5.0.0",
+
+    # MCP (Model Context Protocol)
+    "fastmcp>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -106,6 +113,9 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["openmlr"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["openmlr"]

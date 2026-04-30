@@ -15,8 +15,8 @@ class TestComputeCapabilities:
         assert caps.gpu_available is False
         assert caps.gpu_info == []
         assert caps.installed_packages == []
-        assert caps.available_disk_gb == 0.0
-        assert caps.available_ram_gb == 0.0
+        assert caps.available_disk_gb == pytest.approx(0.0)
+        assert caps.available_ram_gb == pytest.approx(0.0)
 
     def test_custom_values(self):
         caps = ComputeCapabilities(
@@ -47,13 +47,13 @@ class TestExecutionResult:
         assert r.output == "done"
         assert r.success is True
         assert r.exit_code == 0
-        assert r.duration_seconds == 0.0
+        assert r.duration_seconds == pytest.approx(0.0)
 
     def test_failure(self):
         r = ExecutionResult(output="error", success=False, exit_code=1, duration_seconds=2.5)
         assert r.success is False
         assert r.exit_code == 1
-        assert r.duration_seconds == 2.5
+        assert r.duration_seconds == pytest.approx(2.5)
 
     def test_truncation_handled_by_caller(self):
         # Truncation is done by the tools, not the dataclass

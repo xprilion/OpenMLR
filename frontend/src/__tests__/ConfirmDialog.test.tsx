@@ -74,7 +74,7 @@ describe('ConfirmDialog', () => {
 
   it('calls onCancel when overlay clicked', () => {
     const onCancel = vi.fn();
-    const { container } = render(
+    render(
       <ConfirmDialog
         title="Test"
         message="Test message"
@@ -82,9 +82,9 @@ describe('ConfirmDialog', () => {
         onCancel={onCancel}
       />
     );
-    // The overlay is the outermost div with fixed positioning
-    const overlay = container.firstChild as HTMLElement;
-    fireEvent.click(overlay);
+    // The backdrop overlay is the first child inside the dialog with aria-hidden
+    const backdrop = document.querySelector('dialog > div[aria-hidden="true"]');
+    fireEvent.click(backdrop!);
     expect(onCancel).toHaveBeenCalled();
   });
 
@@ -98,7 +98,9 @@ describe('ConfirmDialog', () => {
         onCancel={onCancel}
       />
     );
-    fireEvent.keyDown(window, { key: 'Escape' });
+    // The dialog handles escape via the native cancel event
+    const dialog = document.querySelector('dialog');
+    fireEvent(dialog!, new Event('cancel'));
     expect(onCancel).toHaveBeenCalled();
   });
 

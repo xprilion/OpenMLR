@@ -12,7 +12,7 @@ The agent has access to built-in tools organized by category. Tool availability 
 | Tool | Description | Plan | Execute |
 |------|-------------|:----:|:-------:|
 | `ask_user` | Ask structured questions (2-4 options + free text per question) | yes | no |
-| `plan_tool` | Create/update task plans, track resources, generate completion reports | yes | yes |
+| `plan_tool` | Create/update task plans, track resources, generate completion reports. In Execute mode, `create` and `add` operations require user approval. | yes | yes |
 
 ## Research Tools
 
@@ -95,10 +95,31 @@ In Plan mode, only read-only filesystem tools are available.
 | **SSH** | Remote machine via SSH |
 | **Modal** | Cloud sandbox via Modal |
 
+## Workspace Tools
+
+| Tool | Description | Plan | Execute |
+|------|-------------|:----:|:-------:|
+| `workspace` | Project workspace operations — knowledge graph, notes, search, failure logs | yes | yes |
+
+### Workspace Operations
+
+| Operation | Description |
+|-----------|-------------|
+| `status` | View workspace summary (file counts, knowledge graph size, recent failures) |
+| `search` | Search files by name or content |
+| `note` | Save a research note with topic and content |
+| `knowledge_add` | Add entity to the knowledge graph |
+| `knowledge_relate` | Add relationship between entities |
+| `knowledge_query` | Search entities in the knowledge graph |
+| `knowledge_summary` | Get full knowledge graph context for the conversation |
+| `recent_failures` | View recent tool/API failure logs |
+
+See [Projects & Workspaces](/projects) for details on the knowledge graph entity and relationship types.
+
 ## Mode Restrictions
 
 Tools are filtered based on the current mode before being sent to the LLM. See [Modes](/modes) for details on the enforcement layers.
 
 In summary:
-- **Plan mode**: `ask_user`, `plan_tool`, read-only filesystem, web search, papers, GitHub
+- **Plan mode**: `ask_user`, `plan_tool`, `workspace`, read-only filesystem, web search, papers, GitHub
 - **Execute mode**: Everything except `ask_user`

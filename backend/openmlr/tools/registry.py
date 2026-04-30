@@ -1,24 +1,44 @@
 """ToolRouter — registers, dispatches, and manages all agent tools."""
 
 import inspect
+import logging
 
 from ..agent.types import ToolSpec
+
+logger = logging.getLogger("openmlr.tools.registry")
 
 # Define which tools are allowed in each mode
 # Tools not listed are allowed in all modes
 MODE_TOOL_RESTRICTIONS = {
     "plan": {
-        # Plan mode: ask questions, create plans, read context — NO execution tools
+        # Plan mode: ask questions, create plans, read context — NO execution tools.
+        # Tool names here must EXACTLY match the registered ToolSpec.name values.
         "allowed": {
-            "ask_user", "plan_tool",
-            # Read-only tools for gathering context
-            "read_file", "list_dir", "glob_files", "grep_search",
-            "web_search", "papers",
-            "github_search", "github_read_file", "github_read_repo",
-            "github_find_examples", "github_search_repos", "github_get_readme",
+            "ask_user",
+            "plan_tool",
+            # Read-only local filesystem access for gathering context
+            "read",
+            # Web / academic search
+            "web_search",
+            "papers",
+            # GitHub (read-only)
+            "github_read_file",
+            "github_find_examples",
+            "github_search_repos",
+            "github_get_readme",
             "github_list_repos",
+            # Hugging Face (read-only model/dataset discovery)
+            "hf_search_models",
+            "hf_model_info",
+            "hf_search_datasets",
+            "hf_dataset_info",
+            "hf_read_file",
             # Compute planning (read-only / advisory)
-            "compute_list", "compute_plan", "compute_probe",
+            "compute_list",
+            "compute_plan",
+            "compute_probe",
+            # Workspace (knowledge graph, notes, search — always accessible)
+            "workspace",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -37,6 +57,24 @@ MODE_TOOL_RESTRICTIONS = {
 }
 
 
+# Tools that count as "research" for plan-mode budget tracking
+_RESEARCH_TOOLS = {
+    "web_search",
+    "papers",
+    "github_search_repos",
+    "github_find_examples",
+    "github_get_readme",
+    "github_read_file",
+    "github_list_repos",
+    "hf_search_models",
+    "hf_model_info",
+    "hf_search_datasets",
+    "hf_dataset_info",
+    "hf_read_file",
+}
+_PLAN_RESEARCH_LIMIT = 5  # warn after this many research calls in plan mode
+
+
 class ToolRouter:
     """Central tool registry and dispatcher."""
 
@@ -47,6 +85,7 @@ class ToolRouter:
         self._current_mode: str = "general"
         self._user_id: int | None = None
         self._db = None
+        self._plan_research_calls: int = 0
 
     def set_context(self, user_id: int | None = None, db=None) -> None:
         """Set per-request context (user_id, db) for tools that need them."""
@@ -66,6 +105,8 @@ class ToolRouter:
 
     def set_mode(self, mode: str) -> None:
         """Set the current operating mode for tool filtering."""
+        if mode != self._current_mode:
+            self._plan_research_calls = 0
         self._current_mode = mode
 
     def get_mode(self) -> str:
@@ -87,7 +128,9 @@ class ToolRouter:
         blocked_tools = restrictions.get("blocked", set())
         if blocked_tools:
             if name in blocked_tools:
-                error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
+                error_msg = restrictions.get(
+                    "blocked_message", "Tool '{tool}' not allowed in this mode."
+                )
                 return False, error_msg.format(tool=name, mode=self._current_mode)
             return True, ""
 
@@ -98,6 +141,70 @@ class ToolRouter:
 
         error_msg = restrictions.get("blocked_message", "Tool '{tool}' not allowed in this mode.")
         return False, error_msg.format(tool=name, mode=self._current_mode)
+
+    async def _check_task_enforcement(self, tool_name: str, session) -> str | None:
+        """Check if a work tool can run — requires an in_progress task when a plan exists.
+
+        Returns an error message string if blocked, or None if allowed.
+        """
+        # plan_tool is always allowed (it's how you update task status)
+        plan_allowed = MODE_TOOL_RESTRICTIONS.get("plan", {}).get("allowed", set())
+        if tool_name in plan_allowed:
+            return None
+
+        # Lazy-load plan state from DB if not yet loaded this session
+        if not getattr(session, "_plan_loaded", False):
+            try:
+                plan_tasks = await self._load_plan_from_db(session)
+                session.plan_tasks = plan_tasks
+                session._plan_loaded = True
+            except Exception as e:
+                logger.warning(f"Failed to load plan state for enforcement: {e}")
+                # Don't block on DB errors — allow the tool call
+                return None
+
+        plan_tasks = getattr(session, "plan_tasks", None)
+        if not plan_tasks:
+            # No plan exists — no enforcement needed
+            return None
+
+        # Check if any task is in_progress
+        in_progress = any(t.get("status") == "in_progress" for t in plan_tasks)
+        if in_progress:
+            return None
+
+        # Check if all tasks are completed/cancelled (work is done)
+        all_done = all(t.get("status") in ("completed", "cancelled") for t in plan_tasks)
+        if all_done:
+            return None
+
+        return (
+            f"TASK ENFORCEMENT: Cannot use '{tool_name}' without an active task.\n\n"
+            f"A task plan exists but no task is marked as in_progress. "
+            f"You must mark a task as in_progress before doing any work.\n\n"
+            f"Steps:\n"
+            f"1. Call plan_tool(operation='get') to review the current plan\n"
+            f"2. Call plan_tool(operation='update', task_index=N, status='in_progress') "
+            f"to start working on a task\n"
+            f"3. Then you can use work tools like '{tool_name}'\n\n"
+            f"After finishing work, mark the task completed with a summary before starting the next one."
+        )
+
+    async def _load_plan_from_db(self, session) -> list[dict] | None:
+        """Load plan tasks from DB for a session. Used for lazy enforcement init."""
+        conv_id = getattr(session, "conversation_id", None)
+        if not conv_id:
+            return None
+
+        from ..db import operations as ops
+        from .plan import _get_session_factory
+
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            tasks = await ops.get_conversation_tasks(db, conv_id)
+            if not tasks:
+                return None
+            return [{"title": t.title, "status": t.status, "priority": t.priority} for t in tasks]
 
     def get_tool(self, name: str) -> ToolSpec | None:
         """Look up a tool by name."""
@@ -116,14 +223,16 @@ class ToolRouter:
                 if not allowed:
                     continue
 
-            specs.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters,
-                },
-            })
+            specs.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters,
+                    },
+                }
+            )
         return specs
 
     def get_raw_specs(self) -> list[ToolSpec]:
@@ -146,11 +255,42 @@ class ToolRouter:
             allowed, error_msg = self.is_tool_allowed(name)
             if not allowed:
                 warning = (
-                    f"⚠️ MODE VIOLATION: {error_msg}\n\n"
+                    f"MODE VIOLATION: {error_msg}\n\n"
                     f"Current mode: {self._current_mode.upper()}\n"
                     f"To use this tool, ask the user to switch modes using ask_user with suggest_mode parameter."
                 )
                 return warning, False
+
+        # ENFORCEMENT: In plan mode, track research tool usage and warn if excessive.
+        if enforce_mode and self._current_mode == "plan" and name in _RESEARCH_TOOLS:
+            self._plan_research_calls += 1
+            if self._plan_research_calls > _PLAN_RESEARCH_LIMIT:
+                logger.info(
+                    f"Plan-mode research budget exceeded ({self._plan_research_calls} calls)"
+                )
+
+        # ENFORCEMENT: In execute mode, work tools require an in_progress task.
+        # "Work tools" = anything NOT in the plan-mode allowed set (read-only tools).
+        if enforce_mode and session and self._current_mode == "execute":
+            violation = await self._check_task_enforcement(name, session)
+            if violation:
+                return violation, False
+
+        # Prepare the plan-mode research budget warning (appended to output below)
+        _research_warning = ""
+        if (
+            enforce_mode
+            and self._current_mode == "plan"
+            and name in _RESEARCH_TOOLS
+            and self._plan_research_calls > _PLAN_RESEARCH_LIMIT
+        ):
+            _research_warning = (
+                f"\n\n[PLAN MODE RESEARCH BUDGET: You have made "
+                f"{self._plan_research_calls} research tool calls in Plan mode. "
+                f"This is getting excessive. Plan mode is for quick feasibility checks, "
+                f"not comprehensive research. Please add remaining research as tasks in "
+                f"the plan for Execute mode and finalize the plan now.]"
+            )
 
         tool = self.tools.get(name)
         if not tool:
@@ -172,16 +312,27 @@ class ToolRouter:
             if "db" in sig.parameters and "db" not in kwargs:
                 kwargs["db"] = self._db
             try:
-                return await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
+                output, success = (
+                    await tool.handler(**kwargs) if kwargs else await tool.handler(**arguments)
+                )
+                if _research_warning:
+                    output += _research_warning
+                return output, success
             except TypeError as e:
                 # Handle argument mismatches (model sending wrong param names)
-                return f"Tool argument error: {e}. Expected parameters: {list(sig.parameters.keys())}", False
+                return (
+                    f"Tool argument error: {e}. Expected parameters: {list(sig.parameters.keys())}",
+                    False,
+                )
 
         # MCP tool (no handler — dispatch to MCP client)
         if self._mcp_client:
             try:
                 result = await self._mcp_client.call_tool(name, arguments)
-                return _convert_mcp_content(result), True
+                output = _convert_mcp_content(result)
+                if _research_warning:
+                    output += _research_warning
+                return output, True
             except Exception as e:
                 return f"MCP tool error: {str(e)}", False
 
@@ -235,6 +386,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     # Import and register all built-in tools
     from .ask_user import create_ask_user_tool
     from .github import create_github_tools
+    from .huggingface import create_huggingface_tools
     from .local import create_local_tools
     from .papers import create_papers_tool
     from .plan import create_plan_tool
@@ -244,6 +396,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
 
     router.register_many(create_local_tools())
     router.register_many(create_github_tools())
+    router.register_many(create_huggingface_tools())
     router.register_many(create_search_tools())
     router.register(create_research_tool())
     router.register(create_plan_tool())
@@ -253,11 +406,18 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
 
     # Register compute tools
     from .compute_tools import create_compute_tools
+
     router.register_many(create_compute_tools())
+
+    # Register workspace tools
+    from .workspace_tools import create_workspace_tools
+
+    router.register_many(create_workspace_tools())
 
     # Register sandbox tools if manager provided
     if sandbox_manager:
         from .sandbox_tools import create_sandbox_tools
+
         router.register_many(create_sandbox_tools(sandbox_manager))
 
     return router

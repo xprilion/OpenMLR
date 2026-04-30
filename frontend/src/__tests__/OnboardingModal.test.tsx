@@ -163,7 +163,7 @@ describe('OnboardingModal', () => {
     });
   });
 
-  it('selects model and completes', async () => {
+  it('selects model and advances to project step', async () => {
     const onComplete = vi.fn();
     vi.mocked(api.setModel).mockResolvedValue({ ok: true });
     vi.mocked(api.getProviders).mockResolvedValue({
@@ -177,9 +177,13 @@ describe('OnboardingModal', () => {
 
     fireEvent.click(screen.getByText('GPT-4o'));
 
+    // After selecting a model, should advance to project creation step
     await waitFor(() => {
       expect(api.setModel).toHaveBeenCalledWith('openai/gpt-4o');
-      expect(onComplete).toHaveBeenCalledWith('openai/gpt-4o');
+      expect(screen.getByText('Create Project & Start')).toBeInTheDocument();
     });
+
+    // onComplete should NOT be called yet — user needs to create a project
+    expect(onComplete).not.toHaveBeenCalled();
   });
 });

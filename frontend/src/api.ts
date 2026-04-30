@@ -70,18 +70,21 @@ export const api = {
   getMe: () => get('/api/auth/me'),
 
   // Messages
-  sendMessage: (message: string, mode?: string) => post('/api/message', { message, mode }),
+  sendMessage: (message: string, mode?: string) =>
+    post('/api/message', { message, mode, request_id: crypto.randomUUID() }),
   submitAnswers: (answers: Record<string, string>) => post('/api/answers', { answers }),
   interrupt: () => post('/api/interrupt', {}),
   sendApproval: (approvals: Record<string, boolean>) => post('/api/approval', { approvals }),
+  submitTodoApproval: (approved: boolean, tasks?: any[]) =>
+    post('/api/todo-approval', { approved, tasks }),
   undo: () => post('/api/undo', {}),
   compact: () => post('/api/compact', {}),
   setModel: (model: string) => post('/api/model', { model }),
 
   // Conversations
   listConversations: () => get('/api/conversations'),
-  createConversation: (title?: string, model?: string, mode?: string) =>
-    post('/api/conversations', { title, model, mode }),
+  createConversation: (title?: string, model?: string, mode?: string, projectUuid?: string) =>
+    post('/api/conversations', { title, model, mode, project_uuid: projectUuid }),
   getConversation: (uuid: string) => get(`/api/conversations/${uuid}`),
   deleteConversation: (uuid: string) => del(`/api/conversations/${uuid}`),
   switchConversation: (uuid: string) => post(`/api/conversations/${uuid}/switch`, {}),
@@ -107,14 +110,43 @@ export const api = {
 
   // Providers & Models
   getProviders: () => get('/api/providers'),
-  getModels: () => get('/api/models'),
+  getModels: (provider?: string) => get(`/api/models${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
   getStatus: () => get('/api/status'),
   saveConfig: (config: Record<string, string>) => post('/api/config', config),
+  fetchCustomProviderModels: (providerId: string) => post(`/api/providers/${encodeURIComponent(providerId)}/fetch-models`, {}),
 
   // SSH Keys
   getKeys: () => get('/api/keys'),
   createKey: (body: Record<string, any>) => post('/api/keys', body),
   deleteKey: (filename: string) => del(`/api/keys/${filename}`),
+
+  // Projects
+  listProjects: (includeArchived = false) => get(`/api/projects${includeArchived ? '?include_archived=true' : ''}`),
+  createProject: (name: string, description?: string) => post('/api/projects', { name, description }),
+  getProject: (uuid: string) => get(`/api/projects/${uuid}`),
+  updateProject: (uuid: string, body: Record<string, any>) => put(`/api/projects/${uuid}`, body),
+  deleteProject: (uuid: string) => del(`/api/projects/${uuid}`),
+  listProjectConversations: (uuid: string) => get(`/api/projects/${uuid}/conversations`),
+  attachConversation: (projectUuid: string, convUuid: string) =>
+    post(`/api/projects/${projectUuid}/attach/${convUuid}`, {}),
+  detachConversation: (projectUuid: string, convUuid: string) =>
+    post(`/api/projects/${projectUuid}/detach/${convUuid}`, {}),
+
+  // Project Files
+  listFiles: (projectUuid: string, path = '') =>
+    get(`/api/projects/${projectUuid}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  readFile: (projectUuid: string, filePath: string) =>
+    get(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
+  /** Build an authenticated URL for directly loading a binary file (e.g. images). */
+  fileUrl: (projectUuid: string, filePath: string): string => {
+    const token = getToken();
+    const base = `/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`;
+    return token ? `${base}?token=${token}` : base;
+  },
+  writeFile: (projectUuid: string, filePath: string, content: string) =>
+    put(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`, { content }),
+  deleteFile: (projectUuid: string, filePath: string) =>
+    del(`/api/projects/${projectUuid}/files/${encodeURIComponent(filePath)}`),
 
   // Compute Nodes
   getComputeNodes: () => get('/api/compute/nodes'),
@@ -127,4 +159,9 @@ export const api = {
     post('/api/compute/test', { type, config }),
   probeComputeNode: (id: number) => post(`/api/compute/nodes/${id}/probe`, {}),
   setDefaultComputeNode: (id: number) => post(`/api/compute/nodes/${id}/set-default`, {}),
+
+  // MCP Servers
+  getMcpStatus: () => get('/api/mcp/status'),
+  testMcpServer: (url: string, headers?: Record<string, string>, params?: Record<string, string>) =>
+    post('/api/mcp/test', { url, headers: headers || null, params: params || null }),
 };

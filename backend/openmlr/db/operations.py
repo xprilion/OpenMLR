@@ -12,11 +12,143 @@ from .models import (
     ConversationResource,
     ConversationTask,
     Message,
+    Project,
     SSHKey,
     UserSetting,
 )
 
+# ---- Projects ----
+
+
+async def create_project(
+    db: AsyncSession,
+    user_id: int,
+    name: str,
+    slug: str,
+    description: str | None = None,
+    workspace_path: str | None = None,
+    settings: dict | None = None,
+) -> Project:
+    project = Project(
+        user_id=user_id,
+        name=name,
+        slug=slug,
+        description=description,
+        workspace_path=workspace_path,
+        settings=settings,
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    return project
+
+
+async def get_user_projects(
+    db: AsyncSession,
+    user_id: int,
+    include_archived: bool = False,
+) -> list[Project]:
+    query = select(Project).where(Project.user_id == user_id)
+    if not include_archived:
+        query = query.where(Project.status == "active")
+    query = query.order_by(Project.updated_at.desc())
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_project_by_id(
+    db: AsyncSession, project_id: int, user_id: int | None = None
+) -> Project | None:
+    query = select(Project).where(Project.id == project_id)
+    if user_id is not None:
+        query = query.where(Project.user_id == user_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_project_by_uuid(
+    db: AsyncSession, uuid: str, user_id: int | None = None
+) -> Project | None:
+    query = select(Project).where(Project.uuid == uuid)
+    if user_id is not None:
+        query = query.where(Project.user_id == user_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_project_by_slug(db: AsyncSession, user_id: int, slug: str) -> Project | None:
+    result = await db.execute(
+        select(Project).where(Project.user_id == user_id, Project.slug == slug)
+    )
+    return result.scalar_one_or_none()
+
+
+# Explicit allowlist of fields that can be updated via update_project.
+# Prevents injection of workspace_path, user_id, id, uuid, etc.
+_PROJECT_UPDATABLE_FIELDS = {"name", "slug", "description", "settings", "status"}
+
+
+async def update_project(
+    db: AsyncSession,
+    project_id: int,
+    user_id: int,
+    **kwargs,
+) -> Project | None:
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        return None
+    for key, value in kwargs.items():
+        if key in _PROJECT_UPDATABLE_FIELDS:
+            setattr(project, key, value)
+    await db.commit()
+    await db.refresh(project)
+    return project
+
+
+async def archive_project(db: AsyncSession, project_id: int, user_id: int) -> Project | None:
+    return await update_project(db, project_id, user_id, status="archived")
+
+
+async def get_project_conversations(db: AsyncSession, project_id: int) -> list[Conversation]:
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.project_id == project_id)
+        .order_by(Conversation.updated_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def attach_conversation_to_project(
+    db: AsyncSession,
+    conversation_id: int,
+    project_id: int | None,
+    user_id: int | None = None,
+) -> bool:
+    """Attach or detach a conversation from a project.
+
+    When user_id is provided, verifies ownership of both conversation and project.
+    """
+    conv = await get_conversation_by_id(db, conversation_id)
+    if not conv:
+        return False
+    # Verify conversation ownership when user_id is provided
+    if user_id is not None and conv.user_id != user_id:
+        return False
+    # Verify project ownership when attaching (not detaching)
+    if project_id is not None and user_id is not None:
+        project = await get_project_by_id(db, project_id, user_id)
+        if not project:
+            return False
+    conv.project_id = project_id
+    await db.commit()
+    return True
+
+
 # ---- Conversations ----
+
 
 async def create_conversation(
     db: AsyncSession,
@@ -24,12 +156,14 @@ async def create_conversation(
     title: str = "New conversation",
     model: str | None = None,
     mode: str = "general",
+    project_id: int | None = None,
 ) -> Conversation:
     conv = Conversation(
         user_id=user_id,
         title=title,
         model=model,
         mode=mode,
+        project_id=project_id,
     )
     db.add(conv)
     await db.commit()
@@ -38,12 +172,33 @@ async def create_conversation(
 
 
 async def get_conversations(db: AsyncSession, user_id: int) -> list[Conversation]:
+    """Return all conversations for a user that belong to a project."""
     result = await db.execute(
         select(Conversation)
-        .where(Conversation.user_id == user_id)
+        .where(Conversation.user_id == user_id, Conversation.project_id.isnot(None))
         .order_by(Conversation.updated_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def delete_orphan_conversations(db: AsyncSession, user_id: int) -> int:
+    """Delete conversations with no project (project_id IS NULL).
+
+    Returns the count of deleted conversations. Messages, tasks, resources,
+    and jobs cascade-delete via the FK constraints.
+    """
+    result = await db.execute(
+        select(Conversation).where(
+            Conversation.user_id == user_id, Conversation.project_id.is_(None)
+        )
+    )
+    orphans = list(result.scalars().all())
+    count = len(orphans)
+    for conv in orphans:
+        await db.delete(conv)
+    if count > 0:
+        await db.commit()
+    return count
 
 
 async def get_conversation_by_id(db: AsyncSession, conv_id: int) -> Conversation | None:
@@ -66,23 +221,17 @@ async def delete_conversation(db: AsyncSession, conv_id: int) -> bool:
 
 
 async def update_conversation_title(db: AsyncSession, conv_id: int, title: str):
-    await db.execute(
-        update(Conversation).where(Conversation.id == conv_id).values(title=title)
-    )
+    await db.execute(update(Conversation).where(Conversation.id == conv_id).values(title=title))
     await db.commit()
 
 
 async def update_conversation_model(db: AsyncSession, conv_id: int, model: str):
-    await db.execute(
-        update(Conversation).where(Conversation.id == conv_id).values(model=model)
-    )
+    await db.execute(update(Conversation).where(Conversation.id == conv_id).values(model=model))
     await db.commit()
 
 
 async def update_conversation_extra(db: AsyncSession, conv_id: int, extra: dict):
-    await db.execute(
-        update(Conversation).where(Conversation.id == conv_id).values(extra=extra)
-    )
+    await db.execute(update(Conversation).where(Conversation.id == conv_id).values(extra=extra))
     await db.commit()
 
 
@@ -97,11 +246,10 @@ async def increment_user_message_count(db: AsyncSession, conv_id: int):
 
 # ---- Messages ----
 
+
 async def get_messages(db: AsyncSession, conv_id: int) -> list[Message]:
     result = await db.execute(
-        select(Message)
-        .where(Message.conversation_id == conv_id)
-        .order_by(Message.created_at.asc())
+        select(Message).where(Message.conversation_id == conv_id).order_by(Message.created_at.asc())
     )
     return list(result.scalars().all())
 
@@ -126,21 +274,18 @@ async def add_message(
 
 
 async def clear_messages(db: AsyncSession, conv_id: int):
-    await db.execute(
-        delete(Message).where(Message.conversation_id == conv_id)
-    )
+    await db.execute(delete(Message).where(Message.conversation_id == conv_id))
     await db.commit()
 
 
 # ---- Settings ----
 
-async def get_user_setting(
-    db: AsyncSession, user_id: int, category: str, key: str
-) -> dict | None:
+
+async def get_user_setting(db: AsyncSession, user_id: int, category: str, key: str) -> dict | None:
     from .models import UserSetting
+
     result = await db.execute(
-        select(UserSetting)
-        .where(
+        select(UserSetting).where(
             UserSetting.user_id == user_id,
             UserSetting.category == category,
             UserSetting.key == key,
@@ -151,12 +296,16 @@ async def get_user_setting(
 
 
 async def set_user_setting(
-    db: AsyncSession, user_id: int, category: str, key: str, value: dict | list | str | int | float | bool
+    db: AsyncSession,
+    user_id: int,
+    category: str,
+    key: str,
+    value: dict | list | str | int | float | bool,
 ):
     from .models import UserSetting
+
     result = await db.execute(
-        select(UserSetting)
-        .where(
+        select(UserSetting).where(
             UserSetting.user_id == user_id,
             UserSetting.category == category,
             UserSetting.key == key,
@@ -185,6 +334,7 @@ def _clean_json_value(val: object) -> object:
 
 async def get_all_settings(db: AsyncSession, user_id: int, category: str | None = None) -> dict:
     from .models import UserSetting
+
     query = select(UserSetting).where(UserSetting.user_id == user_id)
     if category:
         query = query.where(UserSetting.category == category)
@@ -201,6 +351,7 @@ async def get_all_settings(db: AsyncSession, user_id: int, category: str | None 
 
 async def delete_user_setting(db: AsyncSession, user_id: int, category: str, key: str):
     from .models import UserSetting
+
     await db.execute(
         delete(UserSetting).where(
             UserSetting.user_id == user_id,
@@ -212,6 +363,7 @@ async def delete_user_setting(db: AsyncSession, user_id: int, category: str, key
 
 
 # ---- Conversation Tasks ----
+
 
 async def get_conversation_tasks(db: AsyncSession, conv_id: int) -> list[ConversationTask]:
     result = await db.execute(
@@ -229,9 +381,7 @@ async def upsert_conversation_tasks(
 ) -> list[ConversationTask]:
     """Replace all tasks for a conversation with the new list."""
     # Delete existing tasks
-    await db.execute(
-        delete(ConversationTask).where(ConversationTask.conversation_id == conv_id)
-    )
+    await db.execute(delete(ConversationTask).where(ConversationTask.conversation_id == conv_id))
 
     # Insert new tasks
     new_tasks = []
@@ -265,7 +415,22 @@ async def update_task_status(
     return False
 
 
+# ---- Workspace Path Helpers ----
+
+
+async def get_project_workspace_for_conversation(db: AsyncSession, conv_id: int) -> str | None:
+    """Resolve the project workspace path for a conversation (conv -> project -> workspace_path)."""
+    conv = await get_conversation_by_id(db, conv_id)
+    if not conv or not conv.project_id:
+        return None
+    project = await get_project_by_id(db, conv.project_id)
+    if not project:
+        return None
+    return project.workspace_path
+
+
 # ---- Conversation Resources ----
+
 
 async def get_conversation_resources(db: AsyncSession, conv_id: int) -> list[ConversationResource]:
     result = await db.execute(
@@ -286,6 +451,7 @@ async def add_conversation_resource(
     resource_id: str | None = None,
 ) -> ConversationResource:
     import uuid as uuid_mod
+
     resource = ConversationResource(
         conversation_id=conv_id,
         resource_id=resource_id or str(uuid_mod.uuid4())[:8],
@@ -341,7 +507,9 @@ async def upsert_conversation_resources(
 PLAN_RESOURCE_ID = "plan-md"
 
 
-async def upsert_plan_resource(db: AsyncSession, conv_id: int, content: str) -> ConversationResource:
+async def upsert_plan_resource(
+    db: AsyncSession, conv_id: int, content: str
+) -> ConversationResource:
     """Create or update the pinned PLAN.md resource for a conversation."""
     existing = await get_resource_by_id(db, f"{PLAN_RESOURCE_ID}-{conv_id}")
     if existing:
@@ -350,7 +518,8 @@ async def upsert_plan_resource(db: AsyncSession, conv_id: int, content: str) -> 
         await db.refresh(existing)
         return existing
     return await add_conversation_resource(
-        db, conv_id,
+        db,
+        conv_id,
         title="PLAN.md",
         resource_type="plan",
         content=content,
@@ -362,7 +531,10 @@ PAPER_RESOURCE_ID = "paper"
 
 
 async def upsert_paper_resource(
-    db: AsyncSession, conv_id: int, title: str, content: str,
+    db: AsyncSession,
+    conv_id: int,
+    title: str,
+    content: str,
 ) -> ConversationResource:
     """Create or update the paper draft resource for a conversation."""
     rid = f"{PAPER_RESOURCE_ID}-{conv_id}"
@@ -374,7 +546,8 @@ async def upsert_paper_resource(
         await db.refresh(existing)
         return existing
     return await add_conversation_resource(
-        db, conv_id,
+        db,
+        conv_id,
         title=title,
         resource_type="paper",
         content=content,
@@ -383,9 +556,13 @@ async def upsert_paper_resource(
 
 
 async def upsert_resource(
-    db: AsyncSession, conv_id: int,
-    resource_id: str, title: str, resource_type: str,
-    content: str | None = None, url: str | None = None,
+    db: AsyncSession,
+    conv_id: int,
+    resource_id: str,
+    title: str,
+    resource_type: str,
+    content: str | None = None,
+    url: str | None = None,
 ) -> ConversationResource:
     """Create or update a resource by resource_id."""
     existing = await get_resource_by_id(db, resource_id)
@@ -398,7 +575,8 @@ async def upsert_resource(
         await db.refresh(existing)
         return existing
     return await add_conversation_resource(
-        db, conv_id,
+        db,
+        conv_id,
         title=title,
         resource_type=resource_type,
         content=content,
@@ -409,6 +587,7 @@ async def upsert_resource(
 
 # ---- Agent Jobs ----
 
+
 async def create_agent_job(
     db: AsyncSession,
     conv_id: int,
@@ -417,6 +596,7 @@ async def create_agent_job(
     mode: str | None = None,
 ) -> AgentJob:
     import uuid as uuid_mod
+
     job = AgentJob(
         job_id=str(uuid_mod.uuid4()),
         conversation_id=conv_id,
@@ -432,9 +612,7 @@ async def create_agent_job(
 
 
 async def get_agent_job(db: AsyncSession, job_id: str) -> AgentJob | None:
-    result = await db.execute(
-        select(AgentJob).where(AgentJob.job_id == job_id)
-    )
+    result = await db.execute(select(AgentJob).where(AgentJob.job_id == job_id))
     return result.scalar_one_or_none()
 
 
@@ -478,6 +656,7 @@ async def update_job_status(
 
 # ---- User Settings ----
 
+
 async def get_user_settings(db: AsyncSession, user_id: int, category: str | None = None) -> dict:
     """Get user settings as a dict. Optionally filter by category."""
     query = select(UserSetting).where(UserSetting.user_id == user_id)
@@ -495,10 +674,7 @@ async def get_user_settings(db: AsyncSession, user_id: int, category: str | None
 async def get_user_agent_settings(db: AsyncSession, user_id: int) -> dict:
     """Get user's agent settings (default_model, research_model, yolo_mode)."""
     result = await db.execute(
-        select(UserSetting).where(
-            UserSetting.user_id == user_id,
-            UserSetting.category == "agent"
-        )
+        select(UserSetting).where(UserSetting.user_id == user_id, UserSetting.category == "agent")
     )
     settings = {}
     for s in result.scalars().all():
@@ -508,9 +684,15 @@ async def get_user_agent_settings(db: AsyncSession, user_id: int) -> dict:
 
 # ---- SSH Keys ----
 
+
 async def create_ssh_key(
-    db: AsyncSession, user_id: int, filename: str, fingerprint: str,
-    algorithm: str, public_key: str, comment: str | None = None,
+    db: AsyncSession,
+    user_id: int,
+    filename: str,
+    fingerprint: str,
+    algorithm: str,
+    public_key: str,
+    comment: str | None = None,
 ) -> SSHKey:
     key = SSHKey(
         user_id=user_id,
@@ -554,9 +736,15 @@ async def delete_ssh_key(db: AsyncSession, user_id: int, filename: str) -> bool:
 
 # ---- Compute Nodes ----
 
+
 async def create_compute_node(
-    db: AsyncSession, user_id: int, name: str, node_type: str, config: dict,
-    is_default: bool = False, priority: int = 0,
+    db: AsyncSession,
+    user_id: int,
+    name: str,
+    node_type: str,
+    config: dict,
+    is_default: bool = False,
+    priority: int = 0,
 ) -> ComputeNode:
     node = ComputeNode(
         user_id=user_id,
@@ -574,12 +762,16 @@ async def create_compute_node(
 
 async def get_compute_nodes(db: AsyncSession, user_id: int) -> list[ComputeNode]:
     result = await db.execute(
-        select(ComputeNode).where(ComputeNode.user_id == user_id).order_by(ComputeNode.priority.desc(), ComputeNode.created_at.desc())
+        select(ComputeNode)
+        .where(ComputeNode.user_id == user_id)
+        .order_by(ComputeNode.priority.desc(), ComputeNode.created_at.desc())
     )
     return list(result.scalars().all())
 
 
-async def get_compute_node_by_id(db: AsyncSession, node_id: int, user_id: int | None = None) -> ComputeNode | None:
+async def get_compute_node_by_id(
+    db: AsyncSession, node_id: int, user_id: int | None = None
+) -> ComputeNode | None:
     query = select(ComputeNode).where(ComputeNode.id == node_id)
     if user_id is not None:
         query = query.where(ComputeNode.user_id == user_id)
@@ -595,7 +787,10 @@ async def get_compute_node_by_name(db: AsyncSession, user_id: int, name: str) ->
 
 
 async def update_compute_node(
-    db: AsyncSession, node_id: int, user_id: int, **kwargs,
+    db: AsyncSession,
+    node_id: int,
+    user_id: int,
+    **kwargs,
 ) -> ComputeNode | None:
     result = await db.execute(
         select(ComputeNode).where(ComputeNode.id == node_id, ComputeNode.user_id == user_id)

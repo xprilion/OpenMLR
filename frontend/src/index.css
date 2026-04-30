@@ -81,7 +81,8 @@
   --animate-fade-in: fade-in 0.15s ease-out;
   --animate-slide-up: slide-up 0.2s ease-out;
   --animate-slide-in-right: slide-in-right 0.25s ease-out;
-  --animate-emboss-pulse: emboss-pulse 4s ease-in-out infinite;
+  --animate-hero-float: hero-float 6s ease-in-out infinite;
+  --animate-hero-glow: hero-glow 6s ease-in-out infinite;
 }
 
 @keyframes pulse {
@@ -89,16 +90,25 @@
   50% { opacity: 0.6; }
 }
 
-@keyframes emboss-pulse {
+@keyframes hero-float {
   0%, 100% {
-    opacity: 1;
-    filter: blur(0px);
-    transform: scale(1);
+    transform: translateY(0px);
+    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.0));
   }
   50% {
-    opacity: 0.7;
-    filter: blur(1px);
-    transform: scale(1.01);
+    transform: translateY(-8px);
+    filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.15));
+  }
+}
+
+@keyframes hero-glow {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -119,6 +129,11 @@
 
 @keyframes slide-in-right {
   from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-100%); }
   to { opacity: 1; transform: translateX(0); }
 }
 
@@ -276,6 +291,13 @@
   .prose img {
     max-width: 100%;
     border-radius: var(--radius-md);
+  }
+}
+
+/* ============ Mobile Layout ============ */
+@media (max-width: 1023px) {
+  .main-content-area {
+    padding-right: 0 !important;
   }
 }
 

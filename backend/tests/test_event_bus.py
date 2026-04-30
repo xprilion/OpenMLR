@@ -11,6 +11,7 @@ from openmlr.services.event_bus import EventBus
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def bus() -> EventBus:
     return EventBus()
@@ -19,6 +20,7 @@ def bus() -> EventBus:
 # ---------------------------------------------------------------------------
 # subscribe
 # ---------------------------------------------------------------------------
+
 
 class TestSubscribe:
     def test_subscribe_returns_queue(self, bus: EventBus):
@@ -40,6 +42,7 @@ class TestSubscribe:
 # ---------------------------------------------------------------------------
 # unsubscribe
 # ---------------------------------------------------------------------------
+
 
 class TestUnsubscribe:
     def test_unsubscribe_removes_queue(self, bus: EventBus):
@@ -66,6 +69,7 @@ class TestUnsubscribe:
 # subscriber_count
 # ---------------------------------------------------------------------------
 
+
 class TestSubscriberCount:
     def test_starts_at_zero(self, bus: EventBus):
         assert bus.subscriber_count == 0
@@ -86,6 +90,7 @@ class TestSubscriberCount:
 # ---------------------------------------------------------------------------
 # broadcast
 # ---------------------------------------------------------------------------
+
 
 class TestBroadcast:
     @pytest.mark.asyncio
@@ -158,6 +163,7 @@ class TestBroadcast:
 # AgentEvent serialization (to_sse)
 # ---------------------------------------------------------------------------
 
+
 class TestAgentEventSerialization:
     def test_to_sse_format(self):
         event = AgentEvent(event_type="done", data={"result": 42})
@@ -166,7 +172,8 @@ class TestAgentEventSerialization:
         assert sse.endswith("\n\n")
 
         import json
-        payload = json.loads(sse[len("data: "):-2])
+
+        payload = json.loads(sse[len("data: ") : -2])
         assert payload["event_type"] == "done"
         assert payload["data"]["result"] == 42
 
@@ -174,5 +181,6 @@ class TestAgentEventSerialization:
         event = AgentEvent(event_type="ping")
         sse = event.to_sse()
         import json
-        payload = json.loads(sse[len("data: "):-2])
+
+        payload = json.loads(sse[len("data: ") : -2])
         assert payload["data"] is None

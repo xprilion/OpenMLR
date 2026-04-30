@@ -16,7 +16,9 @@ async def probe_sandbox(sandbox) -> ComputeCapabilities:
         caps.platform = result.output.strip()
 
     # CPU cores and architecture
-    result = await sandbox.execute("nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo '0'", timeout=5)
+    result = await sandbox.execute(
+        "nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo '0'", timeout=5
+    )
     if result.success:
         try:
             caps.cpu_cores = int(result.output.strip())
@@ -29,8 +31,7 @@ async def probe_sandbox(sandbox) -> ComputeCapabilities:
 
     # RAM (Linux)
     result = await sandbox.execute(
-        "free -g 2>/dev/null | grep Mem | awk '{print $2, $7}' || "
-        "echo '0 0'",
+        "free -g 2>/dev/null | grep Mem | awk '{print $2, $7}' || echo '0 0'",
         timeout=5,
     )
     if result.success:
@@ -129,7 +130,8 @@ async def probe_sandbox(sandbox) -> ComputeCapabilities:
     )
     if result.success:
         caps.installed_packages = [
-            line.strip() for line in result.output.strip().split("\n")
+            line.strip()
+            for line in result.output.strip().split("\n")
             if line.strip() and "==" in line
         ]
 

@@ -21,10 +21,13 @@ class TestJobManager:
         jm2 = get_job_manager()
         assert jm1 is jm2
 
-    async def test_create_job_disabled_by_default(self, db_session: AsyncSession, conversation, test_user):
+    async def test_create_job_disabled_by_default(
+        self, db_session: AsyncSession, conversation, test_user
+    ):
         jm = JobManager()
         # USE_BACKGROUND_JOBS is controlled by env — test without making assumptions
         from openmlr.services.job_manager import USE_BACKGROUND_JOBS
+
         job = await jm.create_job(
             db=db_session,
             conversation_id=conversation.id,
@@ -44,7 +47,10 @@ class TestJobManager:
 
     async def test_get_job_status_from_db(self, db_session: AsyncSession, conversation, test_user):
         job = await ops.create_agent_job(
-            db_session, conversation.id, test_user.id, "Test",
+            db_session,
+            conversation.id,
+            test_user.id,
+            "Test",
         )
         jm = JobManager()
         status = await jm.get_job_status(db_session, job.job_id)
@@ -76,7 +82,9 @@ class TestJobManager:
         cancelled = await jm.cancel_job(db_session, "nonexistent")
         assert cancelled is False
 
-    async def test_cancel_already_running_job(self, db_session: AsyncSession, conversation, test_user):
+    async def test_cancel_already_running_job(
+        self, db_session: AsyncSession, conversation, test_user
+    ):
         job = await ops.create_agent_job(db_session, conversation.id, test_user.id, "Test")
         await ops.update_job_status(db_session, job.job_id, "running")
         jm = JobManager()

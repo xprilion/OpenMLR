@@ -160,24 +160,88 @@ class TestWaitForAnswers:
         assert result is None
 
 
+@pytest.mark.asyncio
+class TestPublishTodoApproval:
+    async def test_sets_todo_approval_key_in_redis(self):
+        import json
+
+        from openmlr.services.redis_pubsub import publish_todo_approval
+
+        mock_redis = AsyncMock()
+        with patch("openmlr.services.redis_pubsub.get_redis", return_value=mock_redis):
+            await publish_todo_approval(42, {"approved": True, "tasks": [{"title": "t1"}]})
+
+        mock_redis.set.assert_called_once()
+        call_args = mock_redis.set.call_args[0]
+        assert "todo_approval" in call_args[0]
+        assert "42" in call_args[0]
+        data = json.loads(call_args[1])
+        assert data["approved"] is True
+
+    async def test_handles_redis_error(self):
+        from openmlr.services.redis_pubsub import publish_todo_approval
+
+        mock_redis = AsyncMock()
+        mock_redis.set.side_effect = Exception("Redis down")
+        with patch("openmlr.services.redis_pubsub.get_redis", return_value=mock_redis):
+            await publish_todo_approval(1, {"approved": False})  # should not raise
+
+
+@pytest.mark.asyncio
+class TestWaitForTodoApproval:
+    async def test_returns_approval_when_set(self):
+        import json
+
+        from openmlr.services.redis_pubsub import wait_for_todo_approval
+
+        result_data = {"approved": True, "tasks": [{"title": "task1"}]}
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = json.dumps(result_data)
+        with patch("openmlr.services.redis_pubsub.get_redis", return_value=mock_redis):
+            result = await wait_for_todo_approval(conversation_id=42, timeout=0.1)
+
+        assert result is not None
+        assert result["approved"] is True
+        assert len(result["tasks"]) == 1
+
+    async def test_returns_none_on_timeout(self):
+        from openmlr.services.redis_pubsub import wait_for_todo_approval
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+        with patch("openmlr.services.redis_pubsub.get_redis", return_value=mock_redis):
+            result = await wait_for_todo_approval(conversation_id=42, timeout=0.1)
+
+        assert result is None
+
+
 class TestModuleConstants:
     def test_channel_name(self):
         from openmlr.services.redis_pubsub import CHANNEL_NAME
+
         assert CHANNEL_NAME == "openmlr:events"
 
     def test_answers_key_prefix(self):
         from openmlr.services.redis_pubsub import ANSWERS_KEY_PREFIX
+
         assert ANSWERS_KEY_PREFIX == "openmlr:answers:"
 
     def test_interrupt_key_prefix(self):
         from openmlr.services.redis_pubsub import INTERRUPT_KEY_PREFIX
+
         assert INTERRUPT_KEY_PREFIX == "openmlr:interrupt:"
+
+    def test_todo_approval_key_prefix(self):
+        from openmlr.services.redis_pubsub import TODO_APPROVAL_KEY_PREFIX
+
+        assert TODO_APPROVAL_KEY_PREFIX == "openmlr:todo_approval:"
 
     def test_redis_url_from_env(self, monkeypatch):
         monkeypatch.setenv("REDIS_URL", "redis://custom:6379/1")
         from importlib import reload
 
         import openmlr.services.redis_pubsub
+
         reload(openmlr.services.redis_pubsub)
         assert openmlr.services.redis_pubsub.REDIS_URL == "redis://custom:6379/1"
         # Restore

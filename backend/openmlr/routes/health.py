@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
-router = APIRouter(tags=["health"])
+from openmlr import __version__ as VERSION
 
-VERSION = "0.3.0"
+router = APIRouter(tags=["health"])
 
 
 @router.get("/api/health")

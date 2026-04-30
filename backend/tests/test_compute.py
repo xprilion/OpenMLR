@@ -19,6 +19,7 @@ from openmlr.tools.registry import MODE_TOOL_RESTRICTIONS, ToolRouter
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_keys_dir(tmp_path):
     keys_dir = tmp_path / ".keys"
@@ -44,6 +45,7 @@ def workspace_manager(tmp_workspace_dir):
 # ---------------------------------------------------------------------------
 # KeyManager
 # ---------------------------------------------------------------------------
+
 
 class TestKeyManager:
     def test_init_creates_dir(self, tmp_keys_dir, key_manager):
@@ -95,7 +97,9 @@ class TestKeyManager:
         assert result is False
 
     def test_write_and_read_key(self, key_manager):
-        key_manager.write_key("id_manual", "-----BEGIN FAKE KEY-----\ndata\n-----END FAKE KEY-----\n")
+        key_manager.write_key(
+            "id_manual", "-----BEGIN FAKE KEY-----\ndata\n-----END FAKE KEY-----\n"
+        )
         content = key_manager.read_key("id_manual")
         assert "FAKE KEY" in content
 
@@ -131,6 +135,7 @@ class TestKeyManager:
 # ---------------------------------------------------------------------------
 # WorkspaceManager
 # ---------------------------------------------------------------------------
+
 
 class TestWorkspaceManager:
     def test_create_workspace(self, workspace_manager):
@@ -216,6 +221,7 @@ class TestWorkspaceManager:
 # ComputeCapabilities
 # ---------------------------------------------------------------------------
 
+
 class TestComputeCapabilities:
     def test_defaults(self):
         caps = ComputeCapabilities()
@@ -241,7 +247,14 @@ class TestComputeCapabilities:
             "platform": "Linux",
             "cpu_cores": 4,
             "gpu_available": True,
-            "gpu_info": [{"model": "RTX 4090", "vram_gb": 24, "cuda_version": "12.4", "driver_version": "545"}],
+            "gpu_info": [
+                {
+                    "model": "RTX 4090",
+                    "vram_gb": 24,
+                    "cuda_version": "12.4",
+                    "driver_version": "545",
+                }
+            ],
         }
         caps = ComputeCapabilities.from_dict(d)
         assert caps.platform == "Linux"
@@ -267,7 +280,7 @@ class TestComputeCapabilities:
         restored = ComputeCapabilities.from_dict(d)
         assert restored.platform == "test"
         assert restored.cpu_cores == 16
-        assert restored.available_ram_gb == 32.5
+        assert restored.available_ram_gb == pytest.approx(32.5)
         assert len(restored.gpu_info) == 2
         assert restored.docker_available is True
 
@@ -275,6 +288,7 @@ class TestComputeCapabilities:
 # ---------------------------------------------------------------------------
 # ComputeManager (validation)
 # ---------------------------------------------------------------------------
+
 
 class TestComputeManager:
     def test_validate_ssh_missing_host(self, key_manager):
@@ -296,9 +310,14 @@ class TestComputeManager:
 
     def test_validate_ssh_missing_key(self, key_manager):
         cm = ComputeManager(key_manager)
-        ok, err = cm.validate_node_config("ssh", {
-            "host": "x", "username": "u", "key_filename": "nonexistent",
-        })
+        ok, err = cm.validate_node_config(
+            "ssh",
+            {
+                "host": "x",
+                "username": "u",
+                "key_filename": "nonexistent",
+            },
+        )
         assert ok is False
         assert "not found" in err
 
@@ -329,6 +348,7 @@ class TestComputeManager:
 # ---------------------------------------------------------------------------
 # SSHConnectionPool
 # ---------------------------------------------------------------------------
+
 
 class TestSSHConnectionPool:
     def test_singleton(self):
@@ -396,6 +416,7 @@ class TestSSHConnectionPool:
 # Path traversal validation
 # ---------------------------------------------------------------------------
 
+
 class TestPathTraversal:
     def test_valid_relative_path(self, tmp_path):
         ws = tmp_path / "workspace"
@@ -429,6 +450,7 @@ class TestPathTraversal:
 # ToolRouter compute context injection
 # ---------------------------------------------------------------------------
 
+
 class TestToolRouterContext:
     def test_set_context(self):
         router = ToolRouter()
@@ -444,8 +466,11 @@ class TestToolRouterContext:
             return f"uid={user_id},db={db},arg={arg}", True
 
         from openmlr.agent.types import ToolSpec
+
         tool = ToolSpec(
-            name="ctx_test", description="test", parameters={"type": "object", "properties": {}},
+            name="ctx_test",
+            description="test",
+            parameters={"type": "object", "properties": {}},
             handler=handler,
         )
         router.register(tool)
@@ -459,6 +484,7 @@ class TestToolRouterContext:
 # ---------------------------------------------------------------------------
 # Plan mode allows compute tools
 # ---------------------------------------------------------------------------
+
 
 class TestPlanModeComputeTools:
     def test_compute_list_allowed(self):
@@ -478,9 +504,11 @@ class TestPlanModeComputeTools:
 # Config redaction (routes/compute.py)
 # ---------------------------------------------------------------------------
 
+
 class TestConfigRedaction:
     def test_redact_password(self):
         from openmlr.routes.compute import _redact_config
+
         config = {"host": "example.com", "password": "secret123", "username": "user"}
         redacted = _redact_config(config)
         assert redacted["host"] == "example.com"
@@ -489,11 +517,13 @@ class TestConfigRedaction:
 
     def test_redact_empty_config(self):
         from openmlr.routes.compute import _redact_config
+
         assert _redact_config({}) == {}
         assert _redact_config(None) == {}
 
     def test_redact_no_sensitive_fields(self):
         from openmlr.routes.compute import _redact_config
+
         config = {"host": "x", "port": 22}
         assert _redact_config(config) == config
 
@@ -502,6 +532,7 @@ class TestConfigRedaction:
 # Routes (keys + compute) — integration via httpx
 # ---------------------------------------------------------------------------
 
+
 class TestKeyRoutes:
     async def test_list_keys_empty(self, auth_client):
         resp = await auth_client.get("/api/keys")
@@ -509,12 +540,15 @@ class TestKeyRoutes:
         assert resp.json()["keys"] == []
 
     async def test_generate_key(self, auth_client):
-        resp = await auth_client.post("/api/keys", json={
-            "action": "generate",
-            "filename": "id_test_route",
-            "algorithm": "ed25519",
-            "comment": "test",
-        })
+        resp = await auth_client.post(
+            "/api/keys",
+            json={
+                "action": "generate",
+                "filename": "id_test_route",
+                "algorithm": "ed25519",
+                "comment": "test",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["key"]
         assert data["filename"] == "id_test_route"
@@ -522,18 +556,33 @@ class TestKeyRoutes:
         assert data["fingerprint"].startswith("SHA256:")
 
     async def test_generate_duplicate(self, auth_client):
-        await auth_client.post("/api/keys", json={
-            "action": "generate", "filename": "id_dup", "algorithm": "ed25519",
-        })
-        resp = await auth_client.post("/api/keys", json={
-            "action": "generate", "filename": "id_dup", "algorithm": "ed25519",
-        })
+        await auth_client.post(
+            "/api/keys",
+            json={
+                "action": "generate",
+                "filename": "id_dup",
+                "algorithm": "ed25519",
+            },
+        )
+        resp = await auth_client.post(
+            "/api/keys",
+            json={
+                "action": "generate",
+                "filename": "id_dup",
+                "algorithm": "ed25519",
+            },
+        )
         assert resp.status_code == 409
 
     async def test_delete_key(self, auth_client):
-        await auth_client.post("/api/keys", json={
-            "action": "generate", "filename": "id_to_del", "algorithm": "ed25519",
-        })
+        await auth_client.post(
+            "/api/keys",
+            json={
+                "action": "generate",
+                "filename": "id_to_del",
+                "algorithm": "ed25519",
+            },
+        )
         resp = await auth_client.delete("/api/keys/id_to_del")
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
@@ -547,9 +596,13 @@ class TestKeyRoutes:
         assert resp.status_code == 400
 
     async def test_create_key_invalid_action(self, auth_client):
-        resp = await auth_client.post("/api/keys", json={
-            "action": "nope", "filename": "id_x",
-        })
+        resp = await auth_client.post(
+            "/api/keys",
+            json={
+                "action": "nope",
+                "filename": "id_x",
+            },
+        )
         assert resp.status_code == 400
 
     async def test_unauthenticated_keys(self, client):
@@ -564,11 +617,14 @@ class TestComputeNodeRoutes:
         assert resp.json()["nodes"] == []
 
     async def test_create_local_node(self, auth_client):
-        resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "My Laptop",
-            "type": "local",
-            "config": {},
-        })
+        resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "My Laptop",
+                "type": "local",
+                "config": {},
+            },
+        )
         assert resp.status_code == 200
         node = resp.json()["node"]
         assert node["name"] == "My Laptop"
@@ -576,53 +632,91 @@ class TestComputeNodeRoutes:
         assert node["health_status"] == "unknown"
 
     async def test_create_duplicate_name(self, auth_client):
-        await auth_client.post("/api/compute/nodes", json={
-            "name": "Dup", "type": "local", "config": {},
-        })
-        resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Dup", "type": "local", "config": {},
-        })
+        await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Dup",
+                "type": "local",
+                "config": {},
+            },
+        )
+        resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Dup",
+                "type": "local",
+                "config": {},
+            },
+        )
         assert resp.status_code == 409
 
     async def test_create_invalid_type(self, auth_client):
-        resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Bad", "type": "kubernetes", "config": {},
-        })
+        resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Bad",
+                "type": "kubernetes",
+                "config": {},
+            },
+        )
         assert resp.status_code == 400
 
     async def test_get_node(self, auth_client):
-        create_resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Get Test", "type": "local", "config": {},
-        })
+        create_resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Get Test",
+                "type": "local",
+                "config": {},
+            },
+        )
         node_id = create_resp.json()["node"]["id"]
         resp = await auth_client.get(f"/api/compute/nodes/{node_id}")
         assert resp.status_code == 200
         assert resp.json()["node"]["name"] == "Get Test"
 
     async def test_update_node(self, auth_client):
-        create_resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Update Test", "type": "local", "config": {},
-        })
+        create_resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Update Test",
+                "type": "local",
+                "config": {},
+            },
+        )
         node_id = create_resp.json()["node"]["id"]
-        resp = await auth_client.put(f"/api/compute/nodes/{node_id}", json={
-            "name": "Updated Name",
-        })
+        resp = await auth_client.put(
+            f"/api/compute/nodes/{node_id}",
+            json={
+                "name": "Updated Name",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["node"]["name"] == "Updated Name"
 
     async def test_delete_node(self, auth_client):
-        create_resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Delete Test", "type": "local", "config": {},
-        })
+        create_resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Delete Test",
+                "type": "local",
+                "config": {},
+            },
+        )
         node_id = create_resp.json()["node"]["id"]
         resp = await auth_client.delete(f"/api/compute/nodes/{node_id}")
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
     async def test_set_default(self, auth_client):
-        create_resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Default Test", "type": "local", "config": {},
-        })
+        create_resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Default Test",
+                "type": "local",
+                "config": {},
+            },
+        )
         node_id = create_resp.json()["node"]["id"]
         resp = await auth_client.post(f"/api/compute/nodes/{node_id}/set-default")
         assert resp.status_code == 200
@@ -632,20 +726,28 @@ class TestComputeNodeRoutes:
         assert get_resp.json()["node"]["is_default"] is True
 
     async def test_config_redacted_in_response(self, auth_client):
-        resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Redact Test",
-            "type": "ssh",
-            "config": {"host": "x", "username": "u", "password": "secret"},
-        })
+        resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Redact Test",
+                "type": "ssh",
+                "config": {"host": "x", "username": "u", "password": "secret"},
+            },
+        )
         assert resp.status_code == 200
         node = resp.json()["node"]
         assert node["config"]["password"] == "***"
         assert node["config"]["host"] == "x"
 
     async def test_test_local_node(self, auth_client):
-        create_resp = await auth_client.post("/api/compute/nodes", json={
-            "name": "Test Local", "type": "local", "config": {},
-        })
+        create_resp = await auth_client.post(
+            "/api/compute/nodes",
+            json={
+                "name": "Test Local",
+                "type": "local",
+                "config": {},
+            },
+        )
         node_id = create_resp.json()["node"]["id"]
         resp = await auth_client.post(f"/api/compute/nodes/{node_id}/test")
         assert resp.status_code == 200
@@ -653,18 +755,24 @@ class TestComputeNodeRoutes:
         assert resp.json()["ok"] is True
 
     async def test_test_config_endpoint(self, auth_client):
-        resp = await auth_client.post("/api/compute/test", json={
-            "type": "local",
-            "config": {},
-        })
+        resp = await auth_client.post(
+            "/api/compute/test",
+            json={
+                "type": "local",
+                "config": {},
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
     async def test_test_config_invalid_type(self, auth_client):
-        resp = await auth_client.post("/api/compute/test", json={
-            "type": "kubernetes",
-            "config": {},
-        })
+        resp = await auth_client.post(
+            "/api/compute/test",
+            json={
+                "type": "kubernetes",
+                "config": {},
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["ok"] is False
 
@@ -677,9 +785,11 @@ class TestComputeNodeRoutes:
 # System prompt includes compute_env
 # ---------------------------------------------------------------------------
 
+
 class TestSystemPromptCompute:
     def test_prompt_includes_compute_env(self):
         from openmlr.agent.prompts import build_system_prompt
+
         prompt = build_system_prompt(
             tool_specs=[],
             compute_env="## Active Compute: TestNode (ssh)\n- CPU: 8 cores",
@@ -689,5 +799,6 @@ class TestSystemPromptCompute:
 
     def test_prompt_without_compute_env(self):
         from openmlr.agent.prompts import build_system_prompt
+
         prompt = build_system_prompt(tool_specs=[], compute_env="")
         assert "Active Compute" not in prompt

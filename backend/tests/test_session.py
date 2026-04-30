@@ -13,6 +13,7 @@ from openmlr.config import AgentConfig
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def config() -> AgentConfig:
     return AgentConfig(model_name="test-model")
@@ -26,6 +27,7 @@ def session(config: AgentConfig) -> Session:
 # ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
+
 
 class TestInit:
     def test_session_creates_context_manager(self, session: Session):
@@ -51,6 +53,7 @@ class TestInit:
 # ---------------------------------------------------------------------------
 # emit
 # ---------------------------------------------------------------------------
+
 
 class TestEmit:
     @pytest.mark.asyncio
@@ -120,6 +123,7 @@ class TestEmit:
 # cancel / is_cancelled / clear_cancel
 # ---------------------------------------------------------------------------
 
+
 class TestCancellation:
     def test_not_cancelled_initially(self, session: Session):
         assert session.is_cancelled() is False
@@ -147,6 +151,7 @@ class TestCancellation:
 # on_event
 # ---------------------------------------------------------------------------
 
+
 class TestOnEvent:
     def test_registers_listener(self, session: Session):
         assert len(session._listeners) == 0
@@ -164,6 +169,7 @@ class TestOnEvent:
 # update_model
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateModel:
     def test_update_model_changes_config(self, session: Session):
         assert session.config.model_name == "test-model"
@@ -174,3 +180,24 @@ class TestUpdateModel:
         """ContextManager shares the config object, so the change propagates."""
         session.update_model("openai/gpt-4o")
         assert session.context_manager.config.model_name == "openai/gpt-4o"
+
+
+# ---------------------------------------------------------------------------
+# current_mode
+# ---------------------------------------------------------------------------
+
+
+class TestCurrentMode:
+    def test_default_mode_is_plan(self, session: Session):
+        """Session defaults to plan mode (safe default)."""
+        assert session.current_mode == "plan"
+
+    def test_mode_can_be_set(self, session: Session):
+        session.current_mode = "execute"
+        assert session.current_mode == "execute"
+
+    def test_mode_persists_across_reads(self, session: Session):
+        session.current_mode = "plan"
+        assert session.current_mode == "plan"
+        session.current_mode = "execute"
+        assert session.current_mode == "execute"

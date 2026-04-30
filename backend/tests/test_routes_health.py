@@ -38,5 +38,6 @@ class TestHealthEndpoints:
         resp = await client.get("/health")
         data = resp.json()
         import re
+
         iso_pattern = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
         assert re.search(iso_pattern, data["timestamp"])

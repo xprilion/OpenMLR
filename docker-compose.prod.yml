@@ -67,6 +67,7 @@ services:
     volumes:
       - ./backend/configs:/app/backend/configs
       - ./.keys:/app/.keys
+      - ${OPENMLR_WORKSPACES_PATH:-./.workspaces}:/app/.workspaces
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -95,6 +96,7 @@ services:
     volumes:
       - ./backend/configs:/app/backend/configs
       - ./.keys:/app/.keys
+      - ${OPENMLR_WORKSPACES_PATH:-./.workspaces}:/app/.workspaces
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -116,3 +118,5 @@ services:
 volumes:
   pgdata:
   redisdata:
+  # Note: workspaces use a bind mount (OPENMLR_WORKSPACES_PATH or ./.workspaces)
+  # for easy backup and inspection. Not a named volume.

@@ -59,6 +59,9 @@ export interface Provider {
   configured: boolean;
   categories: string[];
   docs_url?: string;
+  is_custom?: boolean;
+  sdk_type?: string;
+  api_base?: string;
 }
 
 // ── Structured Questions ────────────────────────────────
@@ -81,6 +84,37 @@ export interface QuestionsPayload {
   suggest_mode?: string | null;
 }
 
+// ── Projects ────────────────────────────────────────────
+
+export interface Project {
+  id: number;
+  uuid: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  workspace_path: string | null;
+  status: 'active' | 'archived';
+  settings: Record<string, any>;
+  is_default?: boolean;
+  conversation_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FileNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number | null;
+  modified: number;
+}
+
+export interface OpenFile {
+  path: string;
+  content: string;
+  language: string;
+}
+
 // ── Task Plan & Resources ───────────────────────────────
 
 export interface PlanTask {
@@ -96,6 +130,14 @@ export interface Resource {
   content?: string;
 }
 
+// ── TODO Approval ───────────────────────────────────────
+
+export interface TodoApprovalPayload {
+  change_type: 'create' | 'add';
+  proposed_tasks: Array<{ title: string; status: string; priority?: string }>;
+  current_tasks: Array<{ title: string; status: string; priority?: string }>;
+}
+
 // ── Context & Budget ────────────────────────────────────
 
 export interface ContextUsage {
@@ -107,6 +149,15 @@ export interface ContextUsage {
 export interface SearchBudget {
   used: number;
   max: number;
+}
+
+// ── MCP Servers ─────────────────────────────────────────
+
+export interface McpServerStatus {
+  name: string;
+  url: string;
+  enabled: boolean;
+  connected: boolean;
 }
 
 // ── Background Jobs ─────────────────────────────────────

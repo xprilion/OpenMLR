@@ -7,9 +7,66 @@ BACKEND       := backend
 FRONTEND      := frontend
 PORT          ?= 3000
 DOCKER_USER   ?= xprilion
-VERSION       ?= 0.3.0
+VERSION       := $(shell cat VERSION 2>/dev/null || echo 0.0.0)
 DOCKER_COMPOSE := docker compose
 LOGO_SRC      := assets/full-logo.png
+
+# ─── Versioning ───────────────────────────────────────────
+# Single source of truth: VERSION file at repo root.
+# Bump targets compute the new version, write it, then sync everywhere.
+
+MAJOR := $(word 1,$(subst ., ,$(VERSION)))
+MINOR := $(word 2,$(subst ., ,$(VERSION)))
+PATCH := $(word 3,$(subst ., ,$(VERSION)))
+
+.PHONY: version
+version: ## Print current version
+	@echo $(VERSION)
+
+.PHONY: version-major
+version-major: ## Bump major version (e.g. 0.3.1 -> 1.0.0)
+	@NEW=$$(( $(MAJOR) + 1 )).0.0; \
+	echo "$$NEW" > VERSION; \
+	$(MAKE) _version-sync; \
+	echo "Version bumped: $(VERSION) -> $$NEW"
+
+.PHONY: version-minor
+version-minor: ## Bump minor version (e.g. 0.3.1 -> 0.4.0)
+	@NEW=$(MAJOR).$$(( $(MINOR) + 1 )).0; \
+	echo "$$NEW" > VERSION; \
+	$(MAKE) _version-sync; \
+	echo "Version bumped: $(VERSION) -> $$NEW"
+
+.PHONY: version-patch
+version-patch: ## Bump patch version (e.g. 0.3.0 -> 0.3.1)
+	@NEW=$(MAJOR).$(MINOR).$$(( $(PATCH) + 1 )); \
+	echo "$$NEW" > VERSION; \
+	$(MAKE) _version-sync; \
+	echo "Version bumped: $(VERSION) -> $$NEW"
+
+.PHONY: version-set
+version-set: ## Set explicit version (V=1.2.3)
+	@if [ -z "$(V)" ]; then echo "Usage: make version-set V=1.2.3"; exit 1; fi
+	@echo "$(V)" > VERSION
+	@$(MAKE) _version-sync
+	@echo "Version set: $(VERSION) -> $(V)"
+
+.PHONY: _version-sync
+_version-sync: # (internal) propagate VERSION file to all project files
+	$(eval NEW_VERSION := $(shell cat VERSION))
+	@# backend/openmlr/__init__.py
+	@sed -i '' 's/^__version__ = ".*"/__version__ = "$(NEW_VERSION)"/' $(BACKEND)/openmlr/__init__.py
+	@# backend/pyproject.toml
+	@sed -i '' 's/^version = ".*"/version = "$(NEW_VERSION)"/' $(BACKEND)/pyproject.toml
+	@# frontend/src/version.ts
+	@sed -i '' 's/^export const APP_VERSION = ".*"/export const APP_VERSION = "$(NEW_VERSION)"/' $(FRONTEND)/src/version.ts
+	@# site/docs/.vitepress/version.ts
+	@sed -i '' 's/^export const APP_VERSION = ".*"/export const APP_VERSION = "$(NEW_VERSION)"/' site/docs/.vitepress/version.ts
+	@# package.json (root)
+	@sed -i '' 's/"version": ".*"/"version": "$(NEW_VERSION)"/' package.json
+	@# frontend/package.json
+	@sed -i '' 's/"version": ".*"/"version": "$(NEW_VERSION)"/' $(FRONTEND)/package.json
+	@echo "Synced version $(NEW_VERSION) to all project files"
 
 # ─── Setup ────────────────────────────────────────────────
 
@@ -153,7 +210,7 @@ test-frontend: ## Run frontend vitest suite
 	cd $(FRONTEND) && pnpm test
 
 .PHONY: test-docs
-test-docs: ## Verify docs site builds cleanly
+test-docs: _docs-sync-changelog ## Verify docs site builds cleanly
 	cd site && npx vitepress build docs
 
 .PHONY: test-coverage
@@ -239,20 +296,25 @@ docker-publish: docker-build docker-tag docker-push ## Build, tag, and push to D
 
 # ─── Docs ─────────────────────────────────────────────────
 
+.PHONY: _docs-sync-changelog
+_docs-sync-changelog: # (internal) copy root CHANGELOG.md into docs with frontmatter
+	@printf '%s\n' '---' 'title: Changelog - OpenMLR' 'description: OpenMLR version history and release notes.' '---' '' > site/docs/changelog.md
+	@cat CHANGELOG.md >> site/docs/changelog.md
+
 .PHONY: docs-install
 docs-install: ## Install docs site dependencies
 	cd site && npm install
 
 .PHONY: docs-dev
-docs-dev: ## Preview docs locally (port 4000)
+docs-dev: _docs-sync-changelog ## Preview docs locally (port 4000)
 	cd site && npx vitepress dev docs --port 4000
 
 .PHONY: docs-docker
-docs-docker: ## Run docs in Docker (port 4000)
+docs-docker: _docs-sync-changelog ## Run docs in Docker (port 4000)
 	$(DOCKER_COMPOSE) --profile docs up -d docs
 
 .PHONY: docs-build
-docs-build: ## Build docs to site/docs/.vitepress/dist
+docs-build: _docs-sync-changelog ## Build docs to site/docs/.vitepress/dist
 	cd site && npx vitepress build docs
 
 # ─── Logo Generation ─────────────────────────────────────

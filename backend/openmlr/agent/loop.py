@@ -33,28 +33,40 @@ async def submission_loop(session: Session, tool_router) -> None:
             break
 
 
-async def run_agent_turn(session: Session, tool_router, user_message: str, mode: str = None) -> None:
+async def run_agent_turn(
+    session: Session, tool_router, user_message: str, mode: str | None = None
+) -> None:
     """Direct entry point: run one agent turn."""
     await _run_agent(session, tool_router, user_message, mode)
 
 
-async def _run_agent(session: Session, tool_router, user_message: str, mode: str = None) -> None:
+async def _run_agent(
+    session: Session, tool_router, user_message: str, mode: str | None = None
+) -> None:
     """Execute the agentic loop for a user message."""
     session.clear_cancel()
 
     if session.pending_approval:
         session.pending_approval = None
 
-    # Set the mode on the tool router for strict enforcement
-    effective_mode = mode if mode in ("plan", "execute") else "execute"
+    # Set the mode on the tool router for strict enforcement.
+    # Default to plan (safe) if mode is missing or invalid.
+    # If mode is explicitly provided, use it and persist on session.
+    # If not provided (e.g. approval continuation), fall back to session's stored mode.
+    if mode in ("plan", "execute"):
+        effective_mode = mode
+        session.current_mode = mode
+    else:
+        effective_mode = session.current_mode  # preserved from the last explicit mode
     tool_router.set_mode(effective_mode)
 
     # Inject per-message mode hint (short reinforcement of system prompt rules)
-    mode_hint = (
-        f"[Mode: {effective_mode.upper()}] "
-        + ("Plan only — ask questions, gather context, create plan. No execution."
-           if effective_mode == "plan" else
-           "Execute the plan — do the work, no questions. All tools except ask_user.")
+    mode_hint = f"[Mode: {effective_mode.upper()}] " + (
+        "Plan only — ask questions, create plan. "
+        "Use search/papers only for quick feasibility checks. "
+        "Do NOT do comprehensive research here — add research as Execute mode tasks."
+        if effective_mode == "plan"
+        else "Execute the plan — do the work, no questions. All tools except ask_user."
     )
     session.context_manager.add_message(Message(role="system", content=mode_hint))
 
@@ -70,31 +82,35 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
 
             # Auto-compaction check
             if session.context_manager.needs_compaction():
-                await session.emit(AgentEvent(
-                    event_type="tool_log",
-                    data={"message": "Context nearing limit, compacting..."},
-                ))
+                await session.emit(
+                    AgentEvent(
+                        event_type="tool_log",
+                        data={"message": "Context nearing limit, compacting..."},
+                    )
+                )
                 summary = await session.context_manager.compact(
                     lambda msgs, cfg: _compact_llm_call(msgs, cfg)
                 )
                 if summary:
-                    await session.emit(AgentEvent(
-                        event_type="compacted",
-                        data={"summary": summary[:500]},
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="compacted",
+                            data={"summary": summary[:500]},
+                        )
+                    )
 
             # Doom loop detection
             doom_msg = detect_doom_loop(session.context_manager.messages)
             if doom_msg:
-                session.context_manager.add_message(
-                    Message(role="system", content=doom_msg)
-                )
+                session.context_manager.add_message(Message(role="system", content=doom_msg))
 
             # Emit context usage for frontend gauge
-            await session.emit(AgentEvent(
-                event_type="context_usage",
-                data=session.context_manager.get_token_usage(),
-            ))
+            await session.emit(
+                AgentEvent(
+                    event_type="context_usage",
+                    data=session.context_manager.get_token_usage(),
+                )
+            )
 
             # Get tool specs for LLM
             tool_specs = tool_router.get_tool_specs_for_llm()
@@ -114,17 +130,21 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
             # Update token count
             if result.usage:
                 session.context_manager.running_token_count = result.usage.get(
-                    "total_tokens", result.usage.get("input_tokens", 0) + result.usage.get("output_tokens", 0)
+                    "total_tokens",
+                    result.usage.get("input_tokens", 0) + result.usage.get("output_tokens", 0),
                 )
 
             # Handle finish_reason == "length" with truncated tool calls
             if result.finish_reason == "length" and result.tool_calls:
                 # Drop truncated tool calls and hint
                 session.context_manager.add_message(
-                    Message(role="system", content=(
-                        "[System: Your response was truncated due to length. "
-                        "Please be more concise and focus on essential tool calls only.]"
-                    ))
+                    Message(
+                        role="system",
+                        content=(
+                            "[System: Your response was truncated due to length. "
+                            "Please be more concise and focus on essential tool calls only.]"
+                        ),
+                    )
                 )
                 continue
 
@@ -134,18 +154,33 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
                     session.context_manager.add_message(
                         Message(role="assistant", content=result.content)
                     )
-                    await session.emit(AgentEvent(
-                        event_type="assistant_message",
-                        data={"content": result.content},
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="assistant_message",
+                            data={"content": result.content},
+                        )
+                    )
                 break
 
             # Add assistant message with tool calls to context
-            session.context_manager.add_message(Message(
-                role="assistant",
-                content=result.content,
-                tool_calls=result.tool_calls,
-            ))
+            session.context_manager.add_message(
+                Message(
+                    role="assistant",
+                    content=result.content,
+                    tool_calls=result.tool_calls,
+                )
+            )
+
+            # Persist assistant text that accompanies tool calls (otherwise
+            # it only lives in the in-memory ContextManager and is lost on
+            # page refresh).
+            if result.content:
+                await session.emit(
+                    AgentEvent(
+                        event_type="assistant_message",
+                        data={"content": result.content},
+                    )
+                )
 
             # Check for approval-required tools
             needs_approval = []
@@ -173,22 +208,26 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
                         output, success = res
 
                     # Add tool result to context
-                    session.context_manager.add_message(Message(
-                        role="tool",
-                        content=output,
-                        tool_call_id=tc.id,
-                        name=tc.name,
-                    ))
+                    session.context_manager.add_message(
+                        Message(
+                            role="tool",
+                            content=output,
+                            tool_call_id=tc.id,
+                            name=tc.name,
+                        )
+                    )
 
-                    await session.emit(AgentEvent(
-                        event_type="tool_output",
-                        data={
-                            "tool": tc.name,
-                            "tool_call_id": tc.id,
-                            "output": output[:10000],
-                            "success": success,
-                        },
-                    ))
+                    await session.emit(
+                        AgentEvent(
+                            event_type="tool_output",
+                            data={
+                                "tool": tc.name,
+                                "tool_call_id": tc.id,
+                                "output": output[:10000],
+                                "success": success,
+                            },
+                        )
+                    )
 
             # Handle approval-required tools
             if needs_approval:
@@ -196,34 +235,42 @@ async def _run_agent(session: Session, tool_router, user_message: str, mode: str
                     "tool_calls": needs_approval,
                     "tool_router": tool_router,
                 }
-                await session.emit(AgentEvent(
-                    event_type="approval_required",
-                    data={
-                        "tool_calls": [
-                            {
-                                "id": tc.id,
-                                "name": tc.name,
-                                "arguments": tc.arguments,
-                            }
-                            for tc in needs_approval
-                        ],
-                    },
-                ))
+                await session.emit(
+                    AgentEvent(
+                        event_type="approval_required",
+                        data={
+                            "tool_calls": [
+                                {
+                                    "id": tc.id,
+                                    "name": tc.name,
+                                    "arguments": tc.arguments,
+                                }
+                                for tc in needs_approval
+                            ],
+                        },
+                    )
+                )
                 break  # Wait for approval submission
 
     except Exception as e:
-        await session.emit(AgentEvent(
-            event_type="error",
-            data={"error": str(e), "traceback": traceback.format_exc()},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="error",
+                data={"error": str(e), "traceback": traceback.format_exc()},
+            )
+        )
     finally:
         session.turn_count += 1
         # Emit final context usage
-        await session.emit(AgentEvent(
-            event_type="context_usage",
-            data=session.context_manager.get_token_usage(),
-        ))
-        await session.emit(AgentEvent(event_type="turn_complete", data={"turns": session.turn_count}))
+        await session.emit(
+            AgentEvent(
+                event_type="context_usage",
+                data=session.context_manager.get_token_usage(),
+            )
+        )
+        await session.emit(
+            AgentEvent(event_type="turn_complete", data={"turns": session.turn_count})
+        )
         await session.emit(AgentEvent(event_type="status", data={"status": "ready"}))
 
 
@@ -243,20 +290,26 @@ async def _stream_llm_call(
 
         if isinstance(chunk, str):
             content_buffer += chunk
-            await session.emit(AgentEvent(
-                event_type="assistant_chunk",
-                data={"chunk": chunk},
-            ))
+            await session.emit(
+                AgentEvent(
+                    event_type="assistant_chunk",
+                    data={"chunk": chunk},
+                )
+            )
         elif isinstance(chunk, ToolCall):
             tool_calls.append(chunk)
-            await session.emit(AgentEvent(
-                event_type="tool_call",
-                data={
-                    "id": chunk.id,
-                    "tool": chunk.name,
-                    "arguments": json.dumps(chunk.arguments) if isinstance(chunk.arguments, dict) else str(chunk.arguments),
-                },
-            ))
+            await session.emit(
+                AgentEvent(
+                    event_type="tool_call",
+                    data={
+                        "id": chunk.id,
+                        "tool": chunk.name,
+                        "arguments": json.dumps(chunk.arguments)
+                        if isinstance(chunk.arguments, dict)
+                        else str(chunk.arguments),
+                    },
+                )
+            )
         elif isinstance(chunk, dict):
             if chunk.get("event") == "usage":
                 usage_data = chunk.get("usage")
@@ -281,21 +334,25 @@ async def _non_stream_llm_call(
     result = await LLMProvider.generate(messages, session.config, tools)
 
     if result.content:
-        await session.emit(AgentEvent(
-            event_type="assistant_chunk",
-            data={"chunk": result.content},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="assistant_chunk",
+                data={"chunk": result.content},
+            )
+        )
         await session.emit(AgentEvent(event_type="assistant_stream_end"))
 
     for tc in result.tool_calls:
-        await session.emit(AgentEvent(
-            event_type="tool_call",
-            data={
-                "id": tc.id,
-                "tool": tc.name,
-                "arguments": json.dumps(tc.arguments),
-            },
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="tool_call",
+                data={
+                    "id": tc.id,
+                    "tool": tc.name,
+                    "arguments": json.dumps(tc.arguments),
+                },
+            )
+        )
 
     return result
 
@@ -306,10 +363,12 @@ async def _execute_tool(
     tool_call: ToolCall,
 ) -> tuple[str, bool]:
     """Execute a single tool call."""
-    await session.emit(AgentEvent(
-        event_type="tool_state_change",
-        data={"tool_call_id": tool_call.id, "state": "running"},
-    ))
+    await session.emit(
+        AgentEvent(
+            event_type="tool_state_change",
+            data={"tool_call_id": tool_call.id, "state": "running"},
+        )
+    )
 
     try:
         output, success = await tool_router.call_tool(
@@ -319,10 +378,12 @@ async def _execute_tool(
     except Exception as e:
         return f"Tool execution error: {str(e)}", False
     finally:
-        await session.emit(AgentEvent(
-            event_type="tool_state_change",
-            data={"tool_call_id": tool_call.id, "state": "done"},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="tool_state_change",
+                data={"tool_call_id": tool_call.id, "state": "done"},
+            )
+        )
 
 
 async def _handle_approval(
@@ -345,21 +406,25 @@ async def _handle_approval(
             output = "Tool execution rejected by user."
             success = False
 
-        session.context_manager.add_message(Message(
-            role="tool",
-            content=output,
-            tool_call_id=tc.id,
-            name=tc.name,
-        ))
-        await session.emit(AgentEvent(
-            event_type="tool_output",
-            data={
-                "tool": tc.name,
-                "tool_call_id": tc.id,
-                "output": output[:10000],
-                "success": success,
-            },
-        ))
+        session.context_manager.add_message(
+            Message(
+                role="tool",
+                content=output,
+                tool_call_id=tc.id,
+                name=tc.name,
+            )
+        )
+        await session.emit(
+            AgentEvent(
+                event_type="tool_output",
+                data={
+                    "tool": tc.name,
+                    "tool_call_id": tc.id,
+                    "output": output[:10000],
+                    "success": success,
+                },
+            )
+        )
 
     # Continue the agent loop after approval
     await _run_agent(session, tool_router, "")
@@ -367,28 +432,32 @@ async def _handle_approval(
 
 async def _compact(session: Session) -> None:
     """Compact the context."""
-    summary = await session.context_manager.compact(
-        lambda msgs, cfg: _compact_llm_call(msgs, cfg)
-    )
+    summary = await session.context_manager.compact(lambda msgs, cfg: _compact_llm_call(msgs, cfg))
     if summary:
-        await session.emit(AgentEvent(
-            event_type="compacted",
-            data={"summary": summary[:500]},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="compacted",
+                data={"summary": summary[:500]},
+            )
+        )
     else:
-        await session.emit(AgentEvent(
-            event_type="compacted",
-            data={"summary": "Nothing to compact."},
-        ))
+        await session.emit(
+            AgentEvent(
+                event_type="compacted",
+                data={"summary": "Nothing to compact."},
+            )
+        )
 
 
 async def _undo(session: Session) -> None:
     """Undo the last turn."""
     removed = session.context_manager.undo_last_turn()
-    await session.emit(AgentEvent(
-        event_type="undo_complete",
-        data={"removed_messages": removed},
-    ))
+    await session.emit(
+        AgentEvent(
+            event_type="undo_complete",
+            data={"removed_messages": removed},
+        )
+    )
 
 
 async def _compact_llm_call(messages: list[dict], config: AgentConfig) -> str:

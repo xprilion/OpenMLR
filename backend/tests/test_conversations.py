@@ -56,8 +56,18 @@ async def _patch_app_state():
 # ---------------------------------------------------------------------------
 
 
+async def _ensure_project(auth_client) -> str:
+    """Create a test project and return its UUID."""
+    resp = await auth_client.post("/api/projects", json={"name": "Test Project"})
+    assert resp.status_code == 200
+    return resp.json()["project"]["uuid"]
+
+
 async def _create_conversation(auth_client, **overrides):
     """Shortcut: create a conversation and return the response body."""
+    # Ensure a project exists so conversations aren't orphaned
+    if "project_uuid" not in overrides:
+        overrides["project_uuid"] = await _ensure_project(auth_client)
     payload = {"title": "Test Conv", "model": "test-model", "mode": "general"}
     payload.update(overrides)
     resp = await auth_client.post("/api/conversations", json=payload)
@@ -117,9 +127,10 @@ async def test_list_conversations_empty(auth_client):
 
 
 async def test_list_conversations(auth_client):
-    """GET /api/conversations returns all conversations for the user."""
-    await _create_conversation(auth_client, title="First")
-    await _create_conversation(auth_client, title="Second")
+    """GET /api/conversations returns all project-scoped conversations for the user."""
+    project_uuid = await _ensure_project(auth_client)
+    await _create_conversation(auth_client, title="First", project_uuid=project_uuid)
+    await _create_conversation(auth_client, title="Second", project_uuid=project_uuid)
 
     resp = await auth_client.get("/api/conversations")
     assert resp.status_code == 200

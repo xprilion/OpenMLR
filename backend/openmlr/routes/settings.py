@@ -1,6 +1,7 @@
 """Settings routes — user settings, provider config, model management."""
 
 import os
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/api", tags=["settings"])
 
 
 # ---- User Settings ----
+
 
 @router.get("/settings")
 async def get_all_settings(
@@ -62,6 +64,7 @@ async def update_setting(
             "openalex_api_key": "OPENALEX_API_KEY",
             "modal_token_id": "MODAL_TOKEN_ID",
             "modal_token_secret": "MODAL_TOKEN_SECRET",
+            "hf_token": "HF_TOKEN",
         }
         env_key = env_key_map.get(key)
         if env_key and isinstance(value, str):
@@ -108,7 +111,57 @@ async def delete_setting(
     return {"ok": True}
 
 
+# ---- Helpers for configured status ----
+
+
+def _is_provider_configured(provider_id: str, provider_settings: dict) -> bool:
+    """Check if a standard provider is configured via env or user setting."""
+    env_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "opencode-go": "OPENCODE_GO_API_KEY",
+        "ollama": "OLLAMA_API_BASE",
+        "lmstudio": "LMSTUDIO_API_BASE",
+        "brave": "BRAVE_API_KEY",
+        "github": "GITHUB_TOKEN",
+        "semantic_scholar": "SEMANTIC_SCHOLAR_API_KEY",
+        "openalex": "OPENALEX_API_KEY",
+        "modal": "MODAL_TOKEN_ID",
+        "huggingface": "HF_TOKEN",
+    }
+    env_key = env_map.get(provider_id)
+    if env_key and os.environ.get(env_key):
+        return True
+    setting_key = {
+        "openai": "openai_api_key",
+        "anthropic": "anthropic_api_key",
+        "openrouter": "openrouter_api_key",
+        "opencode-go": "opencode_go_api_key",
+        "ollama": "ollama_api_base",
+        "lmstudio": "lmstudio_api_base",
+        "brave": "brave_api_key",
+        "github": "github_token",
+        "semantic_scholar": "semantic_scholar_api_key",
+        "openalex": "openalex_api_key",
+        "modal": "modal_token_id",
+        "huggingface": "hf_token",
+    }.get(provider_id)
+    if setting_key and provider_settings.get(setting_key):
+        return True
+    return False
+
+
+def _get_custom_providers(provider_settings: dict) -> list[dict]:
+    """Extract custom providers from user settings."""
+    raw = provider_settings.get("custom_providers")
+    if isinstance(raw, list):
+        return raw
+    return []
+
+
 # ---- Providers ----
+
 
 @router.get("/providers")
 async def list_providers(
@@ -124,7 +177,7 @@ async def list_providers(
             "id": "openai",
             "name": "OpenAI",
             "key_env": "OPENAI_API_KEY",
-            "configured": bool(os.environ.get("OPENAI_API_KEY") or provider_settings.get("openai_api_key")),
+            "configured": _is_provider_configured("openai", provider_settings),
             "categories": ["models"],
             "docs_url": "https://platform.openai.com/docs/api-reference",
         },
@@ -132,7 +185,7 @@ async def list_providers(
             "id": "anthropic",
             "name": "Anthropic",
             "key_env": "ANTHROPIC_API_KEY",
-            "configured": bool(os.environ.get("ANTHROPIC_API_KEY") or provider_settings.get("anthropic_api_key")),
+            "configured": _is_provider_configured("anthropic", provider_settings),
             "categories": ["models"],
             "docs_url": "https://docs.anthropic.com/en/api/getting-started",
         },
@@ -140,7 +193,7 @@ async def list_providers(
             "id": "openrouter",
             "name": "OpenRouter",
             "key_env": "OPENROUTER_API_KEY",
-            "configured": bool(os.environ.get("OPENROUTER_API_KEY") or provider_settings.get("openrouter_api_key")),
+            "configured": _is_provider_configured("openrouter", provider_settings),
             "categories": ["models"],
             "docs_url": "https://openrouter.ai/docs",
         },
@@ -148,7 +201,7 @@ async def list_providers(
             "id": "opencode-go",
             "name": "OpenCode Go",
             "key_env": "OPENCODE_GO_API_KEY",
-            "configured": bool(os.environ.get("OPENCODE_GO_API_KEY") or provider_settings.get("opencode_go_api_key")),
+            "configured": _is_provider_configured("opencode-go", provider_settings),
             "categories": ["models"],
             "docs_url": "https://go.opencode.ai/docs",
         },
@@ -156,7 +209,7 @@ async def list_providers(
             "id": "ollama",
             "name": "Ollama (Local)",
             "key_env": "OLLAMA_API_BASE",
-            "configured": bool(os.environ.get("OLLAMA_API_BASE") or provider_settings.get("ollama_api_base")),
+            "configured": _is_provider_configured("ollama", provider_settings),
             "categories": ["models"],
             "docs_url": "https://ollama.com/docs",
         },
@@ -164,7 +217,7 @@ async def list_providers(
             "id": "lmstudio",
             "name": "LM Studio (Local)",
             "key_env": "LMSTUDIO_API_BASE",
-            "configured": bool(os.environ.get("LMSTUDIO_API_BASE") or provider_settings.get("lmstudio_api_base")),
+            "configured": _is_provider_configured("lmstudio", provider_settings),
             "categories": ["models"],
             "docs_url": "https://lmstudio.ai/docs",
         },
@@ -172,7 +225,7 @@ async def list_providers(
             "id": "brave",
             "name": "Brave Search",
             "key_env": "BRAVE_API_KEY",
-            "configured": bool(os.environ.get("BRAVE_API_KEY") or provider_settings.get("brave_api_key")),
+            "configured": _is_provider_configured("brave", provider_settings),
             "categories": ["search"],
             "docs_url": "https://brave.com/search/api/",
         },
@@ -180,7 +233,7 @@ async def list_providers(
             "id": "github",
             "name": "GitHub",
             "key_env": "GITHUB_TOKEN",
-            "configured": bool(os.environ.get("GITHUB_TOKEN") or provider_settings.get("github_token")),
+            "configured": _is_provider_configured("github", provider_settings),
             "categories": ["papers", "others"],
             "docs_url": "https://docs.github.com/en/rest",
         },
@@ -188,7 +241,7 @@ async def list_providers(
             "id": "semantic_scholar",
             "name": "Semantic Scholar",
             "key_env": "SEMANTIC_SCHOLAR_API_KEY",
-            "configured": bool(os.environ.get("SEMANTIC_SCHOLAR_API_KEY") or provider_settings.get("semantic_scholar_api_key")),
+            "configured": _is_provider_configured("semantic_scholar", provider_settings),
             "categories": ["papers"],
             "docs_url": "https://api.semanticscholar.org/api-docs/",
         },
@@ -196,7 +249,7 @@ async def list_providers(
             "id": "openalex",
             "name": "OpenAlex",
             "key_env": "OPENALEX_API_KEY",
-            "configured": bool(os.environ.get("OPENALEX_API_KEY") or provider_settings.get("openalex_api_key")),
+            "configured": _is_provider_configured("openalex", provider_settings),
             "categories": ["papers"],
             "docs_url": "https://docs.openalex.org/",
         },
@@ -204,15 +257,41 @@ async def list_providers(
             "id": "modal",
             "name": "Modal",
             "key_env": "MODAL_TOKEN_ID",
-            "configured": bool(os.environ.get("MODAL_TOKEN_ID") or provider_settings.get("modal_token_id")),
+            "configured": _is_provider_configured("modal", provider_settings),
             "categories": ["compute"],
             "docs_url": "https://modal.com/docs",
         },
+        {
+            "id": "huggingface",
+            "name": "Hugging Face",
+            "key_env": "HF_TOKEN",
+            "configured": _is_provider_configured("huggingface", provider_settings),
+            "categories": ["models", "papers"],
+            "docs_url": "https://huggingface.co/docs/hub/security-tokens",
+        },
     ]
+
+    # Add custom providers
+    for cp in _get_custom_providers(provider_settings):
+        providers.append(
+            {
+                "id": cp.get("id", ""),
+                "name": cp.get("name", cp.get("id", "")),
+                "key_env": f"{cp.get('id', '').upper()}_API_KEY",
+                "configured": bool(cp.get("api_key") and cp.get("api_base")),
+                "categories": ["models"],
+                "docs_url": cp.get("api_base", ""),
+                "is_custom": True,
+                "sdk_type": cp.get("sdk_type", "openai-sdk"),
+                "api_base": cp.get("api_base", ""),
+            }
+        )
+
     return {"providers": providers}
 
 
 # ---- App Status (model, config) ----
+
 
 @router.get("/status")
 async def get_status(
@@ -231,19 +310,25 @@ async def get_status(
 
     # Only need onboarding if no providers are configured at all
     # (i.e., auto-detection also failed to find anything useful)
-    has_any_provider = any([
-        os.environ.get("ANTHROPIC_API_KEY"),
-        os.environ.get("OPENAI_API_KEY"),
-        os.environ.get("OPENROUTER_API_KEY"),
-        os.environ.get("OPENCODE_GO_API_KEY"),
-        os.environ.get("OLLAMA_API_BASE"),
-        os.environ.get("LMSTUDIO_API_BASE"),
-    ])
+    has_any_provider = any(
+        [
+            os.environ.get("ANTHROPIC_API_KEY"),
+            os.environ.get("OPENAI_API_KEY"),
+            os.environ.get("OPENROUTER_API_KEY"),
+            os.environ.get("OPENCODE_GO_API_KEY"),
+            os.environ.get("OLLAMA_API_BASE"),
+            os.environ.get("LMSTUDIO_API_BASE"),
+        ]
+    )
     # Check user-configured providers too
     if not has_any_provider:
         user_providers = await ops.get_all_settings(db, user.id, category="providers")
         prov = user_providers.get("providers", {})
         has_any_provider = any(v for v in prov.values() if v)
+        # Also check custom providers
+        if not has_any_provider:
+            custom = _get_custom_providers(prov)
+            has_any_provider = any(bool(cp.get("api_key") and cp.get("api_base")) for cp in custom)
 
     return {
         "model": effective_model,
@@ -255,74 +340,416 @@ async def get_status(
 
 # ---- Models ----
 
-@router.get("/models")
-async def list_models():
-    """List available LLM models."""
+
+# Standard fallback models (used when models.dev is unreachable)
+_FALLBACK_MODELS = [
+    {"id": "openai/gpt-4o", "name": "GPT-4o", "provider": "openai", "release_date": "2024-05-13"},
+    {
+        "id": "openai/gpt-4o-mini",
+        "name": "GPT-4o Mini",
+        "provider": "openai",
+        "release_date": "2024-07-18",
+    },
+    {"id": "openai/o3-mini", "name": "o3-mini", "provider": "openai", "release_date": "2025-01-31"},
+    {
+        "id": "anthropic/claude-sonnet-4-20250514",
+        "name": "Claude Sonnet 4",
+        "provider": "anthropic",
+        "release_date": "2025-05-14",
+    },
+    {
+        "id": "anthropic/claude-opus-4-20250514",
+        "name": "Claude Opus 4",
+        "provider": "anthropic",
+        "release_date": "2025-05-14",
+    },
+    {
+        "id": "anthropic/claude-haiku-4-20250514",
+        "name": "Claude Haiku 4",
+        "provider": "anthropic",
+        "release_date": "2025-05-14",
+    },
+    {
+        "id": "openrouter/openai/gpt-4o",
+        "name": "OpenRouter GPT-4o",
+        "provider": "openrouter",
+        "release_date": "2024-05-13",
+    },
+    {
+        "id": "openrouter/anthropic/claude-sonnet-4",
+        "name": "OR Claude Sonnet",
+        "provider": "openrouter",
+        "release_date": "2025-05-14",
+    },
+    {
+        "id": "openrouter/google/gemini-2.5-pro",
+        "name": "OR Gemini 2.5 Pro",
+        "provider": "openrouter",
+        "release_date": "2025-03-25",
+    },
+    {
+        "id": "openrouter/google/gemini-2.5-flash",
+        "name": "OR Gemini 2.5 Flash",
+        "provider": "openrouter",
+        "release_date": "2025-04-15",
+    },
+]
+
+# OpenCode Go models
+_OPENCODE_GO_MODELS = [
+    {
+        "id": "opencode-go/glm-5.1",
+        "name": "GLM-5.1",
+        "provider": "opencode-go",
+        "release_date": "2025-04-01",
+    },
+    {
+        "id": "opencode-go/glm-5",
+        "name": "GLM-5",
+        "provider": "opencode-go",
+        "release_date": "2025-03-01",
+    },
+    {
+        "id": "opencode-go/kimi-k2.6",
+        "name": "Kimi K2.6",
+        "provider": "opencode-go",
+        "release_date": "2025-04-20",
+    },
+    {
+        "id": "opencode-go/kimi-k2.5",
+        "name": "Kimi K2.5",
+        "provider": "opencode-go",
+        "release_date": "2025-03-15",
+    },
+    {
+        "id": "opencode-go/deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "provider": "opencode-go",
+        "release_date": "2025-04-10",
+    },
+    {
+        "id": "opencode-go/deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "provider": "opencode-go",
+        "release_date": "2025-04-10",
+    },
+    {
+        "id": "opencode-go/mimo-v2.5-pro",
+        "name": "MiMo-V2.5-Pro",
+        "provider": "opencode-go",
+        "release_date": "2025-03-20",
+    },
+    {
+        "id": "opencode-go/mimo-v2.5",
+        "name": "MiMo-V2.5",
+        "provider": "opencode-go",
+        "release_date": "2025-03-20",
+    },
+    {
+        "id": "opencode-go/minimax-m2.7",
+        "name": "MiniMax M2.7",
+        "provider": "opencode-go",
+        "release_date": "2025-04-05",
+    },
+    {
+        "id": "opencode-go/minimax-m2.5",
+        "name": "MiniMax M2.5",
+        "provider": "opencode-go",
+        "release_date": "2025-03-10",
+    },
+    {
+        "id": "opencode-go/qwen3.6-plus",
+        "name": "Qwen3.6 Plus",
+        "provider": "opencode-go",
+        "release_date": "2025-04-15",
+    },
+    {
+        "id": "opencode-go/qwen3.5-plus",
+        "name": "Qwen3.5 Plus",
+        "provider": "opencode-go",
+        "release_date": "2025-03-01",
+    },
+]
+
+
+async def _fetch_models_dev() -> list[dict]:
+    """Fetch models from models.dev and return flat list with provider info."""
     models = []
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.get("https://models.dev/api/v1/models", timeout=10)
+            resp = await client.get("https://models.dev/api.json", timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
-                if isinstance(data.get("models"), list):
-                    models = [
-                        {
-                            "id": m.get("id", m.get("modelId", "")),
-                            "name": m.get("name", m.get("id", "")),
-                            "provider": m.get("provider", "unknown"),
-                        }
-                        for m in data["models"]
-                    ]
+                for provider_id, provider_data in data.items():
+                    if not isinstance(provider_data, dict):
+                        continue
+                    provider_models = provider_data.get("models", {})
+                    if isinstance(provider_models, dict):
+                        for model_id, model_info in provider_models.items():
+                            if not isinstance(model_info, dict):
+                                continue
+                            release_date = model_info.get("release_date", "")
+                            # Skip entries without a release date (not real models)
+                            if not release_date:
+                                continue
+                            models.append(
+                                {
+                                    "id": f"{provider_id}/{model_id}",
+                                    "name": model_info.get("name", model_id),
+                                    "provider": provider_id,
+                                    "release_date": release_date,
+                                }
+                            )
     except Exception:
         pass
+    return models
 
+
+@router.get("/models")
+async def list_models(
+    request: Request,
+    provider: str | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List available LLM models from configured providers.
+
+    If `provider` is specified, only return models for that provider.
+    Otherwise return models from all configured providers.
+    """
+    # Get user's provider settings to check what's configured
+    user_settings = await ops.get_all_settings(db, user.id, category="providers")
+    provider_settings = user_settings.get("providers", {})
+
+    # Determine which providers are configured
+    configured_providers = set()
+    for pid in ["openai", "anthropic", "openrouter", "opencode-go", "ollama", "lmstudio"]:
+        if _is_provider_configured(pid, provider_settings):
+            configured_providers.add(pid)
+
+    # Add custom providers
+    custom_providers = _get_custom_providers(provider_settings)
+    for cp in custom_providers:
+        if cp.get("api_key") and cp.get("api_base"):
+            configured_providers.add(cp.get("id", ""))
+
+    # If a specific provider is requested, only use that one
+    target_providers = {provider} if provider else configured_providers
+
+    # Fetch from models.dev
+    all_models = await _fetch_models_dev()
+
+    # Filter to target providers
+    models = [m for m in all_models if m.get("provider") in target_providers]
+
+    # If models.dev failed or returned nothing, use fallbacks
     if not models:
-        models = [
-            {"id": "openai/gpt-4o", "name": "GPT-4o", "provider": "openai"},
-            {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "openai"},
-            {"id": "openai/o3-mini", "name": "o3-mini", "provider": "openai"},
-            {"id": "anthropic/claude-sonnet-4", "name": "Claude Sonnet 4", "provider": "anthropic"},
-            {"id": "anthropic/claude-opus-4", "name": "Claude Opus 4", "provider": "anthropic"},
-            {"id": "anthropic/claude-haiku-4", "name": "Claude Haiku 4", "provider": "anthropic"},
-            {"id": "openrouter/openai/gpt-4o", "name": "OpenRouter GPT-4o", "provider": "openrouter"},
-            {"id": "openrouter/anthropic/claude-sonnet-4", "name": "OR Claude Sonnet", "provider": "openrouter"},
-            {"id": "openrouter/google/gemini-2.5-pro", "name": "OR Gemini 2.5 Pro", "provider": "openrouter"},
-            {"id": "openrouter/google/gemini-2.5-flash", "name": "OR Gemini 2.5 Flash", "provider": "openrouter"},
-        ]
-
-    # Add OpenCode Go models
-    opencode_go_models = [
-        {"id": "opencode-go/glm-5.1", "name": "GLM-5.1", "provider": "opencode-go"},
-        {"id": "opencode-go/glm-5", "name": "GLM-5", "provider": "opencode-go"},
-        {"id": "opencode-go/kimi-k2.6", "name": "Kimi K2.6", "provider": "opencode-go"},
-        {"id": "opencode-go/kimi-k2.5", "name": "Kimi K2.5", "provider": "opencode-go"},
-        {"id": "opencode-go/deepseek-v4-pro", "name": "DeepSeek V4 Pro", "provider": "opencode-go"},
-        {"id": "opencode-go/deepseek-v4-flash", "name": "DeepSeek V4 Flash", "provider": "opencode-go"},
-        {"id": "opencode-go/mimo-v2.5-pro", "name": "MiMo-V2.5-Pro", "provider": "opencode-go"},
-        {"id": "opencode-go/mimo-v2.5", "name": "MiMo-V2.5", "provider": "opencode-go"},
-        {"id": "opencode-go/minimax-m2.7", "name": "MiniMax M2.7", "provider": "opencode-go"},
-        {"id": "opencode-go/minimax-m2.5", "name": "MiniMax M2.5", "provider": "opencode-go"},
-        {"id": "opencode-go/qwen3.6-plus", "name": "Qwen3.6 Plus", "provider": "opencode-go"},
-        {"id": "opencode-go/qwen3.5-plus", "name": "Qwen3.5 Plus", "provider": "opencode-go"},
-    ]
-    models.extend(opencode_go_models)
+        fallback = []
+        for m in _FALLBACK_MODELS:
+            if not provider or m["provider"] == provider:
+                if m["provider"] in configured_providers:
+                    fallback.append(m)
+        for m in _OPENCODE_GO_MODELS:
+            if not provider or m["provider"] == provider:
+                if m["provider"] in configured_providers:
+                    fallback.append(m)
+        models = fallback
+    else:
+        # Add fallback models for providers not in models.dev response
+        # or for when models.dev is missing some providers
+        existing_ids = {m["id"] for m in models}
+        for m in _FALLBACK_MODELS:
+            if m["id"] not in existing_ids:
+                if (not provider or m["provider"] == provider) and m[
+                    "provider"
+                ] in configured_providers:
+                    models.append(m)
+        for m in _OPENCODE_GO_MODELS:
+            if m["id"] not in existing_ids:
+                if (not provider or m["provider"] == provider) and m[
+                    "provider"
+                ] in configured_providers:
+                    models.append(m)
 
     # Add local model placeholders if configured
-    if os.environ.get("OLLAMA_API_BASE"):
+    if "ollama" in configured_providers and (not provider or provider == "ollama"):
         ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.1")
-        models.append({"id": f"ollama/{ollama_model}", "name": f"Ollama: {ollama_model}", "provider": "ollama"})
-        # Common Ollama models
-        for m in ["llama3.1", "llama3.2", "qwen2.5-coder", "codellama", "deepseek-coder-v2", "mistral"]:
-            if m != ollama_model:
-                models.append({"id": f"ollama/{m}", "name": f"Ollama: {m}", "provider": "ollama"})
+        if not any(m["id"] == f"ollama/{ollama_model}" for m in models):
+            models.append(
+                {
+                    "id": f"ollama/{ollama_model}",
+                    "name": f"Ollama: {ollama_model}",
+                    "provider": "ollama",
+                    "release_date": "",
+                }
+            )
+        for m in [
+            "llama3.1",
+            "llama3.2",
+            "qwen2.5-coder",
+            "codellama",
+            "deepseek-coder-v2",
+            "mistral",
+        ]:
+            if not any(x["id"] == f"ollama/{m}" for x in models):
+                models.append(
+                    {
+                        "id": f"ollama/{m}",
+                        "name": f"Ollama: {m}",
+                        "provider": "ollama",
+                        "release_date": "",
+                    }
+                )
 
-    if os.environ.get("LMSTUDIO_API_BASE"):
-        models.append({"id": "lmstudio/default", "name": "LM Studio (default)", "provider": "lmstudio"})
+    if "lmstudio" in configured_providers and (not provider or provider == "lmstudio"):
+        if not any(m["id"] == "lmstudio/default" for m in models):
+            models.append(
+                {
+                    "id": "lmstudio/default",
+                    "name": "LM Studio (default)",
+                    "provider": "lmstudio",
+                    "release_date": "",
+                }
+            )
 
-    return {"models": models}
+    # Add custom provider cached models
+    for cp in custom_providers:
+        cp_id = cp.get("id", "")
+        if cp_id not in configured_providers:
+            continue
+        if provider and cp_id != provider:
+            continue
+        for cm in cp.get("models", []):
+            model_entry = {
+                "id": f"{cp_id}/{cm.get('id', cm.get('modelId', ''))}",
+                "name": cm.get("name", cm.get("id", "")),
+                "provider": cp_id,
+                "release_date": cm.get("release_date", ""),
+            }
+            if not any(m["id"] == model_entry["id"] for m in models):
+                models.append(model_entry)
+
+    # Get recent models
+    agent_settings = await ops.get_user_agent_settings(db, user.id)
+    recent_model_ids = agent_settings.get("recent_models", [])
+    if not isinstance(recent_model_ids, list):
+        recent_model_ids = []
+
+    # Build recent model entries (preserve order, most recent first)
+    recent_models = []
+    seen_recent = set()
+    for mid in recent_model_ids[:10]:
+        if mid in seen_recent:
+            continue
+        seen_recent.add(mid)
+        # Find model info from the full list
+        model_info = None
+        for m in models:
+            if m["id"] == mid:
+                model_info = m
+                break
+        if model_info:
+            recent_models.append(model_info)
+
+    # Sort models by release_date descending within each provider
+    def _sort_key(m):
+        rd = m.get("release_date", "")
+        # Use a very old date for models without release_date so they sort to bottom
+        return (m.get("provider", ""), rd if rd else "1900-01-01")
+
+    models.sort(key=_sort_key, reverse=True)
+    # Actually reverse sort needs to be per-provider. Let's do a stable sort.
+    # Sort by provider first, then by release_date descending
+    models.sort(
+        key=lambda m: (m.get("provider", ""), m.get("release_date", "1900-01-01")), reverse=False
+    )
+    # Hmm, this won't work for reverse per-field. Let's use two sorts.
+    models.sort(key=lambda m: m.get("release_date", "1900-01-01"), reverse=True)
+    models.sort(key=lambda m: m.get("provider", ""))
+
+    return {
+        "models": models,
+        "recent_models": recent_models[:5],
+    }
+
+
+# ---- Custom Provider Model Fetching ----
+
+
+@router.post("/providers/{provider_id}/fetch-models")
+async def fetch_custom_provider_models(
+    provider_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch models from a custom provider's API and cache them."""
+    user_settings = await ops.get_all_settings(db, user.id, category="providers")
+    provider_settings = user_settings.get("providers", {})
+
+    custom_providers = _get_custom_providers(provider_settings)
+    cp = None
+    for c in custom_providers:
+        if c.get("id") == provider_id:
+            cp = c
+            break
+
+    if not cp:
+        raise HTTPException(status_code=404, detail="Custom provider not found")
+
+    sdk_type = cp.get("sdk_type", "openai-sdk")
+    api_base = cp.get("api_base", "").rstrip("/")
+    api_key = cp.get("api_key", "")
+
+    if not api_base or not api_key:
+        raise HTTPException(status_code=400, detail="Provider missing api_base or api_key")
+
+    fetched_models = []
+
+    if sdk_type in ("openai-sdk", "openrouter", "litellm"):
+        # OpenAI-compatible /models endpoint
+        try:
+            async with httpx.AsyncClient() as client:
+                headers = {"Authorization": f"Bearer {api_key}"}
+                resp = await client.get(f"{api_base}/models", headers=headers, timeout=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for m in data.get("data", []):
+                        if isinstance(m, dict):
+                            fetched_models.append(
+                                {
+                                    "id": m.get("id", ""),
+                                    "name": m.get("id", ""),  # OpenAI /models usually only has id
+                                    "release_date": "",
+                                }
+                            )
+                else:
+                    raise HTTPException(
+                        status_code=502, detail=f"Provider returned {resp.status_code}"
+                    )
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Failed to reach provider: {str(e)}")
+    elif sdk_type == "anthropic-sdk":
+        # Anthropic doesn't expose a models list API
+        # Return empty list — user will need to add models manually
+        pass
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported sdk_type: {sdk_type}")
+
+    # Update the custom provider with fetched models
+    for i, c in enumerate(custom_providers):
+        if c.get("id") == provider_id:
+            custom_providers[i]["models"] = fetched_models
+            custom_providers[i]["last_fetched_at"] = datetime.now(UTC).isoformat()
+            break
+
+    await ops.set_user_setting(db, user.id, "providers", "custom_providers", custom_providers)
+
+    return {"models": fetched_models}
 
 
 # ---- Config (legacy .env writing — for backward compat) ----
+
 
 @router.post("/config")
 async def save_config(
@@ -343,6 +770,7 @@ async def save_config(
         "OPENALEX_API_KEY",
         "MODAL_TOKEN_ID",
         "MODAL_TOKEN_SECRET",
+        "HF_TOKEN",
     }
 
     body = await request.json()

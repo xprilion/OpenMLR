@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect } from 'react';
 import { X, Upload, KeyRound } from 'lucide-react';
 
@@ -46,7 +48,7 @@ export function AddKeyModal({ onClose, onSubmit }: AddKeyModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="add-key-title">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} onKeyDown={(e) => e.key === 'Escape' && onClose()} role="dialog" aria-modal="true" aria-labelledby="add-key-title" tabIndex={-1}>
       <div className="bg-surface rounded-xl border border-border w-full max-w-lg mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 id="add-key-title" className="font-semibold text-text flex items-center gap-2">
@@ -85,8 +87,9 @@ export function AddKeyModal({ onClose, onSubmit }: AddKeyModalProps) {
 
           {/* Filename */}
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">Filename</label>
+            <label className="block text-sm font-medium text-text mb-1.5" htmlFor="key-filename">Filename</label>
             <input
+              id="key-filename"
               type="text"
               required
               placeholder="id_ed25519_workstation"
@@ -99,8 +102,9 @@ export function AddKeyModal({ onClose, onSubmit }: AddKeyModalProps) {
 
           {mode === 'upload' ? (
             <div>
-              <label className="block text-sm font-medium text-text mb-1.5">Private Key</label>
+              <label className="block text-sm font-medium text-text mb-1.5" htmlFor="key-private">Private Key</label>
               <textarea
+                id="key-private"
                 required
                 rows={6}
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
@@ -111,8 +115,9 @@ export function AddKeyModal({ onClose, onSubmit }: AddKeyModalProps) {
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-medium text-text mb-1.5">Algorithm</label>
+              <label className="block text-sm font-medium text-text mb-1.5" htmlFor="key-algorithm">Algorithm</label>
               <select
+                id="key-algorithm"
                 value={algorithm}
                 onChange={(e) => setAlgorithm(e.target.value)}
                 className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-text text-sm focus:border-primary focus:outline-none"
@@ -125,8 +130,9 @@ export function AddKeyModal({ onClose, onSubmit }: AddKeyModalProps) {
 
           {/* Comment */}
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">Comment (optional)</label>
+            <label className="block text-sm font-medium text-text mb-1.5" htmlFor="key-comment">Comment (optional)</label>
             <input
+              id="key-comment"
               type="text"
               placeholder="Workstation key"
               value={comment}

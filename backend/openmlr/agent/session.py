@@ -25,14 +25,24 @@ class Session:
     # Cancellation
     _cancelled: asyncio.Event = field(default_factory=asyncio.Event)
 
+    # Mode tracking (plan/execute) — persists across approval continuations
+    current_mode: str = "plan"
+
     # Approval flow
     pending_approval: dict | None = None
 
     # Question/answer flow (ask_user tool)
     pending_answers: Any | None = None
 
+    # TODO approval flow (plan_tool in execute mode)
+    pending_todo_approval: Any | None = None
+
     # Sandbox reference
     sandbox: Any | None = None
+
+    # Plan task state (cached for tool enforcement — updated by plan_tool)
+    plan_tasks: list[dict] | None = None  # None = not loaded yet
+    _plan_loaded: bool = False  # True once we've checked DB or plan_tool ran
 
     # Turn counter (for title generation etc.)
     turn_count: int = 0

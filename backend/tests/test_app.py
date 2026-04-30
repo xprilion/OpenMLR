@@ -2,6 +2,7 @@
 
 import pytest
 
+from openmlr import __version__
 from openmlr.app import app
 
 pytestmark = pytest.mark.asyncio
@@ -12,7 +13,7 @@ class TestAppCreation:
         assert app.title == "OpenMLR"
 
     async def test_app_version(self):
-        assert app.version == "0.3.0"
+        assert app.version == __version__
 
     async def test_app_routers_registered(self):
         route_paths = [r.path for r in app.routes]
@@ -23,6 +24,7 @@ class TestAppCreation:
 
     async def test_cors_middleware_configured(self):
         from fastapi.middleware.cors import CORSMiddleware
+
         middlewares = [m.cls for m in app.user_middleware]
         assert CORSMiddleware in middlewares
 
@@ -34,11 +36,13 @@ class TestAppCreation:
 class TestMainModule:
     async def test_main_is_callable(self):
         from openmlr.main import main
+
         assert callable(main)
 
     async def test_main_contains_uvicorn_import(self):
         import inspect
 
         from openmlr.main import main
+
         source = inspect.getsource(main)
         assert "uvicorn" in source

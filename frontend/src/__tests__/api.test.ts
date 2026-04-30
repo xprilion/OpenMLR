@@ -53,7 +53,10 @@ describe('api.sendMessage', () => {
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/message');
     expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual({ message: 'Hello', mode: 'general' });
+    const body = JSON.parse(opts.body);
+    expect(body.message).toBe('Hello');
+    expect(body.mode).toBe('general');
+    expect(body.request_id).toBeDefined();
   });
 });
 

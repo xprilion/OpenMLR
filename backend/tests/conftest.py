@@ -10,7 +10,6 @@ import pytest
 
 pytestmark = pytest.mark.asyncio
 
-import asyncio
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -55,14 +54,6 @@ _TestSessionLocal = async_sessionmaker(
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture(scope="session")
-def event_loop():
-    """Create a single event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest_asyncio.fixture(autouse=True)
 async def _setup_db():
     """Create all tables before each test and drop them after.
@@ -74,6 +65,27 @@ async def _setup_db():
     yield
     async with _test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _dispose_engine_at_exit():
+    """Dispose the async engine after the test session completes.
+
+    Without this, the aiosqlite connection pool keeps background tasks
+    alive and prevents the process from exiting after tests finish.
+    """
+    yield
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(_test_engine.dispose())
+        else:
+            loop.run_until_complete(_test_engine.dispose())
+    except RuntimeError:
+        # No event loop available — create a temporary one for cleanup
+        asyncio.run(_test_engine.dispose())
 
 
 async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:

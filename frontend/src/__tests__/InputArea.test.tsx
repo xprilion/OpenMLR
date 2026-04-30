@@ -48,8 +48,8 @@ describe('InputArea', () => {
         {...defaultProps({ text: 'hello', onSend, onTextChange })}
       />,
     );
-    // Send button now uses Lucide icon and title attribute
-    const sendBtn = screen.getByTitle('Send message');
+    // Send button has mode-specific title
+    const sendBtn = screen.getByTitle('Send in Plan mode (Enter)');
     fireEvent.click(sendBtn);
     expect(onSend).toHaveBeenCalledWith('hello', 'plan');
     expect(onTextChange).toHaveBeenCalledWith('');
@@ -88,8 +88,14 @@ describe('InputArea', () => {
 
   it('empty text disables send button', () => {
     render(<InputArea {...defaultProps({ text: '' })} />);
-    const sendBtn = screen.getByTitle('Send message');
+    const sendBtn = screen.getByTitle('Send in Plan mode (Enter)');
     expect(sendBtn).toBeDisabled();
+  });
+
+  it('does not render a separate Execute button', () => {
+    render(<InputArea {...defaultProps({ text: 'test', mode: 'plan' })} />);
+    const execBtn = screen.queryByTitle('Send & switch to Execute mode (Cmd+Enter)');
+    expect(execBtn).toBeNull();
   });
 
   it('keyboard shortcut Cmd+M toggles from execute to plan', () => {

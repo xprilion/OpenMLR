@@ -38,11 +38,12 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
     onModeChange(mode === 'plan' ? 'execute' : 'plan');
   }, [mode, onModeChange]);
 
-  // Keyboard shortcut: Cmd+M (or Ctrl+M) toggles between Plan and Execute
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key === 'm' || e.key === 'M') {
+        // Cmd+M: toggle mode
         e.preventDefault();
         onModeChange(mode === 'plan' ? 'execute' : 'plan');
       }
@@ -117,17 +118,17 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
           </button>
         )}
         
-        {/* Send button - same height as mode toggle */}
+        {/* Send button */}
         {!disabled && (
           <button 
-            className="h-11 w-11 rounded-lg flex items-center justify-center transition-all shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-11 w-11 rounded-lg flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             style={{
               backgroundColor: isPlan ? '#f59e0b' : '#3b82f6',
               color: isPlan ? '#000' : '#fff',
             }}
             onClick={submit} 
             disabled={!text.trim()}
-            title="Send message"
+            title={isPlan ? 'Send in Plan mode (Enter)' : 'Send in Execute mode (Enter)'}
           >
             <ArrowUp size={20} strokeWidth={2.5} />
           </button>
