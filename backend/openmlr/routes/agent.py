@@ -360,6 +360,32 @@ async def clear_conversation_compute(
 # ── Messaging ────────────────────────────────────────────
 
 
+# In-memory set of recently seen request IDs (with TTL-based eviction)
+_recent_request_ids: dict[str, float] = {}
+_REQUEST_ID_TTL = 30.0  # seconds
+
+
+def _check_and_record_request_id(request_id: str | None) -> bool:
+    """Return True if this request_id is a duplicate. Records new IDs."""
+    import time
+
+    if not request_id:
+        return False  # No idempotency key — allow through
+
+    now = time.monotonic()
+
+    # Evict expired entries (keep the dict small)
+    expired = [k for k, t in _recent_request_ids.items() if now - t > _REQUEST_ID_TTL]
+    for k in expired:
+        _recent_request_ids.pop(k, None)
+
+    if request_id in _recent_request_ids:
+        return True  # Duplicate
+
+    _recent_request_ids[request_id] = now
+    return False
+
+
 @router.post("/message")
 async def send_message(
     body: MessageSend,
@@ -368,6 +394,10 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     from ..services.job_manager import USE_BACKGROUND_JOBS, get_job_manager
+
+    # Reject duplicate requests (idempotency guard)
+    if _check_and_record_request_id(body.request_id):
+        return {"ok": True, "duplicate": True}
 
     sm = _sm(request)
     event_bus = _bus(request)

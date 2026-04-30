@@ -200,35 +200,84 @@ Controls how the agent executes code.
 
 ## MCP Servers
 
-OpenMLR supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for connecting external tools. Configure MCP servers in **Settings > MCP Servers**.
+OpenMLR supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for connecting remote tool servers. Only HTTP/HTTPS MCP servers are supported. Configure them in **Settings > MCP Servers**.
 
 ### Adding an MCP Server
 
 1. Go to **Settings > MCP Servers**
-2. Click **Add Server**
-3. Enter a unique server name
-4. Configure the transport:
-   - **HTTP**: Enter the server URL (e.g., `http://localhost:8080/mcp`)
-   - **stdio**: Enter the command and arguments (e.g., `npx -y @anthropic/mcp-server-filesystem /path/to/dir`)
+2. Click **Add MCP Server**
+3. In the modal, enter:
+   - **Server Name** — A unique identifier (e.g., `my-tools`)
+   - **Server URL** — The HTTP/HTTPS endpoint (e.g., `https://mcp.example.com/mcp`)
+   - **Configuration (JSON)** — Optional authentication headers and query parameters
+4. Click **Test Connection** to verify the server is reachable and discover available tools
+5. Click **Save**
 
-### Example Configuration
+Connected servers appear as horizontal cards showing the URL, name, authentication status, and enable/disable controls.
 
-**HTTP server:**
-```
-Name: my-tools
-Transport: HTTP
-URL: http://localhost:3001/mcp
-```
+### Authentication
 
-**stdio server (filesystem access):**
-```
-Name: filesystem
-Transport: stdio
-Command: npx
-Arguments: -y, @anthropic/mcp-server-filesystem, /Users/me/projects
+Add authentication to MCP servers via the JSON configuration field. Supported patterns:
+
+**Bearer token:**
+```json
+{
+  "headers": {
+    "Authorization": "Bearer your-token-here"
+  }
+}
 ```
 
-MCP servers are connected when you start a new session. Tools from connected servers appear alongside built-in tools.
+**API key in header:**
+```json
+{
+  "headers": {
+    "X-API-Key": "your-api-key"
+  }
+}
+```
+
+**API key in query parameters:**
+```json
+{
+  "params": {
+    "api_key": "your-api-key"
+  }
+}
+```
+
+**Combined headers and params:**
+```json
+{
+  "headers": {
+    "Authorization": "Bearer your-token"
+  },
+  "params": {
+    "workspace": "my-workspace"
+  }
+}
+```
+
+### Transport Detection
+
+OpenMLR automatically selects the correct MCP transport based on the URL:
+
+- URLs ending in `/sse` use **SSE transport** (legacy, GET-based)
+- All other URLs use **Streamable HTTP transport** (current standard, POST-based)
+
+### Example Servers
+
+| Server | URL |
+|--------|-----|
+| Composio | `https://mcp.composio.dev/...` |
+| Zapier MCP | `https://actions.zapier.com/mcp/...` |
+| Browserbase | `https://mcp.browserbase.com` |
+
+### Status in Right Panel
+
+Connected MCP servers are displayed in the right panel under the **MCP Servers** section, showing each server's name, URL, and connection status (connected/enabled/disabled).
+
+MCP servers are connected when you start a new agent session. Tools from connected servers appear alongside built-in tools and are indistinguishable from the agent's perspective.
 
 ---
 

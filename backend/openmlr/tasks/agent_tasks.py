@@ -12,7 +12,7 @@ from ..services.redis_pubsub import publish_event
 logger = logging.getLogger("openmlr.tasks")
 
 
-@celery_app.task(bind=True, name="openmlr.tasks.agent_tasks.process_agent_message")
+@celery_app.task(bind=True, name="openmlr.tasks.agent_tasks.process_agent_message", acks_late=False)
 def process_agent_message(
     self,
     job_id: str,
@@ -82,19 +82,34 @@ async def _async_process_message(
     # Get worker-specific session factory to avoid event loop conflicts
     worker_session = get_worker_session()
 
-    # Update job status to running
+    # Idempotency guard: check if this job was already started (Celery redelivery).
+    # If the worker crashed and Celery redelivers the task, the user message was
+    # already persisted on the first attempt — we must not save it again.
     async with worker_session() as db:
+        job = await ops.get_agent_job(db, job_id)
+        if job and job.status in ("completed", "failed"):
+            # Job already finished on a previous attempt — nothing to do
+            logger.warning(
+                f"Job {job_id}: redelivery detected (status={job.status}), skipping entirely"
+            )
+            return
+        is_redelivery = job is not None and job.status == "running"
+        if is_redelivery:
+            logger.warning(
+                f"Job {job_id}: redelivery detected (status=running), skipping user message save"
+            )
+
+        # Update job status to running
         await ops.update_job_status(db, job_id, "running", worker_id=worker_id)
 
         # Load existing messages for context
         messages = await ops.get_messages(db, conversation_id)
         existing_messages = [{"role": m.role, "content": m.content} for m in messages]
 
-        # Increment user message count
-        await ops.increment_user_message_count(db, conversation_id)
-
-        # Add user message to database
-        await ops.add_message(db, conversation_id, "user", message)
+        if not is_redelivery:
+            # First execution: persist the user message
+            await ops.increment_user_message_count(db, conversation_id)
+            await ops.add_message(db, conversation_id, "user", message)
 
     # Broadcast that we're processing
     await publish_event(
@@ -140,8 +155,14 @@ async def _async_process_message(
         username="user",
     )
 
-    # Load existing messages into context
-    for msg in existing_messages:
+    # Load existing messages into context.
+    # On redelivery, existing_messages already includes the user message we saved
+    # on the first attempt. Exclude the trailing user message so run_agent_turn
+    # can add it without duplication (it always adds the user message to context).
+    history = existing_messages
+    if is_redelivery and history and history[-1].get("role") == "user":
+        history = history[:-1]
+    for msg in history:
         session.context_manager.add_message(msg)
 
     # Wire event broadcasting to Redis pub/sub

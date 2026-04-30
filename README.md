@@ -20,7 +20,7 @@
 ## Features
 
 - **Projects & Workspaces** — Persistent workspaces with knowledge graphs, file trees, and cross-conversation memory. Research accumulates across chats.
-- **Interactive terminal** — Built-in terminal connected to the project workspace. Run commands directly alongside AI-driven research.
+- **Interactive terminal** — Built-in terminal tab connected to the project workspace. Run commands directly alongside AI-driven research.
 - **Plan + Execute modes** — Plan mode gathers context; Execute mode does the work. Toggle with `Cmd+M`.
 - **Paper research** — OpenAlex, Semantic Scholar, arXiv, CrossRef, Papers With Code. Reads full papers, crawls citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Export to Markdown/LaTeX.
@@ -28,7 +28,7 @@
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
 - **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio). Add custom providers with OpenAI SDK, Anthropic SDK, OpenRouter, or LiteLLM compatibility.
 - **Model picker** — Browse models grouped by provider with logos, sorted by release date. Recently used models at the top. Fetches live from [models.dev](https://models.dev).
-- **MCP servers** — Connect external tools via the Model Context Protocol.
+- **MCP servers** — Connect remote HTTP/HTTPS MCP servers with custom authentication (Bearer, API key, headers).
 - **Onboarding flow** — Guided setup when no LLM provider is configured.
 
 ## Quick Start

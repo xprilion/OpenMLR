@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Terminal as TerminalIcon,
-  X,
   Maximize2,
   Minimize2,
 } from 'lucide-react';
@@ -14,12 +13,10 @@ import '@xterm/xterm/css/xterm.css';
 interface Props {
   readonly projectUuid: string | null;
   readonly visible: boolean;
-  readonly onToggle: () => void;
   readonly onConnectionChange?: (connected: boolean) => void;
-  readonly rightOffset?: number;
 }
 
-export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, rightOffset = 0 }: Props) {
+export function Terminal({ projectUuid, visible, onConnectionChange }: Props) {
   const [connected, setConnected] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -194,10 +191,9 @@ export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, r
 
   return (
     <div
-      className={`bg-[#0d0d0d] border-t border-border flex flex-col ${
-        maximized ? 'fixed inset-0 z-50' : ''
+      className={`bg-[#0d0d0d] flex flex-col ${
+        maximized ? 'fixed inset-0 z-50' : 'flex-1 h-full'
       }`}
-      style={maximized ? undefined : { height: '280px', marginRight: rightOffset }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] border-b border-border shrink-0">
@@ -221,13 +217,6 @@ export function Terminal({ projectUuid, visible, onToggle, onConnectionChange, r
             title={maximized ? 'Minimize' : 'Maximize'}
           >
             {maximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-          </button>
-          <button
-            className="w-6 h-6 rounded flex items-center justify-center text-text-dim hover:text-text hover:bg-surface-hover transition-colors"
-            onClick={onToggle}
-            title="Close terminal"
-          >
-            <X size={12} />
           </button>
         </div>
       </div>

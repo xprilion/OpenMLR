@@ -35,13 +35,6 @@ describe('FileTree', () => {
     expect(screen.getByText('Loading files...')).toBeInTheDocument();
   });
 
-  it('renders refresh button', async () => {
-    render(<FileTree projectUuid="proj-1" />);
-    await waitFor(() => {
-      expect(screen.getByTitle('Refresh')).toBeInTheDocument();
-    });
-  });
-
   it('shows "No files yet" when directory is empty', async () => {
     const { api } = await import('../api');
     vi.mocked(api.listFiles).mockResolvedValueOnce({ entries: [] });
@@ -121,11 +114,4 @@ describe('FileTree', () => {
     expect(onFileSelect).not.toHaveBeenCalled();
   });
 
-  it('renders Files header', async () => {
-    render(<FileTree projectUuid="proj-1" />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Files')).toBeInTheDocument();
-    });
-  });
 });

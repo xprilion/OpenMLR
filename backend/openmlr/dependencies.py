@@ -57,3 +57,19 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Like get_current_user but returns None instead of raising."""
+    if credentials is None:
+        return None
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
+        return None
+    result = await db.execute(
+        select(User).where(User.id == int(payload["sub"]), User.is_active == True)
+    )
+    return result.scalar_one_or_none()

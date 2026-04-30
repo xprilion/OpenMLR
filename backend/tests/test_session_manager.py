@@ -32,7 +32,7 @@ def session_manager(event_bus, config):
 class TestSessionManager:
     async def test_initial_state(self, session_manager):
         assert session_manager.current_conversation_id is None
-        assert session_manager.is_processing is False
+        assert len(session_manager._processing) == 0
         assert session_manager.get_current_session() is None
 
     async def test_get_session_nonexistent(self, session_manager):

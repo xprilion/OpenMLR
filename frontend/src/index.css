@@ -132,6 +132,11 @@
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 /* ============ Base Styles ============ */
 @layer base {
   *, *::before, *::after {
@@ -286,6 +291,13 @@
   .prose img {
     max-width: 100%;
     border-radius: var(--radius-md);
+  }
+}
+
+/* ============ Mobile Layout ============ */
+@media (max-width: 1023px) {
+  .main-content-area {
+    padding-right: 0 !important;
   }
 }
 

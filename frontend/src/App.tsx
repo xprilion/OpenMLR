@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Menu, PanelRightOpen } from 'lucide-react';
 import { ComputeSelector } from './components/ComputeSelector';
 import { ProjectSelector } from './components/ProjectSelector';
 import { useSSE } from './hooks/useSSE';
 import { useJobStatus } from './hooks/useJobStatus';
 import { api } from './api';
-import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project, TodoApprovalPayload, OpenFile } from './types';
+import type { AgentEvent, Message, Conversation, User, QuestionsPayload, PlanTask, Resource, ContextUsage, SearchBudget, Project, TodoApprovalPayload, OpenFile, McpServerStatus } from './types';
 import { MessageList } from './components/MessageList';
 import { InputArea, type Mode } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
@@ -29,6 +29,7 @@ import { McpSettings } from './components/settings/McpSettings';
 import { ComputeSettings } from './components/settings/ComputeSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
 import { EditorPanel } from './components/EditorPanel';
+import { ImageViewer } from './components/ImageViewer';
 
 let msgId = 0;
 const nextId = () => `msg-${++msgId}`;
@@ -41,7 +42,14 @@ function findLastIndex<T>(arr: T[], predicate: (item: T) => boolean): number {
   return -1;
 }
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
-type MainTab = 'agent' | 'editor';
+type MainTab = 'agent' | 'editor' | 'terminal' | 'image';
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+
+function isImageFile(path: string): boolean {
+  const ext = '.' + (path.split('.').pop()?.toLowerCase() || '');
+  return IMAGE_EXTENSIONS.has(ext);
+}
 
 /** Map file extensions to Monaco language IDs. */
 function detectLanguage(path: string): string {
@@ -128,13 +136,16 @@ function ChatUI({
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showManageProjects, setShowManageProjects] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [todoApprovalPayload, setTodoApprovalPayload] = useState<TodoApprovalPayload | null>(null);
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [mainTab, setMainTab] = useState<MainTab>('agent');
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [imageTab, setImageTab] = useState<{ path: string; url: string } | null>(null);
+  const [mcpServers, setMcpServers] = useState<McpServerStatus[]>([]);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
   // Refs to always have current values in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -146,6 +157,10 @@ function ChatUI({
   const switchSeqRef = useRef(0);
   // Timer ref so pending reload timeouts can be cleared on conversation switch
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard against concurrent/duplicate message sends
+  const sendingRef = useRef(false);
+  // Debounce timer for reloadConversationMessages
+  const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Derived per-conversation processing state ─────────
   const currentStatus = currentConvUuid ? (convStatuses[currentConvUuid] || 'idle') : 'idle';
@@ -188,6 +203,15 @@ function ChatUI({
     }
   }, []);
 
+  const loadMcpServers = useCallback(async () => {
+    try {
+      const data = await api.getMcpStatus();
+      setMcpServers(data.servers || []);
+    } catch {
+      setMcpServers([]);
+    }
+  }, []);
+
   const loadActiveCompute = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversationCompute(uuid);
@@ -203,6 +227,7 @@ function ChatUI({
       const [, projData] = await Promise.all([
         loadComputeNodes(),
         api.listProjects().catch(() => ({ projects: [] })),
+        loadMcpServers(),
       ]);
       const allProjects: Project[] = projData.projects || [];
       setProjects(allProjects);
@@ -375,8 +400,8 @@ function ChatUI({
     } catch { /* */ }
   }, [currentConvUuid, loadActiveCompute]);
 
-  // Helper to reload messages from DB for a given conversation
-  const reloadConversationMessages = useCallback(async (uuid: string) => {
+  // Helper to reload messages from DB for a given conversation (raw, no debounce)
+  const _doReloadMessages = useCallback(async (uuid: string) => {
     try {
       const data = await api.getConversation(uuid);
       // Guard: only apply if this is still the active conversation
@@ -397,6 +422,15 @@ function ChatUI({
       }
     } catch { /* ignore */ }
   }, []);
+
+  // Debounced version: collapses rapid successive reloads into one (300ms window)
+  const reloadConversationMessages = useCallback((uuid: string) => {
+    if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current);
+    reloadDebounceRef.current = setTimeout(() => {
+      reloadDebounceRef.current = null;
+      _doReloadMessages(uuid);
+    }, 300);
+  }, [_doReloadMessages]);
 
   // ── Auto-compact when context usage > 90% ─────────────
   const lastCompactRef = useRef<number>(0);
@@ -565,6 +599,8 @@ function ChatUI({
       case 'todo_approval_required': setTodoApprovalPayload(data as TodoApprovalPayload); setCurrentConvStatus('waiting_approval'); break;
       case 'turn_complete':
         setApprovalEvent(null); setTodoApprovalPayload(null);
+        // Cancel any pending job_complete reload — SSE events already updated state
+        if (reloadTimerRef.current) { clearTimeout(reloadTimerRef.current); reloadTimerRef.current = null; }
         setMessages((prev) => {
           const c = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
           const last = c[c.length - 1];
@@ -642,22 +678,37 @@ function ChatUI({
   }, [currentConvUuid, jobProcessing, connected]);
 
   const sendMessage = useCallback(async (text: string, mode: string) => {
+    // Prevent concurrent/duplicate sends
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setInputText('');
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text, metadata: { tool: mode } }]);
     setCurrentConvStatus('processing');
-    try { await api.sendMessage(text, mode); } catch (err: any) {
+    try {
+      await api.sendMessage(text, mode);
+    } catch (err: any) {
       setCurrentConvStatus('idle');
       setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Failed to send: ${err.message}` }]);
+    } finally {
+      sendingRef.current = false;
     }
   }, [setCurrentConvStatus]);
 
   const handleFileOpen = useCallback((path: string, content: string) => {
+    // Images open in a dedicated Image tab
+    if (isImageFile(path) && activeProject?.uuid) {
+      const url = api.fileUrl(activeProject.uuid, path);
+      setImageTab({ path, url });
+      setMainTab('image');
+      return;
+    }
     setOpenFiles((prev) => {
       if (prev.some((f) => f.path === path)) return prev;
       return [...prev, { path, content, language: detectLanguage(path) }];
     });
     setActiveFilePath(path);
     setMainTab('editor');
-  }, []);
+  }, [activeProject]);
 
   const handleCloseFile = useCallback((path: string) => {
     setOpenFiles((prev) => {
@@ -688,8 +739,16 @@ function ChatUI({
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-6 h-14 bg-surface border-b border-border shrink-0 gap-2 sm:gap-4">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Mobile sidebar toggle */}
+          <button
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors md:hidden"
+            onClick={() => setMobileSidebarOpen(true)}
+            title="Open sidebar"
+          >
+            <Menu size={20} />
+          </button>
           <img src="/logo-64.png" alt="OpenMLR" className="w-7 h-7 sm:w-8 sm:h-8" />
-          <span className="font-bold text-base sm:text-lg text-primary tracking-tight">OpenMLR</span>
+          <span className="font-bold text-base sm:text-lg text-primary tracking-tight max-sm:hidden">OpenMLR</span>
           <span 
             className={`w-2 h-2 rounded-full transition-colors duration-300 ${connected ? 'bg-success' : 'bg-error'}`} 
             title={connected ? 'Connected' : 'Disconnected'}
@@ -710,6 +769,14 @@ function ChatUI({
           />
           <ModelModal currentModel={modelLabel} onModelChange={setModel} />
           <CopyModelButton model={model} />
+          {/* Mobile right panel toggle */}
+          <button
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors lg:hidden"
+            onClick={() => setMobileRightOpen(true)}
+            title="Open panel"
+          >
+            <PanelRightOpen size={18} />
+          </button>
         </div>
       </header>
 
@@ -718,19 +785,17 @@ function ChatUI({
         <Sidebar
           conversations={conversations} currentUuid={currentConvUuid} user={user}
           convStatuses={convStatuses}
-          terminalOpen={terminalOpen}
-          terminalConnected={terminalConnected}
-          terminalSessionCount={terminalOpen && terminalConnected ? 1 : 0}
+          mobileOpen={mobileSidebarOpen}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
-          onTerminalToggle={() => setTerminalOpen((v) => !v)}
+          onMobileClose={() => setMobileSidebarOpen(false)}
         />
         
         <div 
-          className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200"
-          style={{ paddingRight: rightPanelOpen ? '288px' : '48px' }}
+          className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200 main-content-area"
+          style={{ paddingRight: rightPanelOpen ? '289px' : '49px' }}
         >
-          {/* Agent / Editor tab bar */}
+          {/* Agent / Editor / Terminal tab bar */}
           <div className="flex items-center border-b border-border shrink-0 bg-surface">
             <button
               className={`px-4 py-2 text-sm font-medium transition-colors ${
@@ -757,6 +822,38 @@ function ChatUI({
                 </span>
               )}
             </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                mainTab === 'terminal'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab('terminal')}
+            >
+              {'Terminal '}
+              <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
+            </button>
+            {/* Closable Image tab */}
+            {imageTab && (
+              <div
+                className={`flex items-center gap-1 px-4 py-2 text-sm font-medium transition-colors group ${
+                  mainTab === 'image'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-text-dim hover:text-text'
+                }`}
+              >
+                <button className="truncate" onClick={() => setMainTab('image')}>
+                  {imageTab.path.split('/').pop()}
+                </button>
+                <button
+                  className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={() => { setImageTab(null); if (mainTab === 'image') setMainTab('agent'); }}
+                  title="Close image"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Agent tab */}
@@ -819,20 +916,28 @@ function ChatUI({
               onCloseFile={handleCloseFile}
             />
           )}
+
+          {/* Terminal tab */}
+          {mainTab === 'terminal' && (
+            <Terminal
+              projectUuid={activeProject?.uuid || null}
+              visible={mainTab === 'terminal'}
+              onConnectionChange={setTerminalConnected}
+            />
+          )}
+
+          {/* Image tab */}
+          {mainTab === 'image' && imageTab && (
+            <ImageViewer
+              src={imageTab.url}
+              filename={imageTab.path.split('/').pop() || 'image'}
+            />
+          )}
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} visible={rightPanelOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onViewReport={(r) => setViewingReport(r)} onFileOpen={handleFileOpen} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} mcpServers={mcpServers} visible={rightPanelOpen} mobileOpen={mobileRightOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onMobileClose={() => setMobileRightOpen(false)} onViewReport={(r) => setViewingReport(r)} onFileOpen={handleFileOpen} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
       </div>
-
-      {/* Terminal panel */}
-      <Terminal
-        projectUuid={activeProject?.uuid || null}
-        visible={terminalOpen}
-        onToggle={() => setTerminalOpen((v) => !v)}
-        onConnectionChange={setTerminalConnected}
-        rightOffset={rightPanelOpen ? 288 : 48}
-      />
       
       {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
       {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={async (p) => { 

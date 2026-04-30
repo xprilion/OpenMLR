@@ -12,7 +12,7 @@ import {
   Settings, 
   LogOut, 
   Trash2,
-  Terminal,
+  X,
 } from 'lucide-react';
 
 type ConvStatus = 'idle' | 'processing' | 'waiting_approval' | 'waiting_input';
@@ -22,13 +22,11 @@ interface Props {
   currentUuid: string | null;
   user: User | null;
   convStatuses: Record<string, ConvStatus>;
-  terminalOpen: boolean;
-  terminalConnected: boolean;
-  terminalSessionCount: number;
+  mobileOpen?: boolean;
   onSwitch: (uuid: string) => void;
   onNew: (mode?: string) => void;
   onDelete: (uuid: string) => void;
-  onTerminalToggle: () => void;
+  onMobileClose?: () => void;
 }
 
 function groupByDate(conversations: readonly Conversation[]) {
@@ -58,24 +56,41 @@ function ConvIcon({ status }: { status: ConvStatus }) {
   return <span className={`${base} bg-border`} />;
 }
 
-function TerminalStatusLabel({ terminalOpen, terminalConnected }: { terminalOpen: boolean; terminalConnected: boolean }) {
-  if (!terminalOpen) {
-    return (
-      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-text-dim bg-bg">
-        Closed
-      </span>
-    );
-  }
+function ConvItem({ conv, isCurrent, status, onSwitch, onDelete }: {
+  conv: Conversation;
+  isCurrent: boolean;
+  status: ConvStatus;
+  onSwitch: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-      terminalConnected ? 'text-success bg-success/10' : 'text-error bg-error/10'
-    }`}>
-      {terminalConnected ? 'Connected' : 'Disconnected'}
-    </span>
+    <div
+      className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all relative ${
+        isCurrent ? 'bg-primary/10 text-text' : 'text-text-dim hover:bg-surface-hover hover:text-text'
+      }`}
+    >
+      <button
+        type="button"
+        className="absolute inset-0 w-full h-full cursor-pointer"
+        onClick={onSwitch}
+        aria-label={`Switch to conversation: ${conv.title}`}
+        aria-pressed={isCurrent}
+      />
+      <ConvIcon status={status} />
+      <span className="flex-1 truncate" title={conv.title}>{conv.title}</span>
+      <button
+        type="button"
+        className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error p-1 rounded transition-all relative z-10"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="Delete"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
   );
 }
 
-export function Sidebar({ conversations, currentUuid, user, convStatuses, terminalOpen, terminalConnected, terminalSessionCount, onSwitch, onNew, onDelete, onTerminalToggle }: Props) {
+export function Sidebar({ conversations, currentUuid, user, convStatuses, mobileOpen, onSwitch, onNew, onDelete, onMobileClose }: Props) {
   const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
@@ -89,57 +104,31 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
-  // Terminal status dot color for collapsed rail
-  const getTermDotColor = (open: boolean, connected: boolean): string => {
-    if (!open) return 'bg-text-dim';
-    return connected ? 'bg-success' : 'bg-error';
-  };
-  const termDotColor = getTermDotColor(terminalOpen, terminalConnected);
-
-  if (collapsed) {
-    return (
-      <aside className="w-14 bg-surface border-r border-border flex flex-col items-center py-4 gap-3 shrink-0">
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-          onClick={() => setCollapsed(false)} 
-          title="Expand sidebar"
-        >
-          <PanelLeftOpen size={18} />
-        </button>
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary text-white hover:bg-primary-hover transition-colors"
-          onClick={() => onNew()} 
-          title="New chat"
-        >
-          <Plus size={18} />
-        </button>
-        <div className="flex-1" />
-        <button
-          className="relative w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-          onClick={onTerminalToggle}
-          title={`Terminal${!terminalOpen ? ' (Closed)' : terminalConnected ? ' (Connected)' : ' (Disconnected)'}`}
-        >
-          <Terminal size={18} />
-          <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${termDotColor}`} />
-        </button>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="w-60 min-w-[200px] bg-surface border-r border-border p-4 flex flex-col gap-4 overflow-hidden shrink-0 max-md:hidden">
+  // Shared sidebar content (used by both inline and mobile drawer)
+  const sidebarContent = (isMobile: boolean) => (
+    <>
       {/* Top row */}
       <div className="flex items-center gap-2">
-        <button 
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors shrink-0"
-          onClick={() => setCollapsed(true)} 
-          title="Collapse sidebar"
-        >
-          <PanelLeftClose size={18} />
-        </button>
+        {isMobile ? (
+          <button
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors shrink-0"
+            onClick={onMobileClose}
+            title="Close"
+          >
+            <X size={18} />
+          </button>
+        ) : (
+          <button 
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors shrink-0"
+            onClick={() => setCollapsed(true)} 
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose size={18} />
+          </button>
+        )}
         <button 
           className="flex-1 flex items-center justify-center gap-2 bg-primary text-white h-9 px-4 rounded-lg font-medium text-sm hover:bg-primary-hover transition-colors"
-          onClick={() => onNew()}
+          onClick={() => { onNew(); if (isMobile) onMobileClose?.(); }}
         >
           <Plus size={16} />
           <span>New Chat</span>
@@ -164,35 +153,14 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
           <div key={group.label} className="mb-3">
             <div className="text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 px-2">{group.label}</div>
             {group.items.map((conv) => (
-              <div
+              <ConvItem
                 key={conv.uuid}
-                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all relative ${
-                  conv.uuid === currentUuid 
-                    ? 'bg-primary/10 text-text' 
-                    : 'text-text-dim hover:bg-surface-hover hover:text-text'
-                }`}
-              >
-                <button
-                  type="button"
-                  className="absolute inset-0 w-full h-full cursor-pointer"
-                  onClick={() => onSwitch(conv.uuid)}
-                  aria-label={`Switch to conversation: ${conv.title}`}
-                  aria-pressed={conv.uuid === currentUuid}
-                />
-                <ConvIcon status={convStatuses[conv.uuid] || 'idle'} />
-                <span className="flex-1 truncate" title={conv.title}>{conv.title}</span>
-                <button
-                  type="button"
-                  className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-error p-1 rounded transition-all relative z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDelete({ uuid: conv.uuid, title: conv.title });
-                  }}
-                  title="Delete"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+                conv={conv}
+                isCurrent={conv.uuid === currentUuid}
+                status={convStatuses[conv.uuid] || 'idle'}
+                onSwitch={() => { onSwitch(conv.uuid); if (isMobile) onMobileClose?.(); }}
+                onDelete={() => setPendingDelete({ uuid: conv.uuid, title: conv.title })}
+              />
             ))}
           </div>
         ))}
@@ -205,26 +173,10 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
 
       {/* Footer */}
       <div className="pt-3 flex flex-col gap-1.5">
-        {/* Terminal button */}
-        <button
-          className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-text-dim bg-surface-hover/50 hover:bg-surface-hover hover:text-text transition-colors w-full text-left"
-          onClick={onTerminalToggle}
-          title="Toggle terminal"
-        >
-          <Terminal size={16} className="shrink-0" />
-          <span className="flex-1 truncate">Terminal</span>
-          {terminalSessionCount > 0 && (
-            <span className="text-[10px] font-medium bg-bg px-1.5 py-0.5 rounded-full">
-              {terminalSessionCount}
-            </span>
-          )}
-          <TerminalStatusLabel terminalOpen={terminalOpen} terminalConnected={terminalConnected} />
-        </button>
-
         <div className="flex items-center gap-2">
           <button 
             className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
-            onClick={() => navigate('/settings')} 
+            onClick={() => { navigate('/settings'); if (isMobile) onMobileClose?.(); }} 
             title="Settings"
           >
             <Settings size={18} />
@@ -259,6 +211,52 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, termin
           onCancel={() => setPendingDelete(null)}
         />
       )}
+    </>
+  );
+
+  // Mobile drawer overlay
+  if (mobileOpen) {
+    return (
+      <>
+        {/* Backdrop */}
+        <button
+          className="fixed inset-0 w-full h-full bg-black/60 z-40 lg:hidden cursor-default"
+          onClick={onMobileClose}
+          aria-label="Close sidebar"
+        />
+        {/* Drawer */}
+        <aside className="fixed inset-y-0 left-0 w-72 bg-surface border-r border-border p-4 flex flex-col gap-4 overflow-hidden z-50 lg:hidden animate-[slide-in-left_0.2s_ease-out]">
+          {sidebarContent(true)}
+        </aside>
+      </>
+    );
+  }
+
+  if (collapsed) {
+    return (
+      <aside className="w-14 bg-surface border-r border-border flex flex-col items-center py-4 gap-3 shrink-0 max-md:hidden">
+        <button 
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors"
+          onClick={() => setCollapsed(false)} 
+          title="Expand sidebar"
+        >
+          <PanelLeftOpen size={18} />
+        </button>
+        <button 
+          className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary text-white hover:bg-primary-hover transition-colors"
+          onClick={() => onNew()} 
+          title="New chat"
+        >
+          <Plus size={18} />
+        </button>
+        <div className="flex-1" />
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="w-60 min-w-[200px] bg-surface border-r border-border p-4 flex flex-col gap-4 overflow-hidden shrink-0 max-md:hidden">
+      {sidebarContent(false)}
     </aside>
   );
 }
