@@ -32,8 +32,13 @@ set -e
 # Check if the venv has a working Python (catches cross-platform mismatch)
 if ! /app/backend/.venv/bin/python -c "import sys" 2>/dev/null; then
     echo "[dev-entrypoint] Installing dependencies (venv missing or incompatible)..."
-    # Docker named volumes can't be rm -rf'd, so try rm first then fall back to --clear
-    rm -rf /app/backend/.venv 2>/dev/null || true
+    # Docker named volumes can't always be rm -rf'd, so try rm first and warn if it fails
+    rm_err_file="$(mktemp)"
+    if ! rm -rf /app/backend/.venv 2>"$rm_err_file"; then
+        echo "[dev-entrypoint] Warning: failed to remove /app/backend/.venv; continuing with 'uv venv --clear'." >&2
+        cat "$rm_err_file" >&2
+    fi
+    rm -f "$rm_err_file"
     cd /app/backend && uv venv --clear && uv sync && uv pip install "watchdog[watchmedo]"
     echo "[dev-entrypoint] Dependencies installed."
 else
