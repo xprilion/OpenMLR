@@ -32,13 +32,16 @@ set -e
 # Check if the venv has a working Python (catches cross-platform mismatch)
 if ! /app/backend/.venv/bin/python -c "import sys" 2>/dev/null; then
     echo "[dev-entrypoint] Installing dependencies (venv missing or incompatible)..."
-    rm -rf /app/backend/.venv
-    cd /app/backend && uv sync && uv pip install "watchdog[watchmedo]"
+    # Docker named volumes can't be rm -rf'd, so try rm first then fall back to --clear
+    rm -rf /app/backend/.venv 2>/dev/null || true
+    cd /app/backend && uv venv --clear && uv sync && uv pip install "watchdog[watchmedo]"
     echo "[dev-entrypoint] Dependencies installed."
 else
-    # Venv exists and works, but ensure watchmedo is there too
+    # Venv works — run uv sync to pick up any new/changed dependencies
+    echo "[dev-entrypoint] Syncing dependencies..."
+    cd /app/backend && uv sync --quiet 2>/dev/null || true
+    # Ensure watchmedo is there too
     if ! command -v watchmedo >/dev/null 2>&1; then
-        echo "[dev-entrypoint] Installing watchmedo..."
         cd /app/backend && uv pip install "watchdog[watchmedo]"
     fi
 fi
