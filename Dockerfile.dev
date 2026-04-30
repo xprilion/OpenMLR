@@ -44,7 +44,9 @@ if ! /app/backend/.venv/bin/python -c "import sys" 2>/dev/null; then
 else
     # Venv works — run uv sync to pick up any new/changed dependencies
     echo "[dev-entrypoint] Syncing dependencies..."
-    cd /app/backend && uv sync --quiet 2>/dev/null || true
+    if ! (cd /app/backend && uv sync --quiet); then
+        echo "[dev-entrypoint] Warning: dependency sync failed; continuing with existing environment." >&2
+    fi
     # Ensure watchmedo is there too
     if ! command -v watchmedo >/dev/null 2>&1; then
         cd /app/backend && uv pip install "watchdog[watchmedo]"
