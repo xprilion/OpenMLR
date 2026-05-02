@@ -70,8 +70,8 @@ export const api = {
   getMe: () => get('/api/auth/me'),
 
   // Messages
-  sendMessage: (message: string, mode?: string) =>
-    post('/api/message', { message, mode, request_id: crypto.randomUUID() }),
+  sendMessage: (message: string, mode?: string, mentions?: Array<{ type: string; value: string }>) =>
+    post('/api/message', { message, mode, request_id: crypto.randomUUID(), mentions: mentions?.length ? mentions : undefined }),
   submitAnswers: (answers: Record<string, string>) => post('/api/answers', { answers }),
   interrupt: () => post('/api/interrupt', {}),
   sendApproval: (approvals: Record<string, boolean>) => post('/api/approval', { approvals }),

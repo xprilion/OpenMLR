@@ -17,9 +17,10 @@ interface McpServer {
   headers?: Record<string, string>;
   params?: Record<string, string>;
   enabled: boolean;
+  modes?: string[];
 }
 
-const EMPTY_SERVER: McpServer = { name: '', url: '', enabled: true };
+const EMPTY_SERVER: McpServer = { name: '', url: '', enabled: true, modes: ['plan', 'execute'] };
 
 export function McpSettings() {
   const [servers, setServers] = useState<McpServer[]>([]);
@@ -46,6 +47,7 @@ export function McpSettings() {
             headers: (cfg.headers as Record<string, string>) || undefined,
             params: (cfg.params as Record<string, string>) || undefined,
             enabled: cfg.enabled !== false,
+            modes: (cfg.modes as string[]) || ['plan', 'execute'],
           });
         }
         setServers(serverList);
@@ -74,6 +76,7 @@ export function McpSettings() {
         if (server.params && Object.keys(server.params).length > 0) {
           entry.params = server.params;
         }
+        entry.modes = server.modes || ['plan', 'execute'];
         serversObj[server.name] = entry;
       }
       await api.updateSetting('mcp', 'servers', serversObj);
@@ -393,6 +396,48 @@ export function McpSettings() {
                 {jsonError && (
                   <p className="text-xs text-error mt-1">{jsonError}</p>
                 )}
+              </div>
+
+              {/* Mode availability */}
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Available in Modes
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="rounded border-border accent-primary"
+                      checked={form.modes?.includes('plan') ?? true}
+                      onChange={(e) => {
+                        setForm((f) => {
+                          const modes = new Set(f.modes || ['plan', 'execute']);
+                          if (e.target.checked) modes.add('plan'); else modes.delete('plan');
+                          return { ...f, modes: Array.from(modes) };
+                        });
+                      }}
+                    />
+                    Plan
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="rounded border-border accent-primary"
+                      checked={form.modes?.includes('execute') ?? true}
+                      onChange={(e) => {
+                        setForm((f) => {
+                          const modes = new Set(f.modes || ['plan', 'execute']);
+                          if (e.target.checked) modes.add('execute'); else modes.delete('execute');
+                          return { ...f, modes: Array.from(modes) };
+                        });
+                      }}
+                    />
+                    Execute
+                  </label>
+                </div>
+                <p className="text-xs text-text-dim mt-1">
+                  Controls which modes can use this server's tools.
+                </p>
               </div>
 
               {/* Test result */}

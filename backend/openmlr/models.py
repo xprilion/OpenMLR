@@ -70,12 +70,23 @@ class ConversationDetail(BaseModel):
 # ---- Messaging ----
 
 
+class Mention(BaseModel):
+    """A resource reference from an @ mention in the chat input."""
+
+    type: Literal["server", "file"]
+    value: str = Field(
+        max_length=1024,
+        description="server name or workspace-relative file/directory path",
+    )
+
+
 class MessageSend(BaseModel):
     message: str
     mode: Literal["plan", "execute"] | None = (
         None  # per-message mode; only plan or execute accepted
     )
     request_id: str | None = None  # client-generated idempotency key
+    mentions: list[Mention] | None = None  # @ mention references
 
 
 class ApprovalRequest(BaseModel):

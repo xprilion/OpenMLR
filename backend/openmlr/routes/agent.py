@@ -420,7 +420,10 @@ async def send_message(
     # If conversation has no model, use user's default
     effective_model = conv.model or user_default_model
 
-    # Title generation after 1st and 3rd messages
+    # Enrich message with @ mention reference hints
+    enriched_message = _enrich_with_mentions(body.message, body.mentions)
+
+    # Title generation after 3rd user message (if not already titled)
     user_count = (conv.user_message_count or 0) + 1
 
     # If background jobs are enabled, use Celery
@@ -429,14 +432,14 @@ async def send_message(
             db=db,
             conversation_id=conv.id,
             user_id=user.id,
-            message=body.message,
+            message=enriched_message,
             mode=body.mode,
             model=effective_model,
             uuid=conv.uuid,
         )
 
         # Title generation (still async in web process for now)
-        if user_count in (1, 3):
+        if user_count == 3 and conv.title == "New conversation":
             msg_dicts = await _load_messages(db, conv.id)
             _task = asyncio.create_task(
                 _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
@@ -445,7 +448,7 @@ async def send_message(
         return {"ok": True, "job_id": job.job_id if job else None, "background": True}
 
     # Synchronous processing (original flow)
-    # Persist user message to DB
+    # Persist original message to DB (without enrichment clutter)
     await ops.add_message(db, conv.id, "user", body.message)
     await ops.increment_user_message_count(db, conv.id)
 
@@ -475,9 +478,9 @@ async def send_message(
         _wire_persistence(active, db, conv.id)
         active._persist_wired = True
 
-    _task = asyncio.create_task(sm.process_message(conv.id, body.message, mode=body.mode))
+    _task = asyncio.create_task(sm.process_message(conv.id, enriched_message, mode=body.mode))
 
-    if user_count in (1, 3):
+    if user_count == 3 and conv.title == "New conversation":
         msg_dicts = await _load_messages(db, conv.id)
         _task = asyncio.create_task(_auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts))
 
@@ -753,6 +756,49 @@ def _conv_dict(c) -> dict:
     }
 
 
+def _sanitize_mention_value(v: str) -> str:
+    """Strip control characters and cap length to prevent prompt injection."""
+    import re
+
+    v = v[:256]
+    v = re.sub(r"[`\n\r\x00-\x1f]", "", v)
+    return v
+
+
+def _enrich_with_mentions(message: str, mentions: list | None) -> str:
+    """Prepend resource-reference hints for @ mentions.
+
+    Mentions are lightweight pointers — the agent is expected to use its
+    tools (``read``, ``inspect_files``, MCP tools) to interact with them.
+    """
+    if not mentions:
+        return message
+
+    refs: list[str] = []
+    for m in mentions:
+        safe_value = _sanitize_mention_value(m.value)
+        if m.type == "file":
+            path = safe_value.rstrip("/")
+            if m.value.endswith("/"):
+                refs.append(
+                    f"- Directory {path}/ — list its contents with read or use "
+                    f"inspect_files to inspect relevant files."
+                )
+            else:
+                refs.append(f"- File {path} — use read to inspect this file.")
+        elif m.type == "server":
+            refs.append(f"- MCP Server {safe_value} — use tools provided by this server.")
+
+    if not refs:
+        return message
+
+    hint = (
+        "[The user referenced these resources — use the appropriate tools "
+        "to interact with them before responding:]\n" + "\n".join(refs)
+    )
+    return hint + "\n\n" + message
+
+
 def _msg_dict(m) -> dict:
     return {
         "id": m.id,
@@ -801,6 +847,13 @@ async def _auto_title(sm, event_bus, db, conv_id, uuid, messages):
             title = await LLMProvider.generate_title(messages, config)
 
         if title:
+            # Re-check the current title to avoid overwriting a title
+            # that was already set by another trigger (e.g. page refresh).
+            current_conv = await ops.get_conversation_by_id(db, conv_id)
+            if current_conv and current_conv.title != "New conversation":
+                logger.debug(f"Skipping title update for conv {conv_id}: already titled")
+                return
+
             await ops.update_conversation_title(db, conv_id, title)
             await event_bus.broadcast(
                 AgentEvent(event_type="conversation_updated", data={"uuid": uuid, "title": title})

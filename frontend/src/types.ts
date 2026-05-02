@@ -158,6 +158,14 @@ export interface McpServerStatus {
   url: string;
   enabled: boolean;
   connected: boolean;
+  modes?: string[];
+}
+
+// ── @ Mentions ──────────────────────────────────────────
+
+export interface Mention {
+  type: 'server' | 'file';
+  value: string; // server name or workspace-relative path
 }
 
 // ── Background Jobs ─────────────────────────────────────

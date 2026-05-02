@@ -273,11 +273,35 @@ OpenMLR automatically selects the correct MCP transport based on the URL:
 | Zapier MCP | `https://actions.zapier.com/mcp/...` |
 | Browserbase | `https://mcp.browserbase.com` |
 
+### Mode Availability
+
+Each MCP server can be configured to be available in specific agent modes:
+
+- **Plan mode** — Tools appear during planning and context-gathering
+- **Execute mode** — Tools appear during task execution
+- **Both** (default) — Tools are available in all modes
+
+Configure this via the **Plan** and **Execute** checkboxes in the Add/Edit MCP Server modal. The backend enforces mode restrictions per-tool — if a server is configured for Execute mode only, its tools will not appear in Plan mode.
+
+### @ Mentions
+
+You can reference MCP servers directly in the chat input using `@` mentions:
+
+1. Type `@` in the message box
+2. Select an MCP server from the dropdown (or a workspace file/directory)
+3. Send your message — the agent will be instructed to use tools from the referenced server
+
+Mentions are lightweight references, not content injections. The agent decides which tools to call based on the context.
+
 ### Status in Right Panel
 
-Connected MCP servers are displayed in the right panel under the **MCP Servers** section, showing each server's name, URL, and connection status (connected/enabled/disabled).
+MCP servers are displayed in the right panel under the **MCP Servers** section, showing each server's name, URL, and live connection status:
 
-MCP servers are connected when you start a new agent session. Tools from connected servers appear alongside built-in tools and are indistinguishable from the agent's perspective.
+- **Green dot** — Connected and ready (tools are available to the agent)
+- **Yellow dot** — Enabled but not yet connected (no active session)
+- **Gray dot** — Disabled
+
+MCP servers connect when an agent session is created (i.e., when you send a message). The status updates in real time via SSE events — dots turn green as soon as the connection succeeds. Tools from connected servers appear alongside built-in tools and are indistinguishable from the agent's perspective.
 
 ---
 

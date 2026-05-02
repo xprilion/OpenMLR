@@ -23,6 +23,7 @@ CROSSREF_API = "https://api.crossref.org"
 ARXIV_API = "https://export.arxiv.org/api/query"
 AR5IV_BASE = "https://ar5iv.labs.arxiv.org/html"
 PWC_API = "https://paperswithcode.com/api/v1"
+PAPERCLIP_API = "https://paperclip.gxl.ai"
 
 # OpenAlex: API key or polite pool via mailto
 MAILTO = os.environ.get("OPENALEX_EMAIL", "openmlr@example.com")
@@ -60,9 +61,11 @@ def create_papers_tool() -> ToolSpec:
     return ToolSpec(
         name="papers",
         description=(
-            "Search and read academic papers using OpenAlex, Semantic Scholar, arXiv, CrossRef, and Papers With Code. "
+            "Search and read academic papers using OpenAlex, Semantic Scholar, arXiv, CrossRef, "
+            "Papers With Code, and Paperclip (8M+ biomedical papers from bioRxiv, medRxiv, PMC). "
             "Multi-source search with automatic fallback for best results. "
             "Operations: search (OpenAlex+S2), arxiv_search (arXiv direct), semantic_search (Semantic Scholar), "
+            "paperclip_search (biomedical: bioRxiv/medRxiv/PMC/arXiv), paperclip_lookup (lookup by DOI/PMID), "
             "trending, details, read_paper, citations, recommend, find_code, find_datasets, "
             "author_papers."
         ),
@@ -75,6 +78,8 @@ def create_papers_tool() -> ToolSpec:
                         "search",
                         "arxiv_search",
                         "semantic_search",
+                        "paperclip_search",
+                        "paperclip_lookup",
                         "trending",
                         "details",
                         "read_paper",
@@ -89,6 +94,8 @@ def create_papers_tool() -> ToolSpec:
                         "search=OpenAlex search (broad coverage), "
                         "arxiv_search=arXiv search (preprints, ML/CS/Physics), "
                         "semantic_search=Semantic Scholar search, "
+                        "paperclip_search=Paperclip search (biomedical: bioRxiv, medRxiv, PMC, arXiv — 8M+ papers), "
+                        "paperclip_lookup=lookup paper by DOI or PMID via Paperclip, "
                         "trending=highly cited recent papers, details=paper metadata, "
                         "read_paper=read arXiv paper sections, citations=references and citing papers, "
                         "recommend=related papers, find_code=code implementations, "
@@ -123,6 +130,11 @@ def create_papers_tool() -> ToolSpec:
                     "type": "string",
                     "enum": ["openalex", "semantic_scholar", "auto"],
                     "description": "Preferred source for search (default: auto, tries OpenAlex then Semantic Scholar)",
+                },
+                "paperclip_source": {
+                    "type": "string",
+                    "enum": ["biorxiv", "medrxiv", "pmc", "arxiv", "all"],
+                    "description": "For paperclip_search: filter by source (default: all)",
                 },
             },
             "required": ["operation"],
@@ -177,6 +189,7 @@ async def _handle_papers(
     year_to: int = None,
     limit: int = 10,
     source: str = "auto",
+    paperclip_source: str = "all",
     session=None,
     **kwargs,
 ) -> tuple[str, bool]:
@@ -185,6 +198,8 @@ async def _handle_papers(
         "search",
         "arxiv_search",
         "semantic_search",
+        "paperclip_search",
+        "paperclip_lookup",
         "trending",
         "details",
         "citations",
@@ -213,6 +228,10 @@ async def _handle_papers(
         "search": lambda: _search(query, year_from, year_to, limit, source),
         "arxiv_search": lambda: _arxiv_search(query, year_from, year_to, limit),
         "semantic_search": lambda: _semantic_scholar_search(query, year_from, year_to, limit),
+        "paperclip_search": lambda: _paperclip_search(
+            query, year_from, year_to, limit, paperclip_source
+        ),
+        "paperclip_lookup": lambda: _paperclip_lookup(paper_id),
         "trending": lambda: _trending(query, limit),
         "details": lambda: _details(paper_id),
         "read_paper": lambda: _read_paper(paper_id, section),
@@ -493,6 +512,159 @@ async def _semantic_scholar_search(
             f"   Citations: {p.get('citationCount', 0)}  |  {id_info}\n"
         )
     return "\n".join(lines), True
+
+
+# ── Paperclip Search (bioRxiv, medRxiv, PMC, arXiv) ───────────────
+
+
+def _get_paperclip_headers() -> dict | None:
+    """Get Paperclip auth headers. Returns None if not configured."""
+    api_key = os.environ.get("PAPERCLIP_API_KEY")
+    if not api_key:
+        return None
+    return {
+        "Content-Type": "application/json",
+        "X-API-Key": api_key,
+    }
+
+
+async def _paperclip_search(
+    query: str,
+    year_from: int = None,
+    year_to: int = None,
+    limit: int = 10,
+    paperclip_source: str = "all",
+) -> tuple[str, bool]:
+    """Search biomedical papers using Paperclip (bioRxiv, medRxiv, PMC, arXiv)."""
+    if not query:
+        return "Provide a 'query' for search.", False
+
+    headers = _get_paperclip_headers()
+    if not headers:
+        return (
+            "PAPERCLIP_API_KEY not configured. "
+            "Set it in Settings > Providers or set the PAPERCLIP_API_KEY environment variable. "
+            "Get an API key at https://paperclip.gxl.ai",
+            False,
+        )
+
+    # Build the raw CLI-style arguments string
+    raw_parts = [f'"{query}"', f"-n {min(limit, 100)}"]
+
+    if paperclip_source and paperclip_source != "all":
+        raw_parts.append(f"--source {paperclip_source}")
+
+    if year_from and year_to and year_from == year_to:
+        raw_parts.append(f"--year {year_from}")
+    elif year_from:
+        raw_parts.append(f"--year {year_from}")
+    elif year_to:
+        raw_parts.append(f"--year {year_to}")
+
+    raw = " ".join(raw_parts)
+
+    try:
+        resp = await fetch_with_retry(
+            f"{PAPERCLIP_API}/api/cli/execute",
+            method="POST",
+            headers=headers,
+            json={"command": "search", "raw": raw},
+            timeout=120,
+            max_retries=2,
+        )
+    except RateLimitError:
+        return "Paperclip rate limit reached. Try again later.", False
+    except Exception as e:
+        log.warning(f"Paperclip search error: {e}")
+        return f"Paperclip error: {str(e)[:200]}", False
+
+    if resp.status_code == 401 or resp.status_code == 403:
+        return (
+            "PAPERCLIP_API_KEY is invalid or expired. Check your API key in Settings > Providers.",
+            False,
+        )
+    if resp.status_code == 429:
+        return "Paperclip rate limit reached. Try again later.", False
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("detail", resp.text[:300])
+        except Exception:
+            detail = resp.text[:300]
+        return f"Paperclip error {resp.status_code}: {detail}", False
+
+    data = resp.json()
+    output = data.get("output", "")
+
+    if not output:
+        return f"No papers found for: {query}", True
+
+    # Prepend source attribution
+    result_id = data.get("result_id", "")
+    elapsed = data.get("elapsed_ms")
+    header = "Results via Paperclip (bioRxiv/medRxiv/PMC/arXiv)"
+    if elapsed:
+        header += f" [{elapsed}ms]"
+    if result_id:
+        header += f" [{result_id}]"
+
+    return f"{header}:\n\n{output}", True
+
+
+async def _paperclip_lookup(paper_id: str) -> tuple[str, bool]:
+    """Look up a paper by DOI or PMID using Paperclip."""
+    if not paper_id:
+        return "Provide a 'paper_id' (DOI like '10.1101/...' or PMID).", False
+
+    headers = _get_paperclip_headers()
+    if not headers:
+        return (
+            "PAPERCLIP_API_KEY not configured. "
+            "Set it in Settings > Providers or set the PAPERCLIP_API_KEY environment variable. "
+            "Get an API key at https://paperclip.gxl.ai",
+            False,
+        )
+
+    # Determine lookup field based on ID format
+    if paper_id.startswith("10."):
+        field = "doi"
+    elif paper_id.isdigit():
+        field = "pmid"
+    else:
+        field = "doi"  # default to DOI
+
+    raw = f"{field} {paper_id}"
+
+    try:
+        resp = await fetch_with_retry(
+            f"{PAPERCLIP_API}/api/cli/execute",
+            method="POST",
+            headers=headers,
+            json={"command": "lookup", "raw": raw},
+            timeout=60,
+            max_retries=2,
+        )
+    except RateLimitError:
+        return "Paperclip rate limit reached. Try again later.", False
+    except Exception as e:
+        log.warning(f"Paperclip lookup error: {e}")
+        return f"Paperclip lookup error: {str(e)[:200]}", False
+
+    if resp.status_code == 401 or resp.status_code == 403:
+        return "PAPERCLIP_API_KEY is invalid or expired.", False
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("detail", resp.text[:300])
+        except Exception:
+            detail = resp.text[:300]
+        return f"Paperclip lookup error {resp.status_code}: {detail}", False
+
+    data = resp.json()
+    output = data.get("output", "")
+
+    if not output:
+        return f"No paper found for {field}: {paper_id}", True
+
+    return f"Paperclip lookup result:\n\n{output}", True
 
 
 # ── Trending (OpenAlex) ──────────────────────────────────

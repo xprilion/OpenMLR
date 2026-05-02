@@ -128,6 +128,9 @@ async def _async_process_message(
     sandbox_manager = SandboxManager()
     tool_router = create_tool_router(sandbox_manager)
 
+    # Track MCP manager for cleanup in finally block
+    mcp_manager = None
+
     # Resolve project workspace for workspace tools and local tools
     async with worker_session() as db:
         try:
@@ -147,6 +150,33 @@ async def _async_process_message(
                     )
         except Exception as e:
             logger.warning(f"Worker job {job_id}: failed to resolve project workspace - {e}")
+
+    # Load MCP servers from user settings (with timeout to avoid stalling the worker)
+    async with worker_session() as db:
+        try:
+            from ..tools.mcp import MCPManager
+
+            user_settings = await ops.get_all_settings(db, user_id, category="mcp")
+            mcp_servers = user_settings.get("mcp", {}).get("servers", {})
+            if mcp_servers:
+                mcp_manager = MCPManager()
+                count = await asyncio.wait_for(
+                    mcp_manager.connect_servers(mcp_servers, tool_router, blocklist=set()),
+                    timeout=30.0,
+                )
+                if count > 0:
+                    logger.info(f"Worker job {job_id}: loaded {count} MCP tools")
+                # Broadcast live connection status to frontend
+                await publish_event(
+                    AgentEvent(
+                        event_type="mcp_status",
+                        data={"servers": mcp_manager.get_server_statuses()},
+                    )
+                )
+        except TimeoutError:
+            logger.warning(f"Worker job {job_id}: MCP server connection timed out")
+        except Exception as e:
+            logger.warning(f"Worker job {job_id}: failed to load MCP servers - {e}")
 
     # Build and set system prompt
     session.context_manager.system_prompt = build_system_prompt(
@@ -263,6 +293,13 @@ async def _async_process_message(
             await sandbox_manager.destroy()
         except Exception:
             pass
+
+        # Disconnect MCP servers
+        if mcp_manager:
+            try:
+                await mcp_manager.disconnect_all()
+            except Exception:
+                pass
 
         # Clear any lingering interrupt key
         try:

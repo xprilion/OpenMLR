@@ -175,6 +175,31 @@ class TestMessageSend:
         m = MessageSend(message="test", mode=None)
         assert m.mode is None
 
+    def test_mentions_default_none(self):
+        m = MessageSend(message="test")
+        assert m.mentions is None
+
+    def test_with_mentions(self):
+        from openmlr.models import Mention
+
+        m = MessageSend(
+            message="check @train.py",
+            mentions=[
+                Mention(type="file", value="code/train.py"),
+                Mention(type="server", value="my-mcp"),
+            ],
+        )
+        assert len(m.mentions) == 2
+        assert m.mentions[0].type == "file"
+        assert m.mentions[0].value == "code/train.py"
+        assert m.mentions[1].type == "server"
+
+    def test_mention_rejects_invalid_type(self):
+        from openmlr.models import Mention
+
+        with pytest.raises(ValidationError):
+            Mention(type="invalid", value="test")
+
 
 class TestApprovalRequest:
     def test_valid(self):

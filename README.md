@@ -28,7 +28,8 @@
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
 - **Multi-provider LLMs** — OpenAI, Anthropic, OpenRouter, plus local models (Ollama, LM Studio). Add custom providers with OpenAI SDK, Anthropic SDK, OpenRouter, or LiteLLM compatibility.
 - **Model picker** — Browse models grouped by provider with logos, sorted by release date. Recently used models at the top. Fetches live from [models.dev](https://models.dev).
-- **MCP servers** — Connect remote HTTP/HTTPS MCP servers with custom authentication (Bearer, API key, headers).
+- **MCP servers** — Connect remote HTTP/HTTPS MCP servers with custom authentication (Bearer, API key, headers). Configure per-server mode availability (Plan, Execute, or both). Live connection status in the sidebar.
+- **@ mentions** — Type `@` in the chat to reference MCP servers or workspace files/directories. The agent uses its tools to interact with the referenced resources.
 - **Onboarding flow** — Guided setup when no LLM provider is configured.
 
 ## Quick Start

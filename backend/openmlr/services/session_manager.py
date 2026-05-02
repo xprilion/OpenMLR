@@ -191,6 +191,13 @@ class SessionManager:
                     )
                     if count > 0:
                         log.info(f"Session {conversation_id}: loaded {count} MCP tools")
+                    # Broadcast live connection status to the frontend
+                    await self.event_bus.broadcast(
+                        AgentEvent(
+                            event_type="mcp_status",
+                            data={"servers": mcp_manager.get_server_statuses()},
+                        )
+                    )
             except Exception as e:
                 log.warning(f"Session {conversation_id}: failed to load MCP servers - {e}")
 

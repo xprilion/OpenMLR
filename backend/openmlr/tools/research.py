@@ -20,7 +20,7 @@ that won't affect the main conversation.
 
 You can use ONLY these read-only tools:
 - **web_search**: General web search for docs, blog posts, tutorials
-- **papers**: Academic paper search (OpenAlex, arXiv, Semantic Scholar, Citations, etc.)
+- **papers**: Academic paper search (OpenAlex, arXiv, Semantic Scholar, Paperclip for biomedical, Citations, etc.)
 - **github_read_file**: Read specific files from GitHub repos
 - **github_find_examples**: Search code patterns across GitHub
 - **hf_search_models**: Search Hugging Face models

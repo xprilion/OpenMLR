@@ -15,7 +15,9 @@ OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focuse
 - Ask clarifying questions via `ask_user` (structured options UI)
 - Create and update task plans via `plan_tool`
 - Read files and search the codebase (read-only filesystem tools)
+- Inspect multiple files at once with `inspect_files` (parallel reading with relevance filtering)
 - Search the web and papers for quick feasibility checks (budget: 5 calls before warning)
+- Use MCP server tools configured for Plan mode
 - Generate `PLAN.md` (auto-saved to `.project-meta/plans/PLAN.md` in the workspace)
 
 **What the agent cannot do:**
@@ -23,6 +25,7 @@ OpenMLR uses two modes — **Plan** and **Execute** — to keep the agent focuse
 - Execute code (bash, sandbox)
 - Write paper sections
 - Use the `research` sub-agent
+- Use MCP tools not configured for Plan mode
 
 **Visual indicator**: Messages have an **amber border**.
 
@@ -42,9 +45,11 @@ Plan mode has a research call budget. After 5+ research tool calls (papers, web_
 - Write and edit files (auto-targeted to the project workspace)
 - Draft paper sections with auto-save (to `papers/` in workspace)
 - Run code in bash or sandboxes (Docker/SSH/Modal)
+- Use MCP server tools configured for Execute mode
 
 **What the agent cannot do:**
 - Use `ask_user` (no structured questions -- it should be working, not asking)
+- Use MCP tools not configured for Execute mode
 
 ::: info TODO approval
 In Execute mode, creating a new task plan or adding tasks requires **user approval**. The agent proposes the changes and a review UI lets you approve, edit, or reject before they take effect.

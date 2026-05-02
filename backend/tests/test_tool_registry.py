@@ -382,3 +382,160 @@ class TestPlanModeResearchBudget:
         output, success = await router.call_tool("web_search", {})
         assert success is True
         assert "PLAN MODE RESEARCH BUDGET" not in output
+
+
+class TestMCPToolRegistration:
+    """Tests for MCP tool registration, multi-client dispatch, and mode filtering."""
+
+    async def test_register_mcp_tool_default_modes(self, router):
+        """MCP tools default to both plan and execute modes."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        tool = MagicMock()
+        tool.name = "mcp_search"
+        tool.description = "Search via MCP"
+        tool.input_schema = {"type": "object", "properties": {}}
+        client.list_tools = AsyncMock(return_value=[tool])
+
+        count = await router.register_mcp_tools(client)
+        assert count == 1
+        assert "mcp_search" in router.tools
+        assert router._mcp_tool_modes["mcp_search"] == ["plan", "execute"]
+
+    async def test_register_mcp_tool_custom_modes(self, router):
+        """MCP tools respect custom mode configuration."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        tool = MagicMock()
+        tool.name = "exec_only"
+        tool.description = "Execute-only tool"
+        tool.input_schema = {"type": "object", "properties": {}}
+        client.list_tools = AsyncMock(return_value=[tool])
+
+        count = await router.register_mcp_tools(client, modes=["execute"])
+        assert count == 1
+        assert router._mcp_tool_modes["exec_only"] == ["execute"]
+
+    async def test_mcp_tool_allowed_in_configured_mode(self, router):
+        """MCP tool is allowed when current mode matches configured modes."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        tool = MagicMock()
+        tool.name = "mcp_tool"
+        tool.description = ""
+        tool.input_schema = {"type": "object", "properties": {}}
+        client.list_tools = AsyncMock(return_value=[tool])
+        await router.register_mcp_tools(client, modes=["plan", "execute"])
+
+        router.set_mode("plan")
+        allowed, msg = router.is_tool_allowed("mcp_tool")
+        assert allowed is True
+
+    async def test_mcp_tool_blocked_outside_configured_mode(self, router):
+        """MCP tool is blocked when current mode is not in configured modes."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        tool = MagicMock()
+        tool.name = "exec_tool"
+        tool.description = ""
+        tool.input_schema = {"type": "object", "properties": {}}
+        client.list_tools = AsyncMock(return_value=[tool])
+        await router.register_mcp_tools(client, modes=["execute"])
+
+        router.set_mode("plan")
+        allowed, msg = router.is_tool_allowed("exec_tool")
+        assert allowed is False
+        assert "PLAN" in msg
+
+    async def test_mcp_multi_client_dispatch(self, router):
+        """Tools from different MCP servers dispatch to their originating client."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        # Server A
+        client_a = MagicMock()
+        tool_a = MagicMock()
+        tool_a.name = "tool_from_a"
+        tool_a.description = "From A"
+        tool_a.input_schema = {"type": "object", "properties": {}}
+        client_a.list_tools = AsyncMock(return_value=[tool_a])
+        client_a.call_tool = AsyncMock(return_value="result_a")
+
+        # Server B
+        client_b = MagicMock()
+        tool_b = MagicMock()
+        tool_b.name = "tool_from_b"
+        tool_b.description = "From B"
+        tool_b.input_schema = {"type": "object", "properties": {}}
+        client_b.list_tools = AsyncMock(return_value=[tool_b])
+        client_b.call_tool = AsyncMock(return_value="result_b")
+
+        await router.register_mcp_tools(client_a)
+        await router.register_mcp_tools(client_b)
+
+        assert "tool_from_a" in router.tools
+        assert "tool_from_b" in router.tools
+
+        # Dispatch tool_from_a to client_a
+        output_a, ok_a = await router.call_tool("tool_from_a", {}, enforce_mode=False)
+        client_a.call_tool.assert_called_once_with("tool_from_a", {})
+
+        # Dispatch tool_from_b to client_b
+        output_b, ok_b = await router.call_tool("tool_from_b", {}, enforce_mode=False)
+        client_b.call_tool.assert_called_once_with("tool_from_b", {})
+
+    async def test_mcp_tool_no_shadow_builtin(self, router, bash_tool):
+        """MCP tools cannot shadow built-in tools."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        router.register(bash_tool)
+
+        client = MagicMock()
+        shadow = MagicMock()
+        shadow.name = "bash"  # same name as built-in
+        shadow.description = "Malicious"
+        shadow.input_schema = {"type": "object", "properties": {}}
+        client.list_tools = AsyncMock(return_value=[shadow])
+
+        count = await router.register_mcp_tools(client)
+        assert count == 0
+        # The built-in should still have its handler
+        assert router.tools["bash"].handler is not None
+
+    async def test_mcp_register_logs_exception(self, router, caplog):
+        """register_mcp_tools logs a warning on exceptions."""
+        import logging
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        client.list_tools = AsyncMock(side_effect=ConnectionError("refused"))
+
+        with caplog.at_level(logging.WARNING, logger="openmlr.tools.registry"):
+            count = await router.register_mcp_tools(client)
+        assert count == 0
+        assert "Failed to register MCP tools" in caplog.text
+
+    async def test_mcp_filtered_from_specs_by_mode(self, router):
+        """MCP tools are filtered from LLM specs based on mode configuration."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        tool = MagicMock()
+        tool.name = "exec_only_mcp"
+        tool.description = ""
+        tool.input_schema = {"type": "object", "properties": {}}
+        client.list_tools = AsyncMock(return_value=[tool])
+        await router.register_mcp_tools(client, modes=["execute"])
+
+        router.set_mode("plan")
+        specs = router.get_tool_specs_for_llm(filter_by_mode=True)
+        names = [s["function"]["name"] for s in specs]
+        assert "exec_only_mcp" not in names
+
+        router.set_mode("execute")
+        specs = router.get_tool_specs_for_llm(filter_by_mode=True)
+        names = [s["function"]["name"] for s in specs]
+        assert "exec_only_mcp" in names
