@@ -578,6 +578,11 @@ async def _paperclip_search(
         log.warning(f"Paperclip search error: {e}")
         return f"Paperclip error: {str(e)[:200]}", False
 
+    return _parse_paperclip_response(resp, query)
+
+
+def _parse_paperclip_response(resp, query: str) -> tuple[str, bool]:
+    """Parse and format a Paperclip API response."""
     if resp.status_code in (401, 403):
         return (
             "PAPERCLIP_API_KEY is invalid or expired. Check your API key in Settings > Providers.",

@@ -256,7 +256,7 @@ class TestPaperclipLookup:
         mock_fetch.return_value = mock_resp
 
         with patch.dict(os.environ, {"PAPERCLIP_API_KEY": "gxl_test123"}):
-            _, ok = await _paperclip_lookup("12345678")
+            await _paperclip_lookup("12345678")
 
         body = mock_fetch.call_args.kwargs["json"]
         assert body["command"] == "lookup"
