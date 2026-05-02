@@ -1,5 +1,62 @@
 # Changelog
 
+## v0.6.0
+
+MCP server fixes, per-server mode configuration, @ mention system for referencing resources, parallel file inspection tool, conversation title generation improvements, and security hardening.
+
+### MCP Server Fixes
+- **Celery worker MCP loading** -- MCP servers are now loaded in the Celery background worker path, matching the inline session path. Previously MCP tools were completely unavailable when using background jobs
+- **Multi-server dispatch** -- Tools from multiple MCP servers now dispatch to their correct originating client. Previously `self._mcp_client` was overwritten by each server, causing tools from earlier servers to fail at execution time
+- **Plan mode MCP access** -- MCP tools are no longer blocked by the plan-mode whitelist. Each tool is tracked with its own mode configuration and bypasses the built-in tool restrictions
+- **Exception logging** -- `register_mcp_tools` now logs warnings on failure instead of silently swallowing exceptions with bare `except: pass`
+- **Tool name collision logging** -- MCP tools that attempt to shadow built-in tool names are logged with a warning for security observability
+- **Connection timeout** -- MCP server connections in the Celery worker are wrapped with a 30-second timeout to prevent hanging workers
+- **Cleanup** -- MCP connections are properly disconnected in the Celery worker's finally block
+
+### Per-Server Mode Configuration
+- **Mode checkboxes** -- Each MCP server can be configured to be available in Plan mode, Execute mode, or both (default: both) via checkboxes in Settings > MCP Servers
+- **Backend enforcement** -- The `modes` field is stored in the server config, passed through `MCPManager.connect_servers` to `register_mcp_tools`, and enforced by `ToolRouter.is_tool_allowed` per-tool
+- **Status endpoint** -- `GET /api/mcp/status` now includes `modes` in each server's response
+
+### @ Mention System
+- **MentionPopover component** -- Type `@` in the chat input to open a dropdown showing MCP servers and workspace files. Supports directory browsing (typing `@code/` lists files in `code/`), keyboard navigation (arrows, Enter, Tab, Escape), and filtering by name
+- **Mention chips** -- Active mentions are displayed as colored chips above the input area (blue for MCP servers, amber for files)
+- **Resource references** -- Mentions are sent as lightweight structured references (`{type, value}`) alongside the message. The backend prepends reference hints that instruct the agent to use appropriate tools (`read`, `inspect_files`, MCP tools) to interact with the referenced resources
+- **Mention model** -- New `Mention` Pydantic model with `type: Literal["server", "file"]` and `value: str` (max 1024 chars). Added `mentions` field to `MessageSend`
+- **Input sanitization** -- Mention values are sanitized (backticks, newlines, control characters stripped, length capped at 256) before interpolation into prompt text to prevent LLM prompt injection
+
+### inspect_files Tool
+- **Parallel file reading** -- New `inspect_files` tool reads multiple files or directories concurrently via `asyncio.gather` and scores each file for relevance against a user query
+- **Keyword relevance scoring** -- Files are scored by keyword overlap between their content and the query, sorted by relevance, and returned within a configurable token budget (100K chars default)
+- **Directory expansion** -- Directory paths are expanded to their file listings; hidden files (dotfiles) are excluded
+- **Safety limits** -- Max 50 files per call, 200 lines per file for scoring, 2MB file-size gate (large files skipped before reading), negative `max_files` clamped to 1
+- **Security** -- Each child file in expanded directories is re-validated via `_validate_path` to catch symlinks escaping the workspace
+- **Plan mode access** -- Added to the plan-mode allowlist for read-only context gathering
+
+### Conversation Title Generation
+- **Deferred generation** -- Title generation no longer triggers after the 1st user message. It now triggers after the 3rd user message or on page refresh, whichever comes first
+- **No re-updates** -- Once a title is set, it is not overwritten by subsequent triggers. A race-condition guard in `_auto_title` re-checks the current title from DB before persisting
+- **Trigger guard** -- The `send_message` endpoint checks `conv.title == "New conversation"` before triggering, preventing redundant generation
+
+### Security Hardening
+- Symlink traversal protection in `inspect_files` -- each child entry in expanded directories is validated via `_validate_path` before reading
+- File-size gate in `inspect_files` -- files over 2MB are skipped before `read_text()` to prevent OOM
+- `asyncio.get_running_loop()` used instead of deprecated `get_event_loop()` in async contexts
+- MCP tool name shadowing logged as a warning for security observability
+- Mention values sanitized to strip backticks, newlines, and control characters before prompt interpolation
+- `Mention.value` field constrained to max 1024 characters via Pydantic `Field`
+- MCP connection timeout (30s) in Celery worker prevents indefinite worker stalls
+
+### UI Fixes
+- **Layout gap fix** -- Fixed 1px gap between the main content area and the right sidebar caused by `paddingRight` being 1px larger than the RightPanel's rendered width (`289px` → `288px`, `49px` → `48px`)
+- **MCP live connection status** -- MCP server dots in the right panel now turn green when connected. Previously the status was hardcoded to `connected: false` in the REST endpoint. An `mcp_status` SSE event is now broadcast from both the session manager and Celery worker after `MCPManager.connect_servers()` succeeds, and the frontend handles it to update the dots in real time
+- **Pre-existing lint fixes** -- Removed extraneous f-string prefix in `papers.py`, removed unused `AsyncMock` import in `test_tools_papers.py`
+
+### Testing
+- **34 new backend tests** -- MCP multi-client dispatch (9), inspect_files tool (12), mention enrichment (7), Mention model validation (3), title generation (3 from prior session)
+- **Total: 915 backend + 223 frontend = 1,138 tests**
+- All ruff checks pass, frontend eslint 0 errors
+
 ## v0.5.0
 
 Project-scoped conversations, unified file workspace, Monaco code viewer, TODO approval flow, comprehensive agent guidance, and test infrastructure improvements.

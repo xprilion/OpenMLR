@@ -74,11 +74,22 @@ Paper preview and client-side export (Markdown/LaTeX) are available in the **Pap
 | `read` | Read files with line numbers | yes | yes |
 | `write` | Create/overwrite files | no | yes |
 | `edit` | Find-and-replace in files | no | yes |
+| `inspect_files` | Parallel file reading with relevance filtering | yes | yes |
 | `list_dir` | List directory contents | yes | yes |
 | `glob_files` | Find files by glob pattern | yes | yes |
 | `grep_search` | Search file contents | yes | yes |
 
 In Plan mode, only read-only filesystem tools are available.
+
+### inspect_files
+
+The `inspect_files` tool reads multiple files or entire directories concurrently and scores each file for relevance against a query. Useful when the agent needs to scan a directory to find which files are relevant without reading them one by one.
+
+- Expands directories to file listings (hidden files excluded)
+- Reads all files in parallel via `asyncio.gather`
+- Scores relevance by keyword overlap with the query
+- Returns relevant files with content, skips low-relevance files
+- Safety limits: 50 files max, 200 lines per file, 2MB file-size gate
 
 ## Execution Tools
 
@@ -121,5 +132,6 @@ See [Projects & Workspaces](/projects) for details on the knowledge graph entity
 Tools are filtered based on the current mode before being sent to the LLM. See [Modes](/modes) for details on the enforcement layers.
 
 In summary:
-- **Plan mode**: `ask_user`, `plan_tool`, `workspace`, read-only filesystem, web search, papers, GitHub
-- **Execute mode**: Everything except `ask_user`
+- **Plan mode**: `ask_user`, `plan_tool`, `workspace`, read-only filesystem, `inspect_files`, web search, papers, GitHub, HuggingFace, compute planning, and MCP tools configured for Plan mode
+- **Execute mode**: Everything except `ask_user`, plus MCP tools configured for Execute mode
+- **MCP tools**: Filtered by the per-server mode configuration set in Settings > MCP Servers (default: both modes)

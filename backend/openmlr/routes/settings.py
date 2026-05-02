@@ -62,6 +62,7 @@ async def update_setting(
             "github_token": "GITHUB_TOKEN",
             "semantic_scholar_api_key": "SEMANTIC_SCHOLAR_API_KEY",
             "openalex_api_key": "OPENALEX_API_KEY",
+            "paperclip_api_key": "PAPERCLIP_API_KEY",
             "modal_token_id": "MODAL_TOKEN_ID",
             "modal_token_secret": "MODAL_TOKEN_SECRET",
             "hf_token": "HF_TOKEN",
@@ -127,6 +128,7 @@ def _is_provider_configured(provider_id: str, provider_settings: dict) -> bool:
         "github": "GITHUB_TOKEN",
         "semantic_scholar": "SEMANTIC_SCHOLAR_API_KEY",
         "openalex": "OPENALEX_API_KEY",
+        "paperclip": "PAPERCLIP_API_KEY",
         "modal": "MODAL_TOKEN_ID",
         "huggingface": "HF_TOKEN",
     }
@@ -144,6 +146,7 @@ def _is_provider_configured(provider_id: str, provider_settings: dict) -> bool:
         "github": "github_token",
         "semantic_scholar": "semantic_scholar_api_key",
         "openalex": "openalex_api_key",
+        "paperclip": "paperclip_api_key",
         "modal": "modal_token_id",
         "huggingface": "hf_token",
     }.get(provider_id)
@@ -260,6 +263,14 @@ async def list_providers(
             "configured": _is_provider_configured("modal", provider_settings),
             "categories": ["compute"],
             "docs_url": "https://modal.com/docs",
+        },
+        {
+            "id": "paperclip",
+            "name": "Paperclip",
+            "key_env": "PAPERCLIP_API_KEY",
+            "configured": _is_provider_configured("paperclip", provider_settings),
+            "categories": ["papers"],
+            "docs_url": "https://paperclip.gxl.ai/docs",
         },
         {
             "id": "huggingface",
@@ -768,6 +779,7 @@ async def save_config(
         "GITHUB_TOKEN",
         "SEMANTIC_SCHOLAR_API_KEY",
         "OPENALEX_API_KEY",
+        "PAPERCLIP_API_KEY",
         "MODAL_TOKEN_ID",
         "MODAL_TOKEN_SECRET",
         "HF_TOKEN",

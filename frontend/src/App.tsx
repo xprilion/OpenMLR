@@ -614,6 +614,13 @@ function ChatUI({
         if (uuid && title) setConversations((prev) => prev.map((c) => c.uuid === uuid ? { ...c, title } : c));
         break;
       }
+      case 'mcp_status': {
+        const servers = data?.servers;
+        if (Array.isArray(servers)) {
+          setMcpServers(servers);
+        }
+        break;
+      }
       case 'interrupted':
         setCurrentConvStatus('idle');
         setMessages((prev) => [...prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::')), { id: nextId(), role: 'system', content: 'Interrupted.' }]);
@@ -677,7 +684,7 @@ function ChatUI({
     }
   }, [currentConvUuid, jobProcessing, connected]);
 
-  const sendMessage = useCallback(async (text: string, mode: string) => {
+  const sendMessage = useCallback(async (text: string, mode: string, mentions?: Array<{ type: 'server' | 'file'; value: string }>) => {
     // Prevent concurrent/duplicate sends
     if (sendingRef.current) return;
     sendingRef.current = true;
@@ -685,7 +692,7 @@ function ChatUI({
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text, metadata: { tool: mode } }]);
     setCurrentConvStatus('processing');
     try {
-      await api.sendMessage(text, mode);
+      await api.sendMessage(text, mode, mentions);
     } catch (err: any) {
       setCurrentConvStatus('idle');
       setMessages((prev) => [...prev, { id: nextId(), role: 'error', content: `Failed to send: ${err.message}` }]);
@@ -793,7 +800,7 @@ function ChatUI({
         
         <div 
           className="flex flex-col flex-1 overflow-hidden relative transition-[padding] duration-200 main-content-area"
-          style={{ paddingRight: rightPanelOpen ? '289px' : '49px' }}
+          style={{ paddingRight: rightPanelOpen ? '288px' : '48px' }}
         >
           {/* Agent / Editor / Terminal tab bar */}
           <div className="flex items-center border-b border-border shrink-0 bg-surface">
@@ -902,7 +909,9 @@ function ChatUI({
                 text={inputText}
                 onTextChange={setInputText}
                 onSend={sendMessage} 
-                onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }} 
+                onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }}
+                mcpServers={mcpServers}
+                projectUuid={activeProject?.uuid ?? null}
               />
             </div>
           )}

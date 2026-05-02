@@ -19,7 +19,7 @@ features:
   - title: Execute
     details: Research papers, write drafts, run code. All tools available. Follows the plan you built in Plan mode.
   - title: MCP Servers
-    details: Connect remote MCP servers with custom authentication. Test connections before saving. Monitor status in the right panel.
+    details: Connect remote MCP servers with custom authentication. Configure per-server mode availability. Live connection status. Reference servers with @ mentions.
 ---
 
 ## Quick Start
@@ -61,7 +61,8 @@ Switch modes with the **P/E button** in the input area or press **Cmd+M** (Mac) 
 
 - **Paper research** — OpenAlex, Semantic Scholar, arXiv, CrossRef, Papers With Code. Full paper reading, citation graphs.
 - **Paper writing** — Section-by-section drafting with auto-save. Preview + export (Markdown/LaTeX) in the Paper tab.
-- **MCP servers** — Connect remote HTTP/HTTPS MCP servers with custom auth (Bearer, API key, headers). Test and monitor connections from the UI.
+- **MCP servers** — Connect remote HTTP/HTTPS MCP servers with custom auth. Per-server mode config, live connection status, @ mentions.
+- **@ mentions** — Type `@` in the chat to reference MCP servers or workspace files. The agent uses its tools to interact with the referenced resources.
 - **Sub-agent streaming** — Research tool spawns independent agents with nested tool call visibility.
 - **Background jobs** — Celery + Redis. Close the browser, come back later.
 - **Per-conversation parallelism** — Multiple conversations process simultaneously.

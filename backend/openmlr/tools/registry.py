@@ -39,6 +39,8 @@ MODE_TOOL_RESTRICTIONS = {
             "compute_probe",
             # Workspace (knowledge graph, notes, search — always accessible)
             "workspace",
+            # Parallel file inspection (read-only)
+            "inspect_files",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -80,8 +82,9 @@ class ToolRouter:
 
     def __init__(self):
         self.tools: dict[str, ToolSpec] = {}
-        self._mcp_client = None
         self._blocklist: set[str] = set()
+        self._mcp_clients: dict[str, object] = {}  # tool_name -> MCP client
+        self._mcp_tool_modes: dict[str, list[str]] = {}  # tool_name -> allowed modes
         self._current_mode: str = "general"
         self._user_id: int | None = None
         self._db = None
@@ -118,9 +121,20 @@ class ToolRouter:
 
         Returns (allowed, error_message).
         Supports both 'allowed' (whitelist) and 'blocked' (blacklist) sets.
+        MCP tools use their own per-tool mode configuration.
         """
         if self._current_mode not in MODE_TOOL_RESTRICTIONS:
             return True, ""
+
+        # MCP tools: check their per-tool mode configuration
+        if name in self._mcp_tool_modes:
+            allowed_modes = self._mcp_tool_modes[name]
+            if self._current_mode in allowed_modes:
+                return True, ""
+            return False, (
+                f"MCP tool '{name}' is not available in {self._current_mode.upper()} mode. "
+                f"It is configured for: {', '.join(m.upper() for m in allowed_modes)}."
+            )
 
         restrictions = MODE_TOOL_RESTRICTIONS[self._current_mode]
 
@@ -325,10 +339,11 @@ class ToolRouter:
                     False,
                 )
 
-        # MCP tool (no handler — dispatch to MCP client)
-        if self._mcp_client:
+        # MCP tool (no handler — dispatch to per-tool MCP client)
+        mcp_client = self._mcp_clients.get(name)
+        if mcp_client:
             try:
-                result = await self._mcp_client.call_tool(name, arguments)
+                result = await mcp_client.call_tool(name, arguments)
                 output = _convert_mcp_content(result)
                 if _research_warning:
                     output += _research_warning
@@ -338,16 +353,29 @@ class ToolRouter:
 
         return f"Tool '{name}' has no handler and no MCP client configured.", False
 
-    async def register_mcp_tools(self, mcp_client, blocklist: set[str] | None = None) -> int:
-        """Register tools from an MCP client. Returns count of tools registered."""
-        self._mcp_client = mcp_client
-        self._blocklist = blocklist or set()
+    async def register_mcp_tools(
+        self,
+        mcp_client,
+        blocklist: set[str] | None = None,
+        modes: list[str] | None = None,
+    ) -> int:
+        """Register tools from an MCP client.
+
+        Each tool is mapped to its originating client for dispatch, and
+        tagged with the modes it is allowed in (default: plan + execute).
+        Returns count of tools registered.
+        """
+        effective_blocklist = blocklist or set()
+        effective_modes = modes or ["plan", "execute"]
         count = 0
 
         try:
             tools = await mcp_client.list_tools()
             for tool in tools:
-                if tool.name in self._blocklist or tool.name in self.tools:
+                if tool.name in effective_blocklist:
+                    continue
+                if tool.name in self.tools:
+                    logger.warning(f"MCP tool '{tool.name}' shadows built-in tool — skipped")
                     continue
                 spec = ToolSpec(
                     name=tool.name,
@@ -356,9 +384,11 @@ class ToolRouter:
                     handler=None,  # MCP tools dispatched via call_tool
                 )
                 self.tools[spec.name] = spec
+                self._mcp_clients[spec.name] = mcp_client
+                self._mcp_tool_modes[spec.name] = list(effective_modes)
                 count += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to register MCP tools: {e}")
 
         return count
 
@@ -387,6 +417,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .ask_user import create_ask_user_tool
     from .github import create_github_tools
     from .huggingface import create_huggingface_tools
+    from .inspect import create_inspect_tool
     from .local import create_local_tools
     from .papers import create_papers_tool
     from .plan import create_plan_tool
@@ -395,6 +426,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .writing import create_writing_tool
 
     router.register_many(create_local_tools())
+    router.register(create_inspect_tool())
     router.register_many(create_github_tools())
     router.register_many(create_huggingface_tools())
     router.register_many(create_search_tools())

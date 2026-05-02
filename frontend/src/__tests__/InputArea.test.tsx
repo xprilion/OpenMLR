@@ -51,7 +51,7 @@ describe('InputArea', () => {
     // Send button has mode-specific title
     const sendBtn = screen.getByTitle('Send in Plan mode (Enter)');
     fireEvent.click(sendBtn);
-    expect(onSend).toHaveBeenCalledWith('hello', 'plan');
+    expect(onSend).toHaveBeenCalledWith('hello', 'plan', undefined);
     expect(onTextChange).toHaveBeenCalledWith('');
   });
 

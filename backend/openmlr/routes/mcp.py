@@ -58,6 +58,7 @@ async def get_status(
                 "url": config.get("url", ""),
                 "enabled": config.get("enabled", True),
                 "connected": False,  # Will be updated via SSE in real-time
+                "modes": config.get("modes", ["plan", "execute"]),
             }
         )
 

@@ -140,9 +140,11 @@ class MCPManager:
 
                 # Connect and register tools
                 await client.__aenter__()
+                modes = config.get("modes", ["plan", "execute"])
                 count = await tool_router.register_mcp_tools(
                     client,
                     blocklist=blocklist or set(),
+                    modes=modes,
                 )
 
                 self._clients[server_name] = client
