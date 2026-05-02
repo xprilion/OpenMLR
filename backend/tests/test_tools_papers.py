@@ -37,13 +37,13 @@ class TestCreatePapersTool:
         assert "find_code" in ops
         assert "find_datasets" in ops
 
-    async def test_paperclip_operations_in_enum(self):
+    def test_paperclip_operations_in_enum(self):
         tool = create_papers_tool()
         ops = tool.parameters["properties"]["operation"]["enum"]
         assert "paperclip_search" in ops
         assert "paperclip_lookup" in ops
 
-    async def test_paperclip_source_parameter(self):
+    def test_paperclip_source_parameter(self):
         tool = create_papers_tool()
         props = tool.parameters["properties"]
         assert "paperclip_source" in props
@@ -126,12 +126,12 @@ class TestBudgetFunctions:
 
 
 class TestPaperclipHeaders:
-    async def test_returns_none_without_key(self):
+    def test_returns_none_without_key(self):
         with patch.dict(os.environ, {}, clear=True):
             os.environ.pop("PAPERCLIP_API_KEY", None)
             assert _get_paperclip_headers() is None
 
-    async def test_returns_headers_with_key(self):
+    def test_returns_headers_with_key(self):
         with patch.dict(os.environ, {"PAPERCLIP_API_KEY": "gxl_test123"}):
             headers = _get_paperclip_headers()
             assert headers is not None
@@ -141,7 +141,7 @@ class TestPaperclipHeaders:
 
 class TestPaperclipSearch:
     async def test_no_query_returns_error(self):
-        result, ok = await _paperclip_search(None)
+        result, ok = await _paperclip_search("")
         assert ok is False
         assert "query" in result.lower()
 
@@ -220,7 +220,7 @@ class TestPaperclipSearch:
 
 class TestPaperclipLookup:
     async def test_no_paper_id_returns_error(self):
-        result, ok = await _paperclip_lookup(None)
+        result, ok = await _paperclip_lookup("")
         assert ok is False
         assert "paper_id" in result.lower()
 
@@ -241,7 +241,7 @@ class TestPaperclipLookup:
         mock_fetch.return_value = mock_resp
 
         with patch.dict(os.environ, {"PAPERCLIP_API_KEY": "gxl_test123"}):
-            result, ok = await _paperclip_lookup("10.1101/2024.01.01")
+            _, ok = await _paperclip_lookup("10.1101/2024.01.01")
 
         assert ok is True
         body = mock_fetch.call_args.kwargs["json"]
@@ -256,7 +256,7 @@ class TestPaperclipLookup:
         mock_fetch.return_value = mock_resp
 
         with patch.dict(os.environ, {"PAPERCLIP_API_KEY": "gxl_test123"}):
-            result, ok = await _paperclip_lookup("12345678")
+            _, ok = await _paperclip_lookup("12345678")
 
         body = mock_fetch.call_args.kwargs["json"]
         assert body["command"] == "lookup"

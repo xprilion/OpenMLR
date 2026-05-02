@@ -58,6 +58,128 @@ def create_inspect_tool() -> ToolSpec:
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase helpers (extracted to reduce cognitive complexity of the main handler)
+# ---------------------------------------------------------------------------
+
+
+def _expand_paths(
+    paths: list[str], effective_root: Path, validate_path_fn
+) -> tuple[list[Path], list[str]]:
+    """Expand user-supplied paths into validated file paths and directory listings."""
+    file_paths: list[Path] = []
+    dir_listings: list[str] = []
+
+    for p in paths:
+        target = Path(p).expanduser()
+        if not target.is_absolute():
+            target = effective_root / target
+        target, error = validate_path_fn(target)
+        if error:
+            dir_listings.append(f"- `{p}`: {error}")
+            continue
+
+        if target.is_dir():
+            _expand_directory(target, effective_root, validate_path_fn, file_paths, dir_listings)
+        elif target.is_file():
+            file_paths.append(target)
+        else:
+            dir_listings.append(f"- `{p}`: not found")
+
+    return file_paths, dir_listings
+
+
+def _expand_directory(
+    target: Path,
+    effective_root: Path,
+    validate_path_fn,
+    file_paths: list[Path],
+    dir_listings: list[str],
+) -> None:
+    """Expand a single directory into file_paths and dir_listings (mutates in place)."""
+    entries = sorted(target.iterdir())
+    dir_entries: list[str] = []
+    for entry in entries:
+        if entry.name.startswith("."):
+            continue
+        if entry.is_file():
+            resolved_entry, entry_err = validate_path_fn(entry.resolve())
+            if not entry_err:
+                file_paths.append(resolved_entry)
+        dir_entries.append(f"  {'/' if entry.is_dir() else ' '} {entry.name}")
+    rel = target.relative_to(effective_root) if _is_relative(target, effective_root) else target
+    dir_listings.append(f"Directory `{rel}/`:\n" + "\n".join(dir_entries))
+
+
+def _score_and_filter(
+    file_paths: list[Path],
+    read_results: list,
+    effective_root: Path,
+    query: str,
+) -> tuple[list[dict], list[dict]]:
+    """Score files for relevance and split into relevant/skipped lists."""
+    file_data: list[dict] = []
+    for fp, result in zip(file_paths, read_results, strict=True):
+        if isinstance(result, Exception):
+            continue
+        content, line_count = result
+        if not content.strip():
+            continue
+        rel_path = fp.relative_to(effective_root) if _is_relative(fp, effective_root) else fp
+        score = _score_relevance(content, query)
+        file_data.append(
+            {"path": str(rel_path), "content": content, "lines": line_count, "score": score}
+        )
+
+    file_data.sort(key=lambda x: x["score"], reverse=True)
+
+    relevant: list[dict] = []
+    skipped: list[dict] = []
+    total_chars = 0
+    for fd in file_data:
+        if fd["score"] < 0.1 or total_chars + len(fd["content"]) > _MAX_TOTAL_CHARS:
+            skipped.append(fd)
+        else:
+            relevant.append(fd)
+            total_chars += len(fd["content"])
+
+    return relevant, skipped
+
+
+def _format_output(
+    dir_listings: list[str],
+    relevant: list[dict],
+    skipped: list[dict],
+    total_inspected: int,
+) -> str:
+    """Build the final markdown output string."""
+    parts: list[str] = []
+
+    if dir_listings:
+        parts.append("## Directory Listings\n" + "\n".join(dir_listings))
+
+    parts.append(f"## Relevant Files ({len(relevant)}/{total_inspected} inspected)")
+    for fd in relevant:
+        parts.append(
+            f"\n### {fd['path']} ({fd['lines']} lines, relevance: {fd['score']:.0%})\n"
+            f"```\n{fd['content']}\n```"
+        )
+
+    if skipped:
+        skip_lines = [f"- `{fd['path']}` ({fd['lines']} lines)" for fd in skipped]
+        parts.append(
+            f"\n## Skipped ({len(skipped)} files — low relevance or budget exceeded)\n"
+            + "\n".join(skip_lines)
+        )
+
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Main handler
+# ---------------------------------------------------------------------------
+
+
 async def _handle_inspect_files(
     paths: list[str],
     query: str,
@@ -76,41 +198,7 @@ async def _handle_inspect_files(
     max_files = max(1, min(max_files, _MAX_FILES))
 
     # Phase 1: Expand directories to file lists
-    file_paths: list[Path] = []
-    dir_listings: list[str] = []
-
-    for p in paths:
-        target = Path(p).expanduser()
-        if not target.is_absolute():
-            target = effective_root / target
-        target, error = _validate_path(target)
-        if error:
-            dir_listings.append(f"- `{p}`: {error}")
-            continue
-
-        if target.is_dir():
-            entries = sorted(target.iterdir())
-            dir_entries = []
-            for entry in entries:
-                if entry.name.startswith("."):
-                    continue
-                if entry.is_file():
-                    # Re-validate each child to catch symlinks escaping workspace
-                    resolved_entry, entry_err = _validate_path(entry.resolve())
-                    if entry_err:
-                        continue
-                    file_paths.append(resolved_entry)
-                dir_entries.append(f"  {'/' if entry.is_dir() else ' '} {entry.name}")
-            rel = (
-                target.relative_to(effective_root)
-                if _is_relative(target, effective_root)
-                else target
-            )
-            dir_listings.append(f"Directory `{rel}/`:\n" + "\n".join(dir_entries))
-        elif target.is_file():
-            file_paths.append(target)
-        else:
-            dir_listings.append(f"- `{p}`: not found")
+    file_paths, dir_listings = _expand_paths(paths, effective_root, _validate_path)
 
     if len(file_paths) > max_files:
         skipped_count = len(file_paths) - max_files
@@ -129,65 +217,18 @@ async def _handle_inspect_files(
     # Phase 2: Read all files in parallel
     loop = asyncio.get_running_loop()
     read_tasks = [loop.run_in_executor(None, _read_file_snippet, fp) for fp in file_paths]
-    results = await asyncio.gather(*read_tasks, return_exceptions=True)
+    read_results = await asyncio.gather(*read_tasks, return_exceptions=True)
 
-    # Phase 3: Score relevance
-    file_data: list[dict] = []
-    for fp, result in zip(file_paths, results, strict=True):
-        if isinstance(result, Exception):
-            continue
-        content, line_count = result
-        if not content.strip():
-            continue
-        rel_path = fp.relative_to(effective_root) if _is_relative(fp, effective_root) else fp
-        score = _score_relevance(content, query)
-        file_data.append(
-            {
-                "path": str(rel_path),
-                "content": content,
-                "lines": line_count,
-                "score": score,
-            }
-        )
+    # Phase 3: Score relevance and filter
+    relevant, skipped = _score_and_filter(file_paths, read_results, effective_root, query)
 
-    # Sort by relevance score (descending)
-    file_data.sort(key=lambda x: x["score"], reverse=True)
+    # Phase 4: Format output
+    return _format_output(dir_listings, relevant, skipped, len(relevant) + len(skipped)), True
 
-    # Phase 4: Build output within budget
-    output_parts: list[str] = []
-    total_chars = 0
-    relevant: list[dict] = []
-    skipped: list[dict] = []
 
-    for fd in file_data:
-        if fd["score"] < 0.1:
-            skipped.append(fd)
-            continue
-        if total_chars + len(fd["content"]) > _MAX_TOTAL_CHARS:
-            skipped.append(fd)
-            continue
-        relevant.append(fd)
-        total_chars += len(fd["content"])
-
-    # Format output
-    if dir_listings:
-        output_parts.append("## Directory Listings\n" + "\n".join(dir_listings))
-
-    output_parts.append(f"## Relevant Files ({len(relevant)}/{len(file_data)} inspected)")
-    for fd in relevant:
-        output_parts.append(
-            f"\n### {fd['path']} ({fd['lines']} lines, relevance: {fd['score']:.0%})\n"
-            f"```\n{fd['content']}\n```"
-        )
-
-    if skipped:
-        skip_lines = [f"- `{fd['path']}` ({fd['lines']} lines)" for fd in skipped]
-        output_parts.append(
-            f"\n## Skipped ({len(skipped)} files — low relevance or budget exceeded)\n"
-            + "\n".join(skip_lines)
-        )
-
-    return "\n\n".join(output_parts), True
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
 
 
 def _read_file_snippet(path: Path) -> tuple[str, int]:

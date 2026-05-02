@@ -431,7 +431,7 @@ class TestMCPToolRegistration:
         await router.register_mcp_tools(client, modes=["plan", "execute"])
 
         router.set_mode("plan")
-        allowed, msg = router.is_tool_allowed("mcp_tool")
+        allowed, _ = router.is_tool_allowed("mcp_tool")
         assert allowed is True
 
     async def test_mcp_tool_blocked_outside_configured_mode(self, router):
@@ -480,11 +480,11 @@ class TestMCPToolRegistration:
         assert "tool_from_b" in router.tools
 
         # Dispatch tool_from_a to client_a
-        output_a, ok_a = await router.call_tool("tool_from_a", {}, enforce_mode=False)
+        await router.call_tool("tool_from_a", {}, enforce_mode=False)
         client_a.call_tool.assert_called_once_with("tool_from_a", {})
 
         # Dispatch tool_from_b to client_b
-        output_b, ok_b = await router.call_tool("tool_from_b", {}, enforce_mode=False)
+        await router.call_tool("tool_from_b", {}, enforce_mode=False)
         client_b.call_tool.assert_called_once_with("tool_from_b", {})
 
     async def test_mcp_tool_no_shadow_builtin(self, router, bash_tool):

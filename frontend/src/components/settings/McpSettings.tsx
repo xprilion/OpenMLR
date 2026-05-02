@@ -400,9 +400,9 @@ export function McpSettings() {
 
               {/* Mode availability */}
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
+                <p className="block text-sm font-medium text-text mb-1.5">
                   Available in Modes
-                </label>
+                </p>
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
                     <input
@@ -412,12 +412,16 @@ export function McpSettings() {
                       onChange={(e) => {
                         setForm((f) => {
                           const modes = new Set(f.modes || ['plan', 'execute']);
-                          if (e.target.checked) modes.add('plan'); else modes.delete('plan');
+                          if (e.target.checked) {
+                            modes.add('plan');
+                          } else {
+                            modes.delete('plan');
+                          }
                           return { ...f, modes: Array.from(modes) };
                         });
                       }}
                     />
-                    Plan
+                    <span>Plan</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
                     <input
@@ -427,16 +431,20 @@ export function McpSettings() {
                       onChange={(e) => {
                         setForm((f) => {
                           const modes = new Set(f.modes || ['plan', 'execute']);
-                          if (e.target.checked) modes.add('execute'); else modes.delete('execute');
+                          if (e.target.checked) {
+                            modes.add('execute');
+                          } else {
+                            modes.delete('execute');
+                          }
                           return { ...f, modes: Array.from(modes) };
                         });
                       }}
                     />
-                    Execute
+                    <span>Execute</span>
                   </label>
                 </div>
                 <p className="text-xs text-text-dim mt-1">
-                  Controls which modes can use this server's tools.
+                  Controls which modes can use this server&apos;s tools.
                 </p>
               </div>
 

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +19,12 @@ from ..dependencies import get_current_user
 from ..models import ApprovalRequest, ConversationCreate, MessageSend, ModelSwitch
 
 router = APIRouter(prefix="/api", tags=["agent"])
+
+# Default conversation title — used as sentinel to detect untitled conversations
+_DEFAULT_TITLE = "New conversation"
+
+# Regex for stripping control characters from mention values (prompt injection defense)
+_MENTION_SANITIZE_RE = re.compile(r"[`\x00-\x1f]")
 
 
 def _sm(request: Request):
@@ -147,8 +154,8 @@ async def get_conversation(
     conv = await _get_conv_or_404(db, uuid, user.id)
     msgs = await ops.get_messages(db, conv.id)
 
-    # Re-generate title if still "New conversation" and has messages
-    if conv.title == "New conversation" and msgs:
+    # Re-generate title if still the default and has messages
+    if conv.title == _DEFAULT_TITLE and msgs:
         msg_dicts = [_msg_dict(m) for m in msgs]
         _task = asyncio.create_task(
             _auto_title(_sm(request), _bus(request), db, conv.id, conv.uuid, msg_dicts)
@@ -439,7 +446,7 @@ async def send_message(
         )
 
         # Title generation (still async in web process for now)
-        if user_count == 3 and conv.title == "New conversation":
+        if user_count == 3 and conv.title == _DEFAULT_TITLE:
             msg_dicts = await _load_messages(db, conv.id)
             _task = asyncio.create_task(
                 _auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts)
@@ -480,7 +487,7 @@ async def send_message(
 
     _task = asyncio.create_task(sm.process_message(conv.id, enriched_message, mode=body.mode))
 
-    if user_count == 3 and conv.title == "New conversation":
+    if user_count == 3 and conv.title == _DEFAULT_TITLE:
         msg_dicts = await _load_messages(db, conv.id)
         _task = asyncio.create_task(_auto_title(sm, event_bus, db, conv.id, conv.uuid, msg_dicts))
 
@@ -758,11 +765,8 @@ def _conv_dict(c) -> dict:
 
 def _sanitize_mention_value(v: str) -> str:
     """Strip control characters and cap length to prevent prompt injection."""
-    import re
-
     v = v[:256]
-    v = re.sub(r"[`\n\r\x00-\x1f]", "", v)
-    return v
+    return _MENTION_SANITIZE_RE.sub("", v)
 
 
 def _enrich_with_mentions(message: str, mentions: list | None) -> str:
@@ -850,7 +854,7 @@ async def _auto_title(sm, event_bus, db, conv_id, uuid, messages):
             # Re-check the current title to avoid overwriting a title
             # that was already set by another trigger (e.g. page refresh).
             current_conv = await ops.get_conversation_by_id(db, conv_id)
-            if current_conv and current_conv.title != "New conversation":
+            if current_conv and current_conv.title != _DEFAULT_TITLE:
                 logger.debug(f"Skipping title update for conv {conv_id}: already titled")
                 return
 

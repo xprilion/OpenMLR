@@ -6,16 +6,16 @@ import { MentionPopover } from './MentionPopover';
 export type Mode = 'plan' | 'execute';
 
 interface Props {
-  disabled: boolean;
-  showStop?: boolean;
-  mode: Mode;
-  onModeChange: (mode: Mode) => void;
-  onSend: (text: string, mode: Mode, mentions?: Mention[]) => void;
-  onStop: () => void;
-  text: string;
-  onTextChange: (text: string) => void;
-  mcpServers?: readonly McpServerStatus[];
-  projectUuid?: string | null;
+  readonly disabled: boolean;
+  readonly showStop?: boolean;
+  readonly mode: Mode;
+  readonly onModeChange: (mode: Mode) => void;
+  readonly onSend: (text: string, mode: Mode, mentions?: Mention[]) => void;
+  readonly onStop: () => void;
+  readonly text: string;
+  readonly onTextChange: (text: string) => void;
+  readonly mcpServers?: readonly McpServerStatus[];
+  readonly projectUuid?: string | null;
 }
 
 export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onStop, text, onTextChange, mcpServers = [], projectUuid = null }: Props) {
@@ -162,9 +162,10 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  const placeholder = isPlan 
-    ? (isMobile ? 'Plan your research...' : 'Plan: ask questions, gather context... (@ to mention)')
-    : (isMobile ? 'Execute task...' : 'Execute: tell the agent what to do... (@ to mention)');
+  const placeholder = (() => {
+    if (isPlan) return isMobile ? 'Plan your research...' : 'Plan: ask questions, gather context... (@ to mention)';
+    return isMobile ? 'Execute task...' : 'Execute: tell the agent what to do... (@ to mention)';
+  })();
 
   // Show mention chips above input
   const mentionChips = mentions.filter((m) => {

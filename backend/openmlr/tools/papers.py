@@ -528,10 +528,13 @@ def _get_paperclip_headers() -> dict | None:
     }
 
 
+_PAPERCLIP_RATE_LIMIT_MSG = "Paperclip rate limit reached. Try again later."
+
+
 async def _paperclip_search(
     query: str,
-    year_from: int = None,
-    year_to: int = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
     limit: int = 10,
     paperclip_source: str = "all",
 ) -> tuple[str, bool]:
@@ -554,12 +557,9 @@ async def _paperclip_search(
     if paperclip_source and paperclip_source != "all":
         raw_parts.append(f"--source {paperclip_source}")
 
-    if year_from and year_to and year_from == year_to:
-        raw_parts.append(f"--year {year_from}")
-    elif year_from:
-        raw_parts.append(f"--year {year_from}")
-    elif year_to:
-        raw_parts.append(f"--year {year_to}")
+    year = year_from or year_to
+    if year:
+        raw_parts.append(f"--year {year}")
 
     raw = " ".join(raw_parts)
 
@@ -573,18 +573,18 @@ async def _paperclip_search(
             max_retries=2,
         )
     except RateLimitError:
-        return "Paperclip rate limit reached. Try again later.", False
+        return _PAPERCLIP_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"Paperclip search error: {e}")
         return f"Paperclip error: {str(e)[:200]}", False
 
-    if resp.status_code == 401 or resp.status_code == 403:
+    if resp.status_code in (401, 403):
         return (
             "PAPERCLIP_API_KEY is invalid or expired. Check your API key in Settings > Providers.",
             False,
         )
     if resp.status_code == 429:
-        return "Paperclip rate limit reached. Try again later.", False
+        return _PAPERCLIP_RATE_LIMIT_MSG, False
     if resp.status_code != 200:
         try:
             detail = resp.json().get("detail", resp.text[:300])
@@ -644,12 +644,12 @@ async def _paperclip_lookup(paper_id: str) -> tuple[str, bool]:
             max_retries=2,
         )
     except RateLimitError:
-        return "Paperclip rate limit reached. Try again later.", False
+        return _PAPERCLIP_RATE_LIMIT_MSG, False
     except Exception as e:
         log.warning(f"Paperclip lookup error: {e}")
         return f"Paperclip lookup error: {str(e)[:200]}", False
 
-    if resp.status_code == 401 or resp.status_code == 403:
+    if resp.status_code in (401, 403):
         return "PAPERCLIP_API_KEY is invalid or expired.", False
     if resp.status_code != 200:
         try:

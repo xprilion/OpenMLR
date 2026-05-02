@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Plug, FileText, Folder } from 'lucide-react';
 import type { McpServerStatus, FileNode, Mention } from '../types';
 import { api } from '../api';
 
 interface Props {
-  query: string;
-  mcpServers: readonly McpServerStatus[];
-  projectUuid: string | null;
-  onSelect: (mention: Mention, displayText: string) => void;
-  onClose: () => void;
+  readonly query: string;
+  readonly mcpServers: readonly McpServerStatus[];
+  readonly projectUuid: string | null;
+  readonly onSelect: (mention: Mention, displayText: string) => void;
+  readonly onClose: () => void;
 }
 
 interface PopoverItem {
@@ -16,6 +16,30 @@ interface PopoverItem {
   label: string;
   value: string;
   isDir?: boolean;
+}
+
+function itemTypeLabel(item: PopoverItem): string {
+  if (item.type === 'server') return 'MCP';
+  if (item.isDir) return 'dir';
+  return 'file';
+}
+
+function buildServerItems(mcpServers: readonly McpServerStatus[], query: string): PopoverItem[] {
+  if (query.includes('/')) return [];
+  const q = query.toLowerCase();
+  return mcpServers
+    .filter((s) => s.enabled && (!q || s.name.toLowerCase().includes(q)))
+    .map((s) => ({ type: 'server' as const, label: s.name, value: s.name }));
+}
+
+function buildFileItems(files: readonly FileNode[], dirPath: string, fileFilter: string): PopoverItem[] {
+  return files
+    .filter((f) => !f.name.startsWith('.') && (!fileFilter || f.name.toLowerCase().includes(fileFilter)))
+    .map((f) => {
+      const fullPath = dirPath ? `${dirPath}/${f.name}` : f.name;
+      const suffix = f.is_dir ? '/' : '';
+      return { type: 'file' as const, label: f.name + suffix, value: fullPath + suffix, isDir: f.is_dir };
+    });
 }
 
 export function MentionPopover({ query, mcpServers, projectUuid, onSelect, onClose }: Props) {
@@ -30,43 +54,19 @@ export function MentionPopover({ query, mcpServers, projectUuid, onSelect, onClo
 
   // Load files from project workspace
   useEffect(() => {
-    if (!projectUuid) {
-      setFiles([]);
-      return;
-    }
+    if (!projectUuid) { setFiles([]); return; }
     let cancelled = false;
     api.listFiles(projectUuid, dirPath).then((data) => {
       if (!cancelled) setFiles(data.entries || []);
-    }).catch(() => {
-      if (!cancelled) setFiles([]);
-    });
+    }).catch(() => { if (!cancelled) setFiles([]); });
     return () => { cancelled = true; };
   }, [projectUuid, dirPath]);
 
-  // Build filtered items list
-  const items: PopoverItem[] = [];
-
-  // MCP servers (only when not typing a path)
-  if (!query.includes('/')) {
-    for (const s of mcpServers) {
-      if (!s.enabled) continue;
-      if (query && !s.name.toLowerCase().includes(query.toLowerCase())) continue;
-      items.push({ type: 'server', label: s.name, value: s.name });
-    }
-  }
-
-  // Files
-  for (const f of files) {
-    if (f.name.startsWith('.')) continue;
-    if (fileFilter && !f.name.toLowerCase().includes(fileFilter)) continue;
-    const fullPath = dirPath ? `${dirPath}/${f.name}` : f.name;
-    items.push({
-      type: 'file',
-      label: f.name + (f.is_dir ? '/' : ''),
-      value: fullPath + (f.is_dir ? '/' : ''),
-      isDir: f.is_dir,
-    });
-  }
+  // Build filtered items list (memoised to avoid rebuilding on every render)
+  const items = useMemo<PopoverItem[]>(
+    () => [...buildServerItems(mcpServers, query), ...buildFileItems(files, dirPath, fileFilter)],
+    [mcpServers, query, files, dirPath, fileFilter],
+  );
 
   // Clamp selected index
   useEffect(() => {
@@ -81,33 +81,37 @@ export function MentionPopover({ query, mcpServers, projectUuid, onSelect, onClo
 
   const handleSelect = useCallback((item: PopoverItem) => {
     if (item.isDir) {
-      // For directories, don't close — let the user keep browsing
-      // The query will update to include the directory path
       onSelect({ type: 'file', value: item.value }, item.value);
       return;
     }
     onSelect({ type: item.type, value: item.value }, item.label);
   }, [onSelect]);
 
-  // Keyboard navigation — called from InputArea
+  // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, items.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        if (items[selectedIndex]) handleSelect(items[selectedIndex]);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((i) => Math.min(i + 1, items.length - 1));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((i) => Math.max(i - 1, 0));
+          break;
+        case 'Enter':
+        case 'Tab':
+          e.preventDefault();
+          if (items[selectedIndex]) handleSelect(items[selectedIndex]);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
       }
     };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
+    globalThis.addEventListener('keydown', handler, true);
+    return () => globalThis.removeEventListener('keydown', handler, true);
   }, [items, selectedIndex, handleSelect, onClose]);
 
   if (items.length === 0) return null;
@@ -131,7 +135,7 @@ export function MentionPopover({ query, mcpServers, projectUuid, onSelect, onClo
             {item.isDir && <Folder size={14} className="text-warning shrink-0" />}
             <span className="truncate">{item.label}</span>
             <span className="ml-auto text-xs text-text-dim shrink-0">
-              {item.type === 'server' ? 'MCP' : (item.isDir ? 'dir' : 'file')}
+              {itemTypeLabel(item)}
             </span>
           </button>
         ))}

@@ -15,7 +15,7 @@ pytestmark = pytest.mark.asyncio
 class TestScoreRelevance:
     def test_full_match(self):
         score = _score_relevance("the training loop runs for epochs", "training loop")
-        assert score == 1.0
+        assert score == pytest.approx(1.0)
 
     def test_partial_match(self):
         score = _score_relevance("the training loop runs", "training loop optimizer")
@@ -23,20 +23,20 @@ class TestScoreRelevance:
 
     def test_no_match(self):
         score = _score_relevance("hello world", "gradient descent")
-        assert score == 0.0
+        assert score == pytest.approx(0.0)
 
     def test_short_query_terms_ignored(self):
         """Words <= 2 chars are excluded from scoring."""
         score = _score_relevance("hello world", "a b c")
-        assert score == 0.5  # fallback for no useful terms
+        assert score == pytest.approx(0.5)  # fallback for no useful terms
 
     def test_case_insensitive(self):
         score = _score_relevance("Training Loop OPTIMIZER", "training loop optimizer")
-        assert score == 1.0
+        assert score == pytest.approx(1.0)
 
     def test_empty_content(self):
         score = _score_relevance("", "training")
-        assert score == 0.0
+        assert score == pytest.approx(0.0)
 
 
 class TestReadFileSnippet:
@@ -72,7 +72,7 @@ class TestReadFileSnippet:
     def test_binary_file_graceful(self, tmp_path):
         f = tmp_path / "binary.dat"
         f.write_bytes(b"\x00\x01\x02\xff" * 100)
-        content, lines = _read_file_snippet(f)
+        content, _ = _read_file_snippet(f)
         # Should not crash — errors="replace" handles it
         assert isinstance(content, str)
 
@@ -160,7 +160,7 @@ class TestHandleInspectFiles:
             (tmp_path / "a.txt").write_text("hello")
             (tmp_path / "b.txt").write_text("world")
 
-            output, success = await _handle_inspect_files(
+            _, success = await _handle_inspect_files(
                 paths=[str(tmp_path)], query="hello", max_files=-5
             )
             assert success is True
