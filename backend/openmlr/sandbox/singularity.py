@@ -299,12 +299,18 @@ class SingularitySandbox(SandboxInterface):
         return True
 
     async def edit_file(self, path: str, old: str, new: str) -> bool:
-        """Edit a file by replacing text."""
-        content = await self.read_file(path)
+        """Edit a file by replacing text.
+
+        Validates the path once and operates on the safe Path object directly,
+        avoiding passing the raw user-controlled string through read_file/write_file.
+        """
+        target = self._safe_workspace_path(path)
+        if not target.exists():
+            return False
+        content = target.read_text(encoding="utf-8", errors="replace")
         if old not in content:
             return False
-        content = content.replace(old, new, 1)
-        await self.write_file(path, content)
+        target.write_text(content.replace(old, new, 1), encoding="utf-8")
         return True
 
     async def file_exists(self, path: str) -> bool:
