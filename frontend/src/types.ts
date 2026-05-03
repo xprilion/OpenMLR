@@ -20,6 +20,12 @@ export interface Message {
   duration?: number;
   model?: string;
   mode?: string;
+  /** Accumulated thinking/reasoning content from the LLM */
+  thinking?: string;
+  /** Duration in seconds the model spent thinking */
+  thinkingDuration?: number;
+  /** Whether the thinking block is collapsed (model started replying) */
+  thinkingCollapsed?: boolean;
   metadata?: {
     tool?: string;
     args?: string;

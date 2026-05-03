@@ -2,13 +2,14 @@
 
 import asyncio
 import json
+import time
 import traceback
 
 from ..config import AgentConfig
 from .doom_loop import detect_doom_loop
 from .llm import LLMProvider
 from .session import Session
-from .types import AgentEvent, LLMResult, Message, OpType, Submission, ToolCall
+from .types import AgentEvent, LLMResult, Message, OpType, Submission, ThinkingChunk, ToolCall
 
 
 def _append_hint_to_last_user_msg(messages: list[Message], hint: str) -> None:
@@ -319,12 +320,35 @@ async def _stream_llm_call(
     content_buffer = ""
     tool_calls: list[ToolCall] = []
     usage_data = None
+    thinking_started: float | None = None
+    was_thinking = False
 
     async for chunk in LLMProvider.generate_stream(messages, session.config, tools):
         if session.is_cancelled():
             return None
 
-        if isinstance(chunk, str):
+        if isinstance(chunk, ThinkingChunk):
+            # Extended thinking / reasoning content
+            if thinking_started is None:
+                thinking_started = time.time()
+            was_thinking = True
+            await session.emit(
+                AgentEvent(
+                    event_type="thinking_chunk",
+                    data={"chunk": chunk.text},
+                )
+            )
+        elif isinstance(chunk, str):
+            # Transition from thinking to text — emit thinking_end
+            if was_thinking:
+                duration = time.time() - thinking_started if thinking_started else 0
+                await session.emit(
+                    AgentEvent(
+                        event_type="thinking_end",
+                        data={"duration_seconds": round(duration, 1)},
+                    )
+                )
+                was_thinking = False
             content_buffer += chunk
             await session.emit(
                 AgentEvent(
@@ -333,6 +357,16 @@ async def _stream_llm_call(
                 )
             )
         elif isinstance(chunk, ToolCall):
+            # Transition from thinking to tool call — emit thinking_end
+            if was_thinking:
+                duration = time.time() - thinking_started if thinking_started else 0
+                await session.emit(
+                    AgentEvent(
+                        event_type="thinking_end",
+                        data={"duration_seconds": round(duration, 1)},
+                    )
+                )
+                was_thinking = False
             tool_calls.append(chunk)
             await session.emit(
                 AgentEvent(
@@ -349,6 +383,16 @@ async def _stream_llm_call(
         elif isinstance(chunk, dict):
             if chunk.get("event") == "usage":
                 usage_data = chunk.get("usage")
+
+    # If thinking was still active at end of stream (no text/tool followed), close it
+    if was_thinking and thinking_started:
+        duration = time.time() - thinking_started
+        await session.emit(
+            AgentEvent(
+                event_type="thinking_end",
+                data={"duration_seconds": round(duration, 1)},
+            )
+        )
 
     if content_buffer or tool_calls:
         await session.emit(AgentEvent(event_type="assistant_stream_end"))

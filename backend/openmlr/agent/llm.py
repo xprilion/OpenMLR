@@ -6,7 +6,7 @@ import os
 from collections.abc import AsyncGenerator
 
 from ..config import AgentConfig
-from .types import LLMResult, ToolCall
+from .types import LLMResult, ThinkingChunk, ToolCall
 
 
 class LLMProvider:
@@ -113,6 +113,18 @@ class LLMProvider:
         return model_name.lower().startswith("anthropic/")
 
     @staticmethod
+    def _supports_thinking(model_name: str) -> bool:
+        """Check if an Anthropic model supports extended thinking (Claude 3.7+, Claude 4+)."""
+        normalized = LLMProvider._normalize_model(model_name).lower()
+        thinking_patterns = [
+            "claude-3-7",
+            "claude-3.7",  # Claude 3.7 Sonnet
+            "claude-sonnet-4",
+            "claude-opus-4",  # Claude 4 family
+        ]
+        return any(p in normalized for p in thinking_patterns)
+
+    @staticmethod
     def _uses_anthropic_format(model_name: str, custom_providers: list | None = None) -> bool:
         """Check if model uses Anthropic message format (native Anthropic, OpenCode Go Anthropic, or custom provider with anthropic-sdk)."""
         if LLMProvider._is_anthropic_model(model_name):
@@ -139,7 +151,7 @@ class LLMProvider:
         messages: list[dict],
         config: AgentConfig,
         tools: list[dict] | None = None,
-    ) -> AsyncGenerator[str | ToolCall | dict, None]:
+    ) -> AsyncGenerator[str | ToolCall | ThinkingChunk | dict, None]:
         async for chunk in LLMProvider._stream_with_retry(messages, config, tools):
             yield chunk
 
@@ -217,7 +229,7 @@ class LLMProvider:
         messages: list[dict],
         config: AgentConfig,
         tools: list[dict] | None = None,
-    ) -> AsyncGenerator[str | ToolCall | dict, None]:
+    ) -> AsyncGenerator[str | ToolCall | ThinkingChunk | dict, None]:
         last_error = None
         for attempt in range(3):
             try:
@@ -319,7 +331,7 @@ class LLMProvider:
         messages: list[dict],
         config: AgentConfig,
         tools: list[dict] | None,
-    ) -> AsyncGenerator[str | ToolCall | dict, None]:
+    ) -> AsyncGenerator[str | ToolCall | ThinkingChunk | dict, None]:
         client = LLMProvider._openai_client(config)
         model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
 
@@ -357,6 +369,11 @@ class LLMProvider:
             delta = chunk.choices[0].delta
             if delta is None:
                 continue
+
+            # Reasoning content (OpenAI o1/o3 reasoning models)
+            reasoning = getattr(delta, "reasoning_content", None)
+            if reasoning:
+                yield ThinkingChunk(text=reasoning)
 
             # Text content
             if delta.content:
@@ -511,16 +528,15 @@ class LLMProvider:
         return AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     @staticmethod
-    async def _call_anthropic(
-        messages: list[dict],
-        config: AgentConfig,
+    def _build_anthropic_params(
+        model: str,
+        chat_msgs: list[dict],
+        system_prompt: str,
         tools: list[dict] | None,
-    ) -> LLMResult:
-        model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
-        client = LLMProvider._anthropic_client(config)
-        system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
-
-        params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
+        model_name: str,
+    ) -> dict:
+        """Build the params dict shared by _call_anthropic and _stream_anthropic."""
+        params: dict = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
         if system_prompt:
             params["system"] = [
                 {
@@ -532,13 +548,34 @@ class LLMProvider:
         anthropic_tools = LLMProvider._anthropic_tool_param(tools)
         if anthropic_tools:
             params["tools"] = anthropic_tools
-
+        # Enable extended thinking for compatible models (Claude 3.7+, Claude 4+)
+        if LLMProvider._supports_thinking(model_name):
+            params["max_tokens"] = 16000
+            params["thinking"] = {"type": "enabled", "budget_tokens": 10000}
         params["extra_headers"] = {"anthropic-beta": "prompt-caching-2024-07-31"}
+        return params
+
+    @staticmethod
+    async def _call_anthropic(
+        messages: list[dict],
+        config: AgentConfig,
+        tools: list[dict] | None,
+    ) -> LLMResult:
+        model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
+        client = LLMProvider._anthropic_client(config)
+        system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
+
+        params = LLMProvider._build_anthropic_params(
+            model, chat_msgs, system_prompt, tools, config.model_name
+        )
         response = await client.messages.create(**params)
 
         tool_calls = []
         text_content = ""
         for block in response.content:
+            if block.type == "thinking":
+                # Thinking blocks are not included in the response text
+                continue
             if block.type == "text":
                 text_content += block.text
             elif block.type == "tool_use":
@@ -564,29 +601,21 @@ class LLMProvider:
         messages: list[dict],
         config: AgentConfig,
         tools: list[dict] | None,
-    ) -> AsyncGenerator[str | ToolCall | dict, None]:
+    ) -> AsyncGenerator[str | ToolCall | ThinkingChunk | dict, None]:
         model = LLMProvider._normalize_model(config.model_name, config.custom_providers)
         client = LLMProvider._anthropic_client(config)
         system_prompt, chat_msgs = LLMProvider._to_anthropic_messages(messages)
 
-        params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
-        if system_prompt:
-            params["system"] = [
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ]
-        anthropic_tools = LLMProvider._anthropic_tool_param(tools)
-        if anthropic_tools:
-            params["tools"] = anthropic_tools
-
-        params["extra_headers"] = {"anthropic-beta": "prompt-caching-2024-07-31"}
+        params = LLMProvider._build_anthropic_params(
+            model, chat_msgs, system_prompt, tools, config.model_name
+        )
         async with client.messages.stream(**params) as stream:
             async for event in stream:
                 if event.type == "content_block_delta":
-                    if event.delta.type == "text_delta":
+                    if event.delta.type == "thinking_delta":
+                        # Extended thinking content
+                        yield ThinkingChunk(text=event.delta.thinking)
+                    elif event.delta.type == "text_delta":
                         yield event.delta.text
 
                 if event.type == "message_delta" and event.usage:

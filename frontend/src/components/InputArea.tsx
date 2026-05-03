@@ -250,8 +250,8 @@ export const InputArea = React.memo(function InputArea({ disabled, showStop, mod
             />
           </div>
           
-          {/* Stop button */}
-          {showStop && (
+          {/* Stop button — only during active processing (not waiting_input/waiting_approval) */}
+          {showStop && disabled && (
             <button 
               className="h-11 w-11 rounded-lg flex items-center justify-center bg-error text-white hover:opacity-90 transition-all shrink-0"
               onClick={onStop} 

@@ -125,6 +125,65 @@ function SubAgentBlock({ msg, expanded, onToggle }: { msg: Message; expanded: bo
   );
 }
 
+/** Format thinking duration into human-readable text */
+function formatThinkingDuration(seconds?: number): string {
+  if (!seconds) return 'a moment';
+  if (seconds < 2) return '1 second';
+  if (seconds < 60) return `${Math.round(seconds)} seconds`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (s === 0) return `${m} minute${m === 1 ? '' : 's'}`;
+  return `${m}m ${s}s`;
+}
+
+/** Thinking/reasoning block — shows model thinking, collapses when reply starts */
+function ThinkingBlock({ msg, expanded, onToggle }: Readonly<{ msg: Message; expanded: boolean; onToggle: () => void }>) {
+  const thinking = msg.thinking || '';
+  const duration = msg.thinkingDuration;
+  const collapsed = msg.thinkingCollapsed;
+
+  if (!collapsed) {
+    // Active thinking — show faded content with streaming indicator
+    return (
+      <div className="max-w-[95%] rounded-lg border border-border/40 bg-surface/30 px-4 py-3 mt-1">
+        <div className="flex items-center gap-2 mb-2 text-xs text-text-dim">
+          <span className="flex gap-1">
+            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </span>
+          <span>Thinking...</span>
+        </div>
+        <pre className="whitespace-pre-wrap text-sm text-text-dim/50 leading-relaxed m-0 p-0 bg-transparent max-h-48 overflow-y-auto font-sans">
+          {thinking}
+          <span className="inline-block w-[2px] h-[1em] bg-text-dim/30 animate-pulse align-middle ml-0.5" />
+        </pre>
+      </div>
+    );
+  }
+
+  // Collapsed — show summary label, clickable to expand
+  return (
+    <div className="max-w-[95%]">
+      <button
+        className="flex items-center gap-2 text-xs text-text-dim/60 hover:text-text-dim transition-colors py-1 bg-transparent border-none cursor-pointer"
+        onClick={onToggle}
+        title="Click to expand thinking"
+      >
+        <span className="text-text-dim/40">{expanded ? '\u25BC' : '\u25B6'}</span>
+        <span>Thought for {formatThinkingDuration(duration)}</span>
+      </button>
+      {expanded && thinking && (
+        <div className="rounded-lg border border-border/40 bg-surface/30 px-4 py-3 mt-1">
+          <pre className="whitespace-pre-wrap text-sm text-text-dim/50 leading-relaxed m-0 p-0 bg-transparent max-h-64 overflow-y-auto font-sans">
+            {thinking}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Individual message row — memoized to skip re-renders when other messages update */
 const MessageRow = React.memo(function MessageRow({ msg, isExpanded, onToggle }: {
   msg: Message;
@@ -152,18 +211,14 @@ const MessageRow = React.memo(function MessageRow({ msg, isExpanded, onToggle }:
         </div>
       )}
 
-      {/* Assistant messages — defer markdown while streaming for performance */}
+      {/* Assistant messages — render markdown seamlessly during streaming */}
       {msg.role === 'assistant' && (
         <div className="prose max-w-[95%] mt-1">
-          {msg.streaming ? (
-            <pre className="whitespace-pre-wrap font-sans text-text leading-relaxed m-0 p-0 bg-transparent prose-sm">
-              {msg.content}
-              <span className="inline-block w-[2px] h-[1em] bg-primary animate-pulse align-middle ml-0.5" />
-            </pre>
-          ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {msg.content}
-            </ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {msg.content}
+          </ReactMarkdown>
+          {msg.streaming && (
+            <span className="inline-block w-[2px] h-[1em] bg-primary animate-pulse align-middle ml-0.5" />
           )}
         </div>
       )}
@@ -186,7 +241,7 @@ const MessageRow = React.memo(function MessageRow({ msg, isExpanded, onToggle }:
         />
       )}
 
-      {/* Thinking indicator */}
+      {/* Thinking indicator (before any thinking content arrives) */}
       {msg.role === 'system' && msg.content === '::thinking::' && (
         <div className="flex items-center gap-3 py-3 text-text-dim">
           <span className="flex gap-1">
@@ -198,8 +253,17 @@ const MessageRow = React.memo(function MessageRow({ msg, isExpanded, onToggle }:
         </div>
       )}
 
+      {/* Thinking content block (streaming or collapsed) */}
+      {msg.role === 'system' && msg.content === '::thinking_content::' && (
+        <ThinkingBlock
+          msg={msg}
+          expanded={isExpanded}
+          onToggle={handleToggle}
+        />
+      )}
+
       {/* System messages */}
-      {msg.role === 'system' && msg.content !== '::thinking::' && (
+      {msg.role === 'system' && msg.content !== '::thinking::' && msg.content !== '::thinking_content::' && (
         <div className="text-sm text-text-dim italic py-2 px-3 bg-surface/50 rounded-md">
           {msg.content}
         </div>

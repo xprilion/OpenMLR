@@ -7,6 +7,13 @@ from typing import Any
 
 
 @dataclass
+class ThinkingChunk:
+    """A chunk of thinking/reasoning content from the LLM."""
+
+    text: str
+
+
+@dataclass
 class ToolCall:
     """A tool call requested by the LLM."""
 
