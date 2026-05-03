@@ -12,6 +12,7 @@ Usage:
 
 import asyncio
 import logging
+import os
 import shutil
 import time
 from pathlib import Path
@@ -20,6 +21,54 @@ from ..compute.capabilities import ComputeCapabilities, GPUInfo
 from .interface import ExecutionResult, SandboxInterface
 
 logger = logging.getLogger(__name__)
+
+
+# ── Probe output parsers (extracted for cognitive complexity) ─────────
+
+
+def _set_platform(lines: list[str], caps: ComputeCapabilities) -> None:
+    if len(lines) >= 1:
+        caps.platform = lines[0].strip()
+
+
+def _set_python(lines: list[str], caps: ComputeCapabilities) -> None:
+    if len(lines) >= 2 and "Python" in lines[1]:
+        caps.python_versions = [lines[1].replace("Python ", "").strip()]
+
+
+def _set_gpu(lines: list[str], caps: ComputeCapabilities) -> None:
+    if len(lines) < 3 or "no-gpu" in lines[2]:
+        return
+    caps.gpu_available = True
+    parts = lines[2].split(",")
+    if len(parts) < 2:
+        return
+    try:
+        vram = float(parts[1].strip().replace("MiB", "").replace("GiB", "").strip())
+        if "GiB" not in parts[1]:
+            vram = vram / 1024.0
+    except (ValueError, IndexError):
+        vram = 0.0
+    caps.gpu_info = [GPUInfo(model=parts[0].strip(), vram_gb=vram)]
+    caps.gpu_count = 1
+
+
+def _set_cpu(lines: list[str], caps: ComputeCapabilities) -> None:
+    if len(lines) < 4:
+        return
+    try:
+        caps.cpu_cores = int(lines[3].strip())
+    except ValueError:
+        pass
+
+
+def _set_ram(lines: list[str], caps: ComputeCapabilities) -> None:
+    if len(lines) < 5 or lines[4].strip() == "unknown":
+        return
+    try:
+        caps.total_ram_gb = float(lines[4].strip())
+    except ValueError:
+        pass
 
 
 class SingularitySandbox(SandboxInterface):
@@ -220,16 +269,31 @@ class SingularitySandbox(SandboxInterface):
             raise PermissionError(f"Path {resolved} is outside workspace {root}")
         return resolved
 
+    def _safe_workspace_path(self, path: str) -> Path:
+        """Resolve a relative path within the workspace, rejecting traversal attempts.
+
+        Security: rejects absolute paths and any resolved path outside _host_workdir.
+        This is intentionally separate from _resolve_and_validate_path so that
+        static analysis tools can trace the sanitization at the call site.
+        """
+        if os.path.isabs(path):
+            raise PermissionError(f"Absolute paths not allowed: {path}")
+        root = Path(self._host_workdir).resolve()
+        target = (root / path).resolve()
+        if not target.is_relative_to(root):
+            raise PermissionError(f"Path {target} is outside workspace {root}")
+        return target
+
     async def read_file(self, path: str) -> str:
         """Read a file from the host bind-mount directory."""
-        target = self._resolve_and_validate_path(path)
+        target = self._safe_workspace_path(path)
         if not target.exists():
             raise FileNotFoundError(f"File not found: {target}")
         return target.read_text(encoding="utf-8", errors="replace")
 
     async def write_file(self, path: str, content: str) -> bool:
         """Write a file to the host bind-mount directory."""
-        target = self._resolve_and_validate_path(path)
+        target = self._safe_workspace_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return True
@@ -266,39 +330,11 @@ class SingularitySandbox(SandboxInterface):
         """
         lines = output.strip().split("\n")
         caps = ComputeCapabilities()
-
-        if len(lines) >= 1:
-            caps.platform = lines[0].strip()
-
-        if len(lines) >= 2 and "Python" in lines[1]:
-            version = lines[1].replace("Python ", "").strip()
-            caps.python_versions = [version]
-
-        if len(lines) >= 3 and "no-gpu" not in lines[2]:
-            caps.gpu_available = True
-            parts = lines[2].split(",")
-            if len(parts) >= 2:
-                try:
-                    vram = float(parts[1].strip().replace("MiB", "").replace("GiB", "").strip())
-                    if "GiB" not in parts[1]:
-                        vram = vram / 1024.0
-                except (ValueError, IndexError):
-                    vram = 0.0
-                caps.gpu_info = [GPUInfo(model=parts[0].strip(), vram_gb=vram)]
-                caps.gpu_count = 1
-
-        if len(lines) >= 4:
-            try:
-                caps.cpu_cores = int(lines[3].strip())
-            except ValueError:
-                pass
-
-        if len(lines) >= 5 and lines[4].strip() != "unknown":
-            try:
-                caps.total_ram_gb = float(lines[4].strip())
-            except ValueError:
-                pass
-
+        _set_platform(lines, caps)
+        _set_python(lines, caps)
+        _set_gpu(lines, caps)
+        _set_cpu(lines, caps)
+        _set_ram(lines, caps)
         return caps
 
     async def probe_environment(self) -> ComputeCapabilities:

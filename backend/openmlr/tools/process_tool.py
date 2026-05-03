@@ -15,12 +15,17 @@ logger = logging.getLogger(__name__)
 _active_processes: dict[str, asyncio.subprocess.Process] = {}
 
 
+def _open_log_fd(output_path: str) -> int:
+    """Synchronous helper: create/truncate log file and return its fd."""
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    return os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+
+
 async def _start_background(
     command: str, cwd: str, output_path: str
 ) -> tuple[asyncio.subprocess.Process, int]:
     """Start a subprocess with output redirected to a log file."""
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    fd = await asyncio.to_thread(_open_log_fd, output_path)
 
     try:
         proc = await asyncio.create_subprocess_shell(
@@ -192,6 +197,34 @@ async def _action_log(session_id, user_id, db, ops, **kwargs) -> tuple[str, bool
         return f"Error reading log: {e}", False
 
 
+async def _try_kill_in_memory(session_id: str) -> bool:
+    """Try to kill a process via its in-memory handle. Returns True if killed."""
+    if session_id not in _active_processes:
+        return False
+    try:
+        _active_processes[session_id].terminate()
+        await asyncio.sleep(2)
+        if _active_processes[session_id].returncode is None:
+            _active_processes[session_id].kill()
+        return True
+    except Exception:
+        return False
+
+
+async def _try_kill_by_pid(pid: int) -> tuple[bool, str | None]:
+    """Try to kill a process by PID. Returns (killed, error_message)."""
+    try:
+        os.kill(pid, signal.SIGTERM)
+        await asyncio.sleep(2)
+        if _is_pid_alive(pid):
+            os.kill(pid, signal.SIGKILL)
+        return True, None
+    except ProcessLookupError:
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
 async def _action_kill(session_id, user_id, db, ops, **kwargs) -> tuple[str, bool]:
     """Handle 'kill' action: terminate a running process."""
     if not session_id:
@@ -204,28 +237,11 @@ async def _action_kill(session_id, user_id, db, ops, **kwargs) -> tuple[str, boo
     if proc_record.status != "running":
         return f"Process is not running (status: {proc_record.status}).", False
 
-    killed = False
-    if session_id in _active_processes:
-        try:
-            _active_processes[session_id].terminate()
-            await asyncio.sleep(2)
-            if _active_processes[session_id].returncode is None:
-                _active_processes[session_id].kill()
-            killed = True
-        except Exception:
-            pass
-
+    killed = await _try_kill_in_memory(session_id)
     if not killed and proc_record.pid:
-        try:
-            os.kill(proc_record.pid, signal.SIGTERM)
-            await asyncio.sleep(2)
-            if _is_pid_alive(proc_record.pid):
-                os.kill(proc_record.pid, signal.SIGKILL)
-            killed = True
-        except ProcessLookupError:
-            killed = True
-        except Exception as e:
-            return f"Failed to kill process: {e}", False
+        killed, err = await _try_kill_by_pid(proc_record.pid)
+        if not killed:
+            return f"Failed to kill process: {err}", False
 
     await ops.update_background_process(
         db,
@@ -234,15 +250,13 @@ async def _action_kill(session_id, user_id, db, ops, **kwargs) -> tuple[str, boo
         completed_at=datetime.now(UTC),
     )
     _active_processes.pop(session_id, None)
-
     return f"Process {session_id[:8]} killed.", True
 
 
-async def _action_wait(session_id, timeout, user_id, db, ops, **kwargs) -> tuple[str, bool]:
-    """Handle 'wait' action: block until process completes.
-
-    The timeout parameter is used with asyncio.sleep polling, capped at 300s.
-    """
+async def _action_wait(
+    session_id, max_wait=300, user_id=None, db=None, ops=None, **kwargs
+) -> tuple[str, bool]:
+    """Handle 'wait' action: block until process completes (max_wait capped at 300s)."""
     if not session_id:
         return "Error: 'session_id' is required for wait action.", False
 
@@ -256,9 +270,9 @@ async def _action_wait(session_id, timeout, user_id, db, ops, **kwargs) -> tuple
             True,
         )
 
-    timeout = min(timeout, 300)
+    wait_limit = min(max_wait, 300)
     elapsed = 0
-    while elapsed < timeout:
+    while elapsed < wait_limit:
         await asyncio.sleep(5)
         elapsed += 5
         if proc_record.pid and not _is_pid_alive(proc_record.pid):
@@ -273,7 +287,7 @@ async def _action_wait(session_id, timeout, user_id, db, ops, **kwargs) -> tuple
             )
             return f"Process finished ({new_status}, exit code: {exit_code}).", True
 
-    return f"Timed out after {timeout}s — process still running.", True
+    return f"Timed out after {wait_limit}s — process still running.", True
 
 
 # Action dispatch table
@@ -291,7 +305,7 @@ async def _handle_process(
     action: str,
     session_id: str = "",
     command: str = "",
-    timeout: int = 120,
+    max_wait: int = 120,
     tail: int = 50,
     session=None,
     user_id: int | None = None,
@@ -311,7 +325,7 @@ async def _handle_process(
     return await handler(
         session_id=session_id,
         command=command,
-        timeout=timeout,
+        max_wait=max_wait,
         tail=tail,
         session=session,
         user_id=user_id,
@@ -376,9 +390,9 @@ def create_process_tool() -> ToolSpec:
                     "type": "string",
                     "description": "Shell command to run (for start action)",
                 },
-                "timeout": {
+                "max_wait": {
                     "type": "integer",
-                    "description": "Wait timeout in seconds (for wait action, max 300)",
+                    "description": "Max wait in seconds (for wait action, max 300)",
                 },
                 "tail": {
                     "type": "integer",

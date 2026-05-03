@@ -440,44 +440,51 @@ class LLMProvider:
         return merged
 
     @staticmethod
+    def _convert_assistant_msg(m: dict) -> dict:
+        """Convert an assistant message to Anthropic format with tool_use blocks."""
+        content_blocks = []
+        if m.get("content"):
+            content_blocks.append({"type": "text", "text": m["content"]})
+        for tc in m.get("tool_calls", []):
+            func = tc.get("function", tc)
+            content_blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": tc.get("id", ""),
+                    "name": func.get("name", tc.get("name", "")),
+                    "input": func.get("arguments", tc.get("arguments", {})),
+                }
+            )
+        return {"role": "assistant", "content": content_blocks or m.get("content", "")}
+
+    @staticmethod
+    def _append_tool_result(chat: list[dict], m: dict) -> None:
+        """Append a tool result to the chat list, merging with previous user message if possible."""
+        tool_block = {
+            "type": "tool_result",
+            "tool_use_id": m.get("tool_call_id", ""),
+            "content": m["content"],
+        }
+        if chat and chat[-1]["role"] == "user" and isinstance(chat[-1]["content"], list):
+            chat[-1]["content"].append(tool_block)
+        else:
+            chat.append({"role": "user", "content": [tool_block]})
+
+    @staticmethod
     def _to_anthropic_messages(messages: list[dict]) -> tuple[str, list[dict]]:
         """Split system prompt and convert messages to Anthropic format."""
         system_parts = []
         chat = []
         for m in messages:
-            if m["role"] == "system":
+            role = m["role"]
+            if role == "system":
                 system_parts.append(m["content"])
-            elif m["role"] == "user":
+            elif role == "user":
                 chat.append({"role": "user", "content": m["content"]})
-            elif m["role"] == "assistant":
-                content_blocks = []
-                if m.get("content"):
-                    content_blocks.append({"type": "text", "text": m["content"]})
-                for tc in m.get("tool_calls", []):
-                    func = tc.get("function", tc)
-                    content_blocks.append(
-                        {
-                            "type": "tool_use",
-                            "id": tc.get("id", ""),
-                            "name": func.get("name", tc.get("name", "")),
-                            "input": func.get("arguments", tc.get("arguments", {})),
-                        }
-                    )
-                chat.append(
-                    {"role": "assistant", "content": content_blocks or m.get("content", "")}
-                )
-            elif m["role"] == "tool":
-                # Merge consecutive tool results into a single user message
-                # to avoid breaking Anthropic's strict user/assistant alternation
-                tool_block = {
-                    "type": "tool_result",
-                    "tool_use_id": m.get("tool_call_id", ""),
-                    "content": m["content"],
-                }
-                if chat and chat[-1]["role"] == "user" and isinstance(chat[-1]["content"], list):
-                    chat[-1]["content"].append(tool_block)
-                else:
-                    chat.append({"role": "user", "content": [tool_block]})
+            elif role == "assistant":
+                chat.append(LLMProvider._convert_assistant_msg(m))
+            elif role == "tool":
+                LLMProvider._append_tool_result(chat, m)
 
         return "\n\n".join(system_parts), LLMProvider._merge_consecutive_user_messages(chat)
 

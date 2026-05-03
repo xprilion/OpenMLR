@@ -643,7 +643,7 @@ class TestProcessTool:
         assert "action" in props
         assert "session_id" in props
         assert "command" in props
-        assert "timeout" in props
+        assert "max_wait" in props
         assert "tail" in props
 
     def test_tool_required_fields(self):
