@@ -682,6 +682,81 @@ async def get_user_agent_settings(db: AsyncSession, user_id: int) -> dict:
     return settings
 
 
+# ---- Conversation Search (Full-Text) ----
+
+
+async def search_conversations(
+    db: AsyncSession,
+    user_id: int,
+    query: str,
+    project_id: int | None = None,
+    limit: int = 20,
+) -> list[dict]:
+    """Search conversation messages using PostgreSQL full-text search.
+
+    Returns matching conversations with highlighted snippets.
+    Uses plainto_tsquery for natural language queries.
+    """
+    from sqlalchemy import func, text
+
+    # Build the search query using PostgreSQL FTS functions
+    ts_query = func.plainto_tsquery("english", query)
+    ts_vector = func.to_tsvector("english", Message.content)
+
+    # Build base query joining messages to conversations
+    stmt = (
+        select(
+            Conversation.id.label("conversation_id"),
+            Conversation.uuid.label("conversation_uuid"),
+            Conversation.title,
+            Conversation.created_at,
+            func.ts_headline(
+                "english",
+                Message.content,
+                ts_query,
+                text("'MaxWords=40, MinWords=20, StartSel=**, StopSel=**'"),
+            ).label("snippet"),
+            func.ts_rank(ts_vector, ts_query).label("rank"),
+        )
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(
+            Conversation.user_id == user_id,
+            Message.role.in_(["user", "assistant"]),
+            ts_vector.op("@@")(ts_query),
+        )
+    )
+
+    if project_id is not None:
+        stmt = stmt.where(Conversation.project_id == project_id)
+
+    # Group by conversation and take the best-matching snippet
+    stmt = stmt.order_by(text("rank DESC")).limit(limit * 3)  # Over-fetch for dedup
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # Deduplicate by conversation (keep highest-ranked snippet per conversation)
+    seen_convs = set()
+    results = []
+    for row in rows:
+        if row.conversation_id in seen_convs:
+            continue
+        seen_convs.add(row.conversation_id)
+        results.append(
+            {
+                "conversation_id": row.conversation_id,
+                "conversation_uuid": row.conversation_uuid,
+                "title": row.title,
+                "snippet": row.snippet,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+        )
+        if len(results) >= limit:
+            break
+
+    return results
+
+
 # ---- SSH Keys ----
 
 
@@ -843,3 +918,74 @@ async def get_default_compute_node(db: AsyncSession, user_id: int) -> ComputeNod
         )
     )
     return result.scalar_one_or_none()
+
+
+# ---- Background Processes ----
+
+
+async def create_background_process(
+    db: AsyncSession,
+    conversation_id: int,
+    user_id: int,
+    command: str,
+    pid: int | None = None,
+    host: str = "local",
+    project_id: int | None = None,
+    output_path: str | None = None,
+):
+    from .models import BackgroundProcess
+
+    proc = BackgroundProcess(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        command=command,
+        pid=pid,
+        host=host,
+        project_id=project_id,
+        output_path=output_path,
+    )
+    db.add(proc)
+    await db.commit()
+    await db.refresh(proc)
+    return proc
+
+
+async def get_background_processes(
+    db: AsyncSession,
+    user_id: int,
+    conversation_id: int | None = None,
+    status: str | None = None,
+) -> list:
+    from .models import BackgroundProcess
+
+    query = select(BackgroundProcess).where(BackgroundProcess.user_id == user_id)
+    if conversation_id is not None:
+        query = query.where(BackgroundProcess.conversation_id == conversation_id)
+    if status is not None:
+        query = query.where(BackgroundProcess.status == status)
+    query = query.order_by(BackgroundProcess.created_at.desc())
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_background_process_by_uuid(db: AsyncSession, uuid: str):
+    from .models import BackgroundProcess
+
+    result = await db.execute(select(BackgroundProcess).where(BackgroundProcess.uuid == uuid))
+    return result.scalar_one_or_none()
+
+
+async def update_background_process(
+    db: AsyncSession,
+    uuid: str,
+    **kwargs,
+) -> bool:
+
+    proc = await get_background_process_by_uuid(db, uuid)
+    if not proc:
+        return False
+    for key, value in kwargs.items():
+        if hasattr(proc, key):
+            setattr(proc, key, value)
+    await db.commit()
+    return True

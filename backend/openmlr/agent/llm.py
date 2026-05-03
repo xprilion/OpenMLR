@@ -439,19 +439,42 @@ class LLMProvider:
                     {"role": "assistant", "content": content_blocks or m.get("content", "")}
                 )
             elif m["role"] == "tool":
-                chat.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": m.get("tool_call_id", ""),
-                                "content": m["content"],
-                            }
-                        ],
-                    }
-                )
-        return "\n\n".join(system_parts), chat
+                # Merge consecutive tool results into a single user message
+                # to avoid breaking Anthropic's strict user/assistant alternation
+                tool_block = {
+                    "type": "tool_result",
+                    "tool_use_id": m.get("tool_call_id", ""),
+                    "content": m["content"],
+                }
+                if chat and chat[-1]["role"] == "user" and isinstance(chat[-1]["content"], list):
+                    # Previous message is already a tool_result user block — merge
+                    chat[-1]["content"].append(tool_block)
+                else:
+                    chat.append({"role": "user", "content": [tool_block]})
+        # Post-process: merge any remaining consecutive user messages
+        # (can happen when system messages between user and tool get extracted)
+        merged: list[dict] = []
+        for msg in chat:
+            if merged and merged[-1]["role"] == "user" and msg["role"] == "user":
+                prev_content = merged[-1]["content"]
+                curr_content = msg["content"]
+                # Merge list + list
+                if isinstance(prev_content, list) and isinstance(curr_content, list):
+                    merged[-1]["content"] = prev_content + curr_content
+                # Merge string + string
+                elif isinstance(prev_content, str) and isinstance(curr_content, str):
+                    merged[-1]["content"] = prev_content + "\n\n" + curr_content
+                # Merge string + list or list + string: wrap string in text block
+                elif isinstance(prev_content, str) and isinstance(curr_content, list):
+                    merged[-1]["content"] = [{"type": "text", "text": prev_content}] + curr_content
+                elif isinstance(prev_content, list) and isinstance(curr_content, str):
+                    merged[-1]["content"] = prev_content + [{"type": "text", "text": curr_content}]
+                else:
+                    merged.append(msg)
+            else:
+                merged.append(msg)
+
+        return "\n\n".join(system_parts), merged
 
     @staticmethod
     def _anthropic_client(config: AgentConfig):
@@ -487,11 +510,18 @@ class LLMProvider:
 
         params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
         if system_prompt:
-            params["system"] = system_prompt
+            params["system"] = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         anthropic_tools = LLMProvider._anthropic_tool_param(tools)
         if anthropic_tools:
             params["tools"] = anthropic_tools
 
+        params["extra_headers"] = {"anthropic-beta": "prompt-caching-2024-07-31"}
         response = await client.messages.create(**params)
 
         tool_calls = []
@@ -529,11 +559,18 @@ class LLMProvider:
 
         params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
         if system_prompt:
-            params["system"] = system_prompt
+            params["system"] = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         anthropic_tools = LLMProvider._anthropic_tool_param(tools)
         if anthropic_tools:
             params["tools"] = anthropic_tools
 
+        params["extra_headers"] = {"anthropic-beta": "prompt-caching-2024-07-31"}
         async with client.messages.stream(**params) as stream:
             async for event in stream:
                 if event.type == "content_block_delta":

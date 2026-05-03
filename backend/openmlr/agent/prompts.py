@@ -12,11 +12,10 @@ from .types import ToolSpec
 
 PROMPT_DIR = Path(__file__).parent.parent.parent / "configs" / "prompts"
 COMPACT_PROMPT = (
-    "Provide a concise summary of the conversation above, focusing on "
-    "key decisions, the 'why' behind decisions, problems solved, and "
-    "important context needed for continuing this work. "
-    "Your summary will be given to someone who has never worked on this "
-    "project before."
+    "Produce a structured summary focusing on: research goals, papers found, "
+    "methodology decisions, progress (done/in-progress/blocked), code and "
+    "experiments, key findings, and next steps. Preserve specific details "
+    "like file paths, paper IDs, error messages, and numeric results."
 )
 
 
@@ -27,6 +26,9 @@ def build_system_prompt(
     sandbox_info: str = "none",
     compute_env: str = "",
     config: AgentConfig | None = None,
+    project_context: str = "",
+    memory_context: str = "",
+    knowledge_context: str = "",
 ) -> str:
     """Build the full system prompt from YAML template."""
     template_path = PROMPT_DIR / "system_prompt.yaml"
@@ -60,6 +62,9 @@ def build_system_prompt(
         username=username,
         sandbox_info=sandbox_info,
         compute_env=compute_env,
+        project_context=project_context,
+        memory_context=memory_context,
+        knowledge_context=knowledge_context,
     )
 
     return prompt

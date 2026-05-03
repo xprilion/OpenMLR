@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { setToken } from '../api';
+import { setToken, api } from '../api';
 import type { Conversation, User } from '../types';
 import { APP_VERSION } from '../version';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -90,11 +90,31 @@ function ConvItem({ conv, isCurrent, status, onSwitch, onDelete }: {
   );
 }
 
-export function Sidebar({ conversations, currentUuid, user, convStatuses, mobileOpen, onSwitch, onNew, onDelete, onMobileClose }: Props) {
+export const Sidebar = React.memo(function Sidebar({ conversations, currentUuid, user, convStatuses, mobileOpen, onSwitch, onNew, onDelete, onMobileClose }: Props) {
   const navigate = useNavigate();
   const [pendingDelete, setPendingDelete] = useState<{ uuid: string; title: string } | null>(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [deepResults, setDeepResults] = useState<Array<{ conversation_uuid: string; title: string; snippet: string; created_at: string }> | null>(null);
+  const [deepSearching, setDeepSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up debounce timer on unmount to prevent state updates on unmounted component
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  // Deep search: queries the API after a debounce when user types 3+ chars
+  const triggerDeepSearch = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.trim().length < 3) { setDeepResults(null); return; }
+    debounceRef.current = setTimeout(async () => {
+      setDeepSearching(true);
+      try {
+        const res = await api.searchConversations(q.trim());
+        setDeepResults(res.results || []);
+      } catch { setDeepResults(null); }
+      setDeepSearching(false);
+    }, 400);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return conversations;
@@ -141,9 +161,9 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, mobile
         <input 
           type="text" 
           className="w-full bg-bg border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-text placeholder-text-dim focus:border-primary focus:outline-none transition-colors"
-          placeholder="Search..." 
+          placeholder="Search conversations..." 
           value={search} 
-          onChange={(e) => setSearch(e.target.value)} 
+          onChange={(e) => { setSearch(e.target.value); triggerDeepSearch(e.target.value); }} 
         />
       </div>
 
@@ -164,9 +184,37 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, mobile
             ))}
           </div>
         ))}
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !deepResults?.length && (
           <div className="text-center text-text-dim text-sm py-8">
-            {search ? 'No matches' : 'No conversations yet'}
+            {search ? 'No title matches' : 'No conversations yet'}
+          </div>
+        )}
+
+        {/* Deep search results (content matches from API) */}
+        {search.trim().length >= 3 && deepResults && deepResults.length > 0 && (
+          <div className="mt-2 border-t border-border pt-2">
+            <div className="text-xs uppercase tracking-wider text-text-dim font-semibold mb-2 px-2 flex items-center gap-1">
+              Content Matches
+              {deepSearching && <span className="animate-pulse">...</span>}
+            </div>
+            {deepResults.map((r) => (
+              <button
+                key={`deep-${r.conversation_uuid}`}
+                type="button"
+                className="w-full text-left px-3 py-2 rounded-lg text-sm text-text-dim hover:bg-surface-hover hover:text-text transition-all"
+                onClick={() => { onSwitch(r.conversation_uuid); setSearch(''); setDeepResults(null); }}
+              >
+                <div className="font-medium truncate">{r.title}</div>
+                <div className="text-xs text-text-dim mt-0.5 line-clamp-2">
+                  {r.snippet.replace(/\*\*/g, '').replace(/<[^>]*>/g, '')}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {search.trim().length >= 3 && deepSearching && !deepResults && (
+          <div className="text-center text-text-dim text-xs py-2 animate-pulse">
+            Searching message content...
           </div>
         )}
       </div>
@@ -259,4 +307,4 @@ export function Sidebar({ conversations, currentUuid, user, convStatuses, mobile
       {sidebarContent(false)}
     </aside>
   );
-}
+});

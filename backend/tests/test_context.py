@@ -30,17 +30,22 @@ def _make_config(**overrides) -> AgentConfig:
 class TestEstimateTokens:
     def test_returns_roughly_len_over_4(self):
         text = "a" * 100
-        assert estimate_tokens(text) == 25
+        # With tiktoken: BPE merges repeated chars, result varies.
+        # Without tiktoken: 100 // 4 = 25.
+        result = estimate_tokens(text)
+        assert 5 <= result <= 30
 
     def test_short_string(self):
-        assert estimate_tokens("hi") == 1  # max(1, 2//4) = max(1, 0) = 1
+        assert estimate_tokens("hi") >= 1
 
     def test_empty_string(self):
-        assert estimate_tokens("") == 1  # max(1, 0) = 1
+        assert estimate_tokens("") == 1
 
     def test_longer_text(self):
         text = "x" * 4000
-        assert estimate_tokens(text) == 1000
+        # tiktoken compresses repeated chars more efficiently than len//4
+        result = estimate_tokens(text)
+        assert 100 <= result <= 1100
 
 
 # ── ContextManager.add_message ─────────────────────────────────────────────
@@ -64,9 +69,10 @@ class TestAddMessage:
     def test_tracks_token_count(self):
         cm = ContextManager(config=_make_config())
         cm.add_message(Message(role="user", content="a" * 100))
-        assert cm.running_token_count == 25  # 100 / 4
+        first = cm.running_token_count
+        assert first > 0  # token count increases
         cm.add_message(Message(role="assistant", content="b" * 200))
-        assert cm.running_token_count == 75  # 25 + 50
+        assert cm.running_token_count > first  # adding more content increases count
 
     def test_dict_with_tool_calls(self):
         cm = ContextManager(config=_make_config())

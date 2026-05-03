@@ -10,6 +10,7 @@ read/write/edit operate on the host filesystem (for project files).
 import asyncio
 import logging
 import os
+import re
 from contextvars import ContextVar
 from pathlib import Path
 
@@ -122,6 +123,56 @@ def _validate_path(path: Path) -> tuple[Path, str | None]:
         return resolved, f"Path {resolved} is outside workspace {effective_root}"
     except Exception as e:
         return path, f"Path validation error: {e}"
+
+
+# ── Dangerous command detection ──────────────────────────
+
+DANGEROUS_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # Recursive deletes
+    (
+        re.compile(r"\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|(-[a-zA-Z]*f[a-zA-Z]*r))\b"),
+        "recursive force delete",
+    ),
+    (re.compile(r"\brm\s+-rf\s+/\s*$"), "delete root filesystem"),
+    # Filesystem destruction
+    (re.compile(r"\bmkfs\b"), "filesystem format"),
+    (re.compile(r"\bdd\s+.*of=/dev/"), "raw disk write"),
+    # SQL destructive operations
+    (re.compile(r"\bDROP\s+(TABLE|DATABASE|SCHEMA)\b", re.IGNORECASE), "SQL drop"),
+    (re.compile(r"\bDELETE\s+FROM\s+\w+\s*;", re.IGNORECASE), "SQL delete without WHERE"),
+    (re.compile(r"\bTRUNCATE\s+TABLE\b", re.IGNORECASE), "SQL truncate"),
+    # System config overwrites
+    (re.compile(r">\s*/etc/"), "system config overwrite"),
+    # Remote code execution
+    (re.compile(r"curl\s+.*\|\s*(bash|sh|zsh)\b"), "remote code execution (curl pipe)"),
+    (re.compile(r"wget\s+.*\|\s*(bash|sh|zsh)\b"), "remote code execution (wget pipe)"),
+    # Service manipulation
+    (re.compile(r"\bsystemctl\s+(stop|disable|mask)\b"), "service stop/disable"),
+    # Process killing — only block mass-kill commands, not targeted kill -9
+    # (researchers need kill -9 for hung training processes)
+    (re.compile(r"\bkillall\b"), "kill all processes by name"),
+    (re.compile(r"\bpkill\b"), "kill processes by pattern"),
+    # Fork bombs
+    (re.compile(r":\(\)\s*\{.*\}"), "fork bomb"),
+    # GPU operations (ML-research-specific)
+    (re.compile(r"\bnvidia-smi\s+(-r|--gpu-reset)\b"), "GPU reset"),
+    # Dangerous git operations
+    (re.compile(r"\bgit\s+push\s+.*--force\b"), "force push"),
+    (re.compile(r"\bgit\s+reset\s+--hard\b"), "hard reset"),
+    # Chmod dangerous
+    (re.compile(r"\bchmod\s+(-R\s+)?777\b"), "world-writable permissions"),
+]
+
+
+def _detect_dangerous_command(command: str) -> str | None:
+    """Check if a command matches dangerous patterns.
+
+    Returns a description of the danger if matched, None if safe.
+    """
+    for pattern, description in DANGEROUS_PATTERNS:
+        if pattern.search(command):
+            return description
+    return None
 
 
 def create_local_tools() -> list[ToolSpec]:
@@ -252,6 +303,16 @@ async def _handle_bash(
 ) -> tuple[str, bool]:
     timeout = min(int(timeout), 3600)
     cwd = workdir or str(_get_effective_root())
+
+    # Check for dangerous commands
+    danger = _detect_dangerous_command(command)
+    if danger:
+        return (
+            f"DANGEROUS COMMAND DETECTED: {danger}\n\n"
+            f"Command: {command}\n\n"
+            f"This command has been blocked for safety. If you need to run this command, "
+            f"explain why it is necessary and the user can approve it through the approval flow."
+        ), False
 
     # If we're already running inside a container, execute directly
     # The container itself provides isolation, so no need for Docker-in-Docker

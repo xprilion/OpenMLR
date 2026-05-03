@@ -129,16 +129,19 @@ class TestEstimateTokens:
         assert estimate_tokens("") == 1
 
     def test_short_string(self):
-        # "hi" -> len=2, 2//4 = 0, max(1,0) = 1
-        assert estimate_tokens("hi") == 1
+        # With or without tiktoken, short strings should return >= 1
+        assert estimate_tokens("hi") >= 1
 
     def test_four_char_string(self):
-        # "abcd" -> len=4, 4//4 = 1
-        assert estimate_tokens("abcd") == 1
+        assert estimate_tokens("abcd") >= 1
 
     def test_longer_string(self):
         text = "a" * 100
-        assert estimate_tokens(text) == 25  # 100 // 4
+        # With tiktoken: BPE merges repeated chars, result varies.
+        # Without tiktoken: 100 // 4 = 25.
+        # Just verify it returns a reasonable positive number.
+        result = estimate_tokens(text)
+        assert 5 <= result <= 30
 
     def test_rough_proportionality(self):
         short = estimate_tokens("hello world")  # 11 chars -> 2

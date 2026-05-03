@@ -13,7 +13,11 @@ celery_app = Celery(
     "openmlr",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["openmlr.tasks.agent_tasks", "openmlr.tasks.compute_tasks"],
+    include=[
+        "openmlr.tasks.agent_tasks",
+        "openmlr.tasks.compute_tasks",
+        "openmlr.tasks.process_tasks",
+    ],
 )
 
 # Celery configuration
@@ -47,6 +51,10 @@ celery_app.conf.update(
         "cleanup-old-workspaces": {
             "task": "openmlr.tasks.compute_tasks.cleanup_old_workspaces",
             "schedule": 86400.0,  # Every 24 hours
+        },
+        "check-orphaned-processes": {
+            "task": "openmlr.tasks.process_tasks.check_orphaned_processes",
+            "schedule": 300.0,  # Every 5 minutes
         },
     },
 )

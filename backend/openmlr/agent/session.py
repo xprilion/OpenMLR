@@ -47,6 +47,10 @@ class Session:
     # Turn counter (for title generation etc.)
     turn_count: int = 0
 
+    # Self-nudging: knowledge persistence reminders
+    nudge_interval: int = 5  # Nudge every N turns
+    turns_since_nudge: int = 0
+
     # Event listeners
     _listeners: list[Callable] = field(default_factory=list)
 

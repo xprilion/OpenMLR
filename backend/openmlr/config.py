@@ -30,6 +30,11 @@ class AgentConfig:
         default_factory=list
     )  # [{id, name, sdk_type, api_base, api_key, models}]
 
+    # Singularity/Apptainer compute
+    singularity_image: str = "docker://python:3.12-slim"
+    singularity_bind_paths: list = field(default_factory=list)
+    singularity_gpu: bool = False
+
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "configs" / "agent_config.yaml"
 

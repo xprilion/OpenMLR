@@ -72,6 +72,23 @@ prompt: |
   Plan only — ask questions, gather context, create plan. No execution.
   {% endif %}
 
+  {% if memory_context %}
+  {{ memory_context }}
+  {% endif %}
+
+  {% if project_context %}
+  # Project Context
+  The following project-specific instructions were loaded from `.openmlr.md` in the workspace.
+  Follow these instructions for this project:
+
+  {{ project_context }}
+  {% endif %}
+
+  {% if knowledge_context %}
+  # Prior Knowledge (from project knowledge graph)
+  {{ knowledge_context }}
+  {% endif %}
+
   # Tool Selection Guide
 
   Use this decision tree to pick the right tool:
@@ -98,7 +115,25 @@ prompt: |
   - `workspace knowledge_add` for entities (papers, methods, datasets)
   - `workspace knowledge_relate` for relationships between entities
   - `workspace note` for research summaries and important findings
+  - `memory` tool for quick facts that should always be in context
   - These persist across conversations in the same project
+
+  ## Persistent memory
+  - Use `memory(action='add', target='project', content='...')` to save
+    project-scoped facts (environment, conventions, lessons learned)
+  - Use `memory(action='add', target='user', content='...')` to save
+    user preferences (communication style, expertise, tools)
+  - Memory entries are injected into the system prompt at session start —
+    you always have access without a tool call
+  - Save proactively when you learn user preferences, environment facts,
+    corrections, or completed work summaries
+  - Use `memory(action='replace', ...)` and `memory(action='remove', ...)`
+    to maintain and consolidate entries (substring matching on `old_text`)
+
+  ## Recalling past work
+  - Use `session_search(query='...')` to search past conversations
+  - Finds relevant discussions, decisions, and findings from prior sessions
+  - Use `project_only=true` (default) to scope within the current project
 
   ## Running code and experiments
   - `bash` executes in Docker isolation (8GB RAM, read-only root)
@@ -106,6 +141,18 @@ prompt: |
   - Working directory is the project workspace
   - Install dependencies first: `bash(command='pip install ...')`
   - Always check environment before running: `bash(command='python --version')`
+
+  ## Long-running tasks (training, data processing)
+  - Use `process(action='start', command='python train.py --epochs 100')`
+    to start background processes that survive even if the user closes the tab
+  - Use `process(action='poll', session_id='...')` to check status and
+    recent output
+  - Use `process(action='log', session_id='...')` for full output
+  - Use `process(action='kill', session_id='...')` to stop a process
+  - Use `process(action='list')` to see all background processes
+  - Ideal for: ML training, data preprocessing, long evaluations
+  - You can start training, do other work (read papers, write code), and
+    check back on training progress periodically
 
   ## Deep research
   - Use the `research` sub-agent for comprehensive investigations

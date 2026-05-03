@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import type { McpServerStatus, Mention } from '../types';
 import { MentionPopover } from './MentionPopover';
@@ -18,7 +18,7 @@ interface Props {
   readonly projectUuid?: string | null;
 }
 
-export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onStop, text, onTextChange, mcpServers = [], projectUuid = null }: Props) {
+export const InputArea = React.memo(function InputArea({ disabled, showStop, mode, onModeChange, onSend, onStop, text, onTextChange, mcpServers = [], projectUuid = null }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [mentionPopoverOpen, setMentionPopoverOpen] = useState(false);
@@ -280,4 +280,4 @@ export function InputArea({ disabled, showStop, mode, onModeChange, onSend, onSt
       </div>
     </div>
   );
-}
+});
