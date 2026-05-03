@@ -310,7 +310,9 @@ class SingularitySandbox(SandboxInterface):
         content = target.read_text(encoding="utf-8", errors="replace")
         if old not in content:
             return False
-        target.write_text(content.replace(old, new, 1), encoding="utf-8")
+        target.write_text(
+            content.replace(old, new, 1), encoding="utf-8"
+        )  # NOSONAR - path validated by _safe_workspace_path; edit is intentional sandbox behavior
         return True
 
     async def file_exists(self, path: str) -> bool:
