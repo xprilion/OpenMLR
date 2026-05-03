@@ -132,12 +132,12 @@ function formatThinkingDuration(seconds?: number): string {
   if (seconds < 60) return `${Math.round(seconds)} seconds`;
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
-  if (s === 0) return `${m} minute${m !== 1 ? 's' : ''}`;
+  if (s === 0) return `${m} minute${m === 1 ? '' : 's'}`;
   return `${m}m ${s}s`;
 }
 
 /** Thinking/reasoning block — shows model thinking, collapses when reply starts */
-function ThinkingBlock({ msg, expanded, onToggle }: { msg: Message; expanded: boolean; onToggle: () => void }) {
+function ThinkingBlock({ msg, expanded, onToggle }: Readonly<{ msg: Message; expanded: boolean; onToggle: () => void }>) {
   const thinking = msg.thinking || '';
   const duration = msg.thinkingDuration;
   const collapsed = msg.thinkingCollapsed;
