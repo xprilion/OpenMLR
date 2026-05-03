@@ -7,6 +7,32 @@ from ..agent.types import ToolSpec
 logger = logging.getLogger(__name__)
 
 
+async def _resolve_search_project_id(session, db, ops) -> int | None:
+    """Resolve the project_id from the current session's conversation."""
+    conv_id = getattr(session, "conversation_id", None)
+    if not conv_id:
+        return None
+    try:
+        conv = await ops.get_conversation_by_id(db, conv_id)
+        if conv:
+            return conv.project_id
+    except Exception:
+        pass
+    return None
+
+
+def _format_search_results(results: list[dict]) -> str:
+    """Format search results into a human-readable string."""
+    lines = [f"Found {len(results)} matching conversation(s):\n"]
+    for i, r in enumerate(results, 1):
+        lines.append(f"### {i}. {r['title']}")
+        if r.get("created_at"):
+            lines.append(f"Date: {r['created_at'][:10]}")
+        lines.append(f"Snippet: {r['snippet']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 async def _handle_session_search(
     query: str,
     project_only: bool = True,
@@ -24,17 +50,9 @@ async def _handle_session_search(
 
     from ..db import operations as ops
 
-    # Determine project_id if searching within project only
     project_id = None
     if project_only and session:
-        conv_id = getattr(session, "conversation_id", None)
-        if conv_id:
-            try:
-                conv = await ops.get_conversation_by_id(db, conv_id)
-                if conv:
-                    project_id = conv.project_id
-            except Exception:
-                pass
+        project_id = await _resolve_search_project_id(session, db, ops)
 
     try:
         results = await ops.search_conversations(
@@ -48,16 +66,7 @@ async def _handle_session_search(
         scope = "this project" if project_id else "all conversations"
         return f"No matches found for '{query}' in {scope}.", True
 
-    # Format results
-    lines = [f"Found {len(results)} matching conversation(s):\n"]
-    for i, r in enumerate(results, 1):
-        lines.append(f"### {i}. {r['title']}")
-        if r.get("created_at"):
-            lines.append(f"Date: {r['created_at'][:10]}")
-        lines.append(f"Snippet: {r['snippet']}")
-        lines.append("")
-
-    return "\n".join(lines), True
+    return _format_search_results(results), True
 
 
 def create_session_search_tool() -> ToolSpec:

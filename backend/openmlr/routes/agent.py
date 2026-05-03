@@ -120,10 +120,10 @@ async def list_conversations(
 @router.get("/conversations/search")
 async def search_conversations(
     q: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     project_uuid: str | None = None,
     limit: int = 20,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     """Full-text search across conversation messages."""
     if not q or not q.strip():

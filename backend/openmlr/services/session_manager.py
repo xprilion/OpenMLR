@@ -1,5 +1,6 @@
 """Session manager — manages per-conversation agent sessions."""
 
+import asyncio
 import logging
 import os
 import re
@@ -33,6 +34,12 @@ _INJECTION_PATTERNS = [
 
 # Invisible Unicode characters (zero-width spaces and BOM)
 _INVISIBLE_CHARS = {"\u200b", "\u200c", "\u200d", "\ufeff"}
+
+
+def _read_context_file(context_path: str) -> str:
+    """Synchronous helper to read a context file (called via asyncio.to_thread)."""
+    with open(context_path, encoding="utf-8") as f:
+        return f.read()
 
 
 def _scan_context_file(content: str) -> tuple[bool, str]:
@@ -206,8 +213,7 @@ class SessionManager:
             context_file = os.path.join(project_workspace_path, ".openmlr.md")
             if os.path.isfile(context_file):
                 try:
-                    with open(context_file, encoding="utf-8") as f:
-                        raw_content = f.read()
+                    raw_content = await asyncio.to_thread(_read_context_file, context_file)
 
                     # Truncate if too long: keep head + marker + tail
                     if len(raw_content) > _CONTEXT_MAX_CHARS:

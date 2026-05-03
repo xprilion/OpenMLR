@@ -204,8 +204,13 @@ class SingularitySandbox(SandboxInterface):
                 duration_seconds=duration,
             )
 
-    def _resolve_path(self, path: str) -> Path:
-        """Resolve a path relative to host workdir with traversal protection."""
+    def _resolve_and_validate_path(self, path: str) -> Path:
+        """Resolve a path relative to host workdir and validate against traversal.
+
+        Security: This method prevents path traversal attacks by resolving
+        symlinks and verifying the resulting path is within the workspace root.
+        Any path that escapes the workspace raises PermissionError.
+        """
         target = Path(path)
         if not target.is_absolute():
             target = Path(self._host_workdir) / path
@@ -217,14 +222,14 @@ class SingularitySandbox(SandboxInterface):
 
     async def read_file(self, path: str) -> str:
         """Read a file from the host bind-mount directory."""
-        target = self._resolve_path(path)
+        target = self._resolve_and_validate_path(path)
         if not target.exists():
             raise FileNotFoundError(f"File not found: {target}")
         return target.read_text(encoding="utf-8", errors="replace")
 
     async def write_file(self, path: str, content: str) -> bool:
         """Write a file to the host bind-mount directory."""
-        target = self._resolve_path(path)
+        target = self._resolve_and_validate_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return True
@@ -239,14 +244,62 @@ class SingularitySandbox(SandboxInterface):
         return True
 
     async def file_exists(self, path: str) -> bool:
-        target = self._resolve_path(path)
+        target = self._resolve_and_validate_path(path)
         return target.exists()
 
     async def list_files(self, path: str = ".") -> list[str]:
-        target = self._resolve_path(path)
+        target = self._resolve_and_validate_path(path)
         if not target.is_dir():
             return []
         return sorted(f"{e.name}{'/' if e.is_dir() else ''}" for e in target.iterdir())
+
+    @staticmethod
+    def _parse_probe_output(output: str) -> ComputeCapabilities:
+        """Parse the output of the probe command into ComputeCapabilities.
+
+        Expected output lines (best-effort parsing):
+          0: platform (uname -s)
+          1: Python version
+          2: GPU info or 'no-gpu'
+          3: CPU core count (nproc)
+          4: Total RAM in GB or 'unknown'
+        """
+        lines = output.strip().split("\n")
+        caps = ComputeCapabilities()
+
+        if len(lines) >= 1:
+            caps.platform = lines[0].strip()
+
+        if len(lines) >= 2 and "Python" in lines[1]:
+            version = lines[1].replace("Python ", "").strip()
+            caps.python_versions = [version]
+
+        if len(lines) >= 3 and "no-gpu" not in lines[2]:
+            caps.gpu_available = True
+            parts = lines[2].split(",")
+            if len(parts) >= 2:
+                try:
+                    vram = float(parts[1].strip().replace("MiB", "").replace("GiB", "").strip())
+                    if "GiB" not in parts[1]:
+                        vram = vram / 1024.0
+                except (ValueError, IndexError):
+                    vram = 0.0
+                caps.gpu_info = [GPUInfo(model=parts[0].strip(), vram_gb=vram)]
+                caps.gpu_count = 1
+
+        if len(lines) >= 4:
+            try:
+                caps.cpu_cores = int(lines[3].strip())
+            except ValueError:
+                pass
+
+        if len(lines) >= 5 and lines[4].strip() != "unknown":
+            try:
+                caps.total_ram_gb = float(lines[4].strip())
+            except ValueError:
+                pass
+
+        return caps
 
     async def probe_environment(self) -> ComputeCapabilities:
         """Probe the container for hardware/software capabilities."""
@@ -258,39 +311,10 @@ class SingularitySandbox(SandboxInterface):
             timeout=30,
         )
 
-        # Parse output (best effort)
-        lines = result.output.strip().split("\n") if result.success else []
-        caps = ComputeCapabilities()
-        if len(lines) >= 1:
-            caps.platform = lines[0].strip()
-        if len(lines) >= 2 and "Python" in lines[1]:
-            version = lines[1].replace("Python ", "").strip()
-            caps.python_versions = [version]
-        if len(lines) >= 3 and "no-gpu" not in lines[2]:
-            caps.gpu_available = True
-            parts = lines[2].split(",")
-            if len(parts) >= 2:
-                try:
-                    vram = float(parts[1].strip().replace("MiB", "").replace("GiB", "").strip())
-                    # nvidia-smi reports in MiB by default
-                    if "GiB" not in parts[1]:
-                        vram = vram / 1024.0
-                except (ValueError, IndexError):
-                    vram = 0.0
-                caps.gpu_info = [GPUInfo(model=parts[0].strip(), vram_gb=vram)]
-                caps.gpu_count = 1
-        if len(lines) >= 4:
-            try:
-                caps.cpu_cores = int(lines[3].strip())
-            except ValueError:
-                pass
-        if len(lines) >= 5 and lines[4].strip() != "unknown":
-            try:
-                caps.total_ram_gb = float(lines[4].strip())
-            except ValueError:
-                pass
+        if not result.success:
+            return ComputeCapabilities()
 
-        return caps
+        return self._parse_probe_output(result.output)
 
     async def destroy(self) -> None:
         """No-op — Singularity containers are ephemeral by design."""

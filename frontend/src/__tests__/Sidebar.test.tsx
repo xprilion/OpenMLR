@@ -128,7 +128,7 @@ describe('Sidebar', () => {
         <Sidebar {...defaultProps} />
       </MemoryRouter>
     );
-    const searchInput = screen.getByPlaceholderText('Search...');
+    const searchInput = screen.getByPlaceholderText('Search conversations...');
     fireEvent.change(searchInput, { target: { value: 'Research' } });
     expect(screen.getByText('Research project')).toBeInTheDocument();
     expect(screen.queryByText('First conversation')).not.toBeInTheDocument();

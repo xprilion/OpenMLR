@@ -87,8 +87,11 @@ export const api = {
     post('/api/conversations', { title, model, mode, project_uuid: projectUuid }),
   getConversation: (uuid: string) => get(`/api/conversations/${uuid}`),
   deleteConversation: (uuid: string) => del(`/api/conversations/${uuid}`),
-  searchConversations: (query: string, projectUuid?: string) =>
-    get(`/api/conversations/search?q=${encodeURIComponent(query)}${projectUuid ? `&project_uuid=${projectUuid}` : ''}`),
+  searchConversations: (query: string, projectUuid?: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (projectUuid) params.set('project_uuid', projectUuid);
+    return get(`/api/conversations/search?${params.toString()}`);
+  },
   switchConversation: (uuid: string) => post(`/api/conversations/${uuid}/switch`, {}),
   getConversationCompute: (uuid: string) => get(`/api/conversations/${uuid}/compute`),
   setConversationCompute: (uuid: string, nodeId: number | null) =>

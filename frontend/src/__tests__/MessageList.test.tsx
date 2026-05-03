@@ -53,8 +53,11 @@ describe('MessageList', () => {
       msg({ id: 'a2', role: 'assistant', content: 'Streaming now', streaming: true }),
     ];
     render(<MessageList messages={messages} />);
-    // The block cursor character \u258C should be appended
-    expect(screen.getByText(/Streaming now\u258C/)).toBeInTheDocument();
+    // Streaming renders as <pre> with text + separate <span> cursor element
+    expect(screen.getByText('Streaming now')).toBeInTheDocument();
+    // The cursor is a separate span with animate-pulse class
+    const cursor = document.querySelector('.animate-pulse.bg-primary');
+    expect(cursor).toBeInTheDocument();
   });
 
   it('renders tool call row with tool name and args', () => {

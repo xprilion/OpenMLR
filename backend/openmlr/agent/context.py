@@ -24,7 +24,7 @@ def _get_tiktoken_encoder():
 
         _tiktoken_encoder = tiktoken.get_encoding("cl100k_base")  # Works for GPT-4, Claude
         return _tiktoken_encoder
-    except (ImportError, Exception):
+    except Exception:
         return None
 
 

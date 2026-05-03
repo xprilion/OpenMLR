@@ -412,6 +412,34 @@ class LLMProvider:
         return result
 
     @staticmethod
+    def _merge_consecutive_user_messages(chat: list[dict]) -> list[dict]:
+        """Merge consecutive user messages to satisfy Anthropic's strict alternation.
+
+        Handles all combinations of string and list content blocks.
+        """
+        merged: list[dict] = []
+        for msg in chat:
+            if not (merged and merged[-1]["role"] == "user" and msg["role"] == "user"):
+                merged.append(msg)
+                continue
+
+            prev_content = merged[-1]["content"]
+            curr_content = msg["content"]
+
+            if isinstance(prev_content, list) and isinstance(curr_content, list):
+                merged[-1]["content"] = prev_content + curr_content
+            elif isinstance(prev_content, str) and isinstance(curr_content, str):
+                merged[-1]["content"] = prev_content + "\n\n" + curr_content
+            elif isinstance(prev_content, str) and isinstance(curr_content, list):
+                merged[-1]["content"] = [{"type": "text", "text": prev_content}] + curr_content
+            elif isinstance(prev_content, list) and isinstance(curr_content, str):
+                merged[-1]["content"] = prev_content + [{"type": "text", "text": curr_content}]
+            else:
+                merged.append(msg)
+
+        return merged
+
+    @staticmethod
     def _to_anthropic_messages(messages: list[dict]) -> tuple[str, list[dict]]:
         """Split system prompt and convert messages to Anthropic format."""
         system_parts = []
@@ -447,34 +475,11 @@ class LLMProvider:
                     "content": m["content"],
                 }
                 if chat and chat[-1]["role"] == "user" and isinstance(chat[-1]["content"], list):
-                    # Previous message is already a tool_result user block — merge
                     chat[-1]["content"].append(tool_block)
                 else:
                     chat.append({"role": "user", "content": [tool_block]})
-        # Post-process: merge any remaining consecutive user messages
-        # (can happen when system messages between user and tool get extracted)
-        merged: list[dict] = []
-        for msg in chat:
-            if merged and merged[-1]["role"] == "user" and msg["role"] == "user":
-                prev_content = merged[-1]["content"]
-                curr_content = msg["content"]
-                # Merge list + list
-                if isinstance(prev_content, list) and isinstance(curr_content, list):
-                    merged[-1]["content"] = prev_content + curr_content
-                # Merge string + string
-                elif isinstance(prev_content, str) and isinstance(curr_content, str):
-                    merged[-1]["content"] = prev_content + "\n\n" + curr_content
-                # Merge string + list or list + string: wrap string in text block
-                elif isinstance(prev_content, str) and isinstance(curr_content, list):
-                    merged[-1]["content"] = [{"type": "text", "text": prev_content}] + curr_content
-                elif isinstance(prev_content, list) and isinstance(curr_content, str):
-                    merged[-1]["content"] = prev_content + [{"type": "text", "text": curr_content}]
-                else:
-                    merged.append(msg)
-            else:
-                merged.append(msg)
 
-        return "\n\n".join(system_parts), merged
+        return "\n\n".join(system_parts), LLMProvider._merge_consecutive_user_messages(chat)
 
     @staticmethod
     def _anthropic_client(config: AgentConfig):

@@ -120,6 +120,124 @@ async def _save_memory(target: str, entries: list[str], session, user_id: int, d
     await ops.set_user_setting(db, user_id, "memory", key, {"content": content})
 
 
+async def _action_add(
+    target: str,
+    content: str,
+    entries: list[str],
+    total_chars: int,
+    char_limit: int,
+    session,
+    user_id: int,
+    db,
+) -> tuple[str, bool]:
+    """Handle memory 'add' action."""
+    if not content:
+        return "Error: 'content' is required for add action.", False
+
+    is_safe, threat = _scan_memory_content(content)
+    if not is_safe:
+        return f"Memory entry blocked: detected {threat} pattern.", False
+
+    if content.strip() in entries:
+        return "Entry already exists (no duplicate added).", True
+
+    new_total = total_chars + len(content.strip())
+    if new_total > char_limit:
+        entry_list = "\n".join(f"  - {e[:80]}..." if len(e) > 80 else f"  - {e}" for e in entries)
+        return (
+            f"Memory at {total_chars}/{char_limit} chars. "
+            f"Adding this entry ({len(content.strip())} chars) would exceed the limit.\n"
+            f"Replace or remove existing entries first.\n\n"
+            f"Current entries:\n{entry_list}\n\n"
+            f"Usage: {total_chars}/{char_limit}"
+        ), False
+
+    entries.append(content.strip())
+    await _save_memory(target, entries, session, user_id, db)
+    new_total = sum(len(e) for e in entries)
+    return f"Added to {target} memory. Usage: {new_total}/{char_limit} chars.", True
+
+
+def _find_unique_match(entries: list[str], old_text: str) -> tuple[list[int], str | None]:
+    """Find entries matching old_text. Returns (matches, error_message)."""
+    matches = [i for i, e in enumerate(entries) if old_text in e]
+    if len(matches) == 0:
+        return matches, f"No entry matching '{old_text}' found."
+    if len(matches) > 1:
+        return matches, (
+            f"Found {len(matches)} entries matching '{old_text}'. "
+            f"Provide a more specific substring."
+        )
+    return matches, None
+
+
+async def _action_replace(
+    target: str,
+    content: str,
+    old_text: str,
+    entries: list[str],
+    total_chars: int,
+    char_limit: int,
+    session,
+    user_id: int,
+    db,
+) -> tuple[str, bool]:
+    """Handle memory 'replace' action."""
+    if not old_text:
+        return "Error: 'old_text' is required for replace action.", False
+    if not content:
+        return "Error: 'content' is required for replace action.", False
+
+    is_safe, threat = _scan_memory_content(content)
+    if not is_safe:
+        return f"Memory entry blocked: detected {threat} pattern.", False
+
+    matches, error = _find_unique_match(entries, old_text)
+    if error:
+        return error, False
+
+    idx = matches[0]
+    old_entry_len = len(entries[idx])
+    new_entry = content.strip()
+    new_total = total_chars - old_entry_len + len(new_entry)
+    if new_total > char_limit:
+        return (
+            f"Replacement would exceed limit ({new_total}/{char_limit} chars). "
+            f"Use a shorter entry or remove other entries first."
+        ), False
+
+    entries[idx] = new_entry
+    await _save_memory(target, entries, session, user_id, db)
+    new_total = sum(len(e) for e in entries)
+    return f"Replaced entry in {target} memory. Usage: {new_total}/{char_limit} chars.", True
+
+
+async def _action_remove(
+    target: str,
+    old_text: str,
+    entries: list[str],
+    char_limit: int,
+    session,
+    user_id: int,
+    db,
+) -> tuple[str, bool]:
+    """Handle memory 'remove' action."""
+    if not old_text:
+        return "Error: 'old_text' is required for remove action.", False
+
+    matches, error = _find_unique_match(entries, old_text)
+    if error:
+        return error, False
+
+    removed = entries.pop(matches[0])
+    await _save_memory(target, entries, session, user_id, db)
+    new_total = sum(len(e) for e in entries)
+    return (
+        f"Removed from {target} memory: '{removed[:60]}...'. Usage: {new_total}/{char_limit} chars.",
+        True,
+    )
+
+
 async def _handle_memory(
     action: str,
     target: str = "project",
@@ -130,7 +248,7 @@ async def _handle_memory(
     db=None,
     **kwargs,
 ) -> tuple[str, bool]:
-    """Handle memory tool actions: add, replace, remove."""
+    """Handle memory tool actions by dispatching to action-specific functions."""
     if target not in MEMORY_LIMITS:
         return f"Invalid target '{target}'. Use 'project' or 'user'.", False
 
@@ -141,96 +259,39 @@ async def _handle_memory(
     entries, total_chars = await _load_memory(target, session, user_id, db)
 
     if action == "add":
-        if not content:
-            return "Error: 'content' is required for add action.", False
-
-        # Security scan
-        is_safe, threat = _scan_memory_content(content)
-        if not is_safe:
-            return f"Memory entry blocked: detected {threat} pattern.", False
-
-        # Duplicate check
-        if content.strip() in entries:
-            return "Entry already exists (no duplicate added).", True
-
-        # Check capacity
-        new_total = total_chars + len(content.strip())
-        if new_total > char_limit:
-            entry_list = "\n".join(
-                f"  - {e[:80]}..." if len(e) > 80 else f"  - {e}" for e in entries
-            )
-            return (
-                f"Memory at {total_chars}/{char_limit} chars. "
-                f"Adding this entry ({len(content.strip())} chars) would exceed the limit.\n"
-                f"Replace or remove existing entries first.\n\n"
-                f"Current entries:\n{entry_list}\n\n"
-                f"Usage: {total_chars}/{char_limit}"
-            ), False
-
-        entries.append(content.strip())
-        await _save_memory(target, entries, session, user_id, db)
-        new_total = sum(len(e) for e in entries)
-        return f"Added to {target} memory. Usage: {new_total}/{char_limit} chars.", True
-
-    elif action == "replace":
-        if not old_text:
-            return "Error: 'old_text' is required for replace action.", False
-        if not content:
-            return "Error: 'content' is required for replace action.", False
-
-        # Security scan on new content
-        is_safe, threat = _scan_memory_content(content)
-        if not is_safe:
-            return f"Memory entry blocked: detected {threat} pattern.", False
-
-        # Find matching entry by substring
-        matches = [i for i, e in enumerate(entries) if old_text in e]
-        if len(matches) == 0:
-            return f"No entry matching '{old_text}' found.", False
-        if len(matches) > 1:
-            return (
-                f"Found {len(matches)} entries matching '{old_text}'. Provide a more specific substring.",
-                False,
-            )
-
-        idx = matches[0]
-        old_entry_len = len(entries[idx])
-        new_entry = content.strip()
-        new_total = total_chars - old_entry_len + len(new_entry)
-        if new_total > char_limit:
-            return (
-                f"Replacement would exceed limit ({new_total}/{char_limit} chars). "
-                f"Use a shorter entry or remove other entries first."
-            ), False
-
-        entries[idx] = new_entry
-        await _save_memory(target, entries, session, user_id, db)
-        new_total = sum(len(e) for e in entries)
-        return f"Replaced entry in {target} memory. Usage: {new_total}/{char_limit} chars.", True
-
-    elif action == "remove":
-        if not old_text:
-            return "Error: 'old_text' is required for remove action.", False
-
-        matches = [i for i, e in enumerate(entries) if old_text in e]
-        if len(matches) == 0:
-            return f"No entry matching '{old_text}' found.", False
-        if len(matches) > 1:
-            return (
-                f"Found {len(matches)} entries matching '{old_text}'. Provide a more specific substring.",
-                False,
-            )
-
-        removed = entries.pop(matches[0])
-        await _save_memory(target, entries, session, user_id, db)
-        new_total = sum(len(e) for e in entries)
-        return (
-            f"Removed from {target} memory: '{removed[:60]}...'. Usage: {new_total}/{char_limit} chars.",
-            True,
+        return await _action_add(
+            target,
+            content,
+            entries,
+            total_chars,
+            char_limit,
+            session,
+            user_id,
+            db,
         )
-
-    else:
-        return f"Unknown action '{action}'. Use 'add', 'replace', or 'remove'.", False
+    if action == "replace":
+        return await _action_replace(
+            target,
+            content,
+            old_text,
+            entries,
+            total_chars,
+            char_limit,
+            session,
+            user_id,
+            db,
+        )
+    if action == "remove":
+        return await _action_remove(
+            target,
+            old_text,
+            entries,
+            char_limit,
+            session,
+            user_id,
+            db,
+        )
+    return f"Unknown action '{action}'. Use 'add', 'replace', or 'remove'.", False
 
 
 def create_memory_tool() -> ToolSpec:
