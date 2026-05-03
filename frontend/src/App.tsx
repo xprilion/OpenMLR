@@ -480,12 +480,50 @@ function ChatUI({
           return [...prev, { id: nextId(), role: 'system', content: '::thinking::' }];
         });
         break;
+      case 'thinking_chunk': {
+        const tchunk = data?.chunk || '';
+        if (!tchunk) break;
+        setMessages((prev) => {
+          // Remove plain ::thinking:: indicator if present
+          let msgs = prev;
+          if (msgs.length > 0 && msgs[msgs.length - 1].content === '::thinking::') msgs = msgs.slice(0, -1);
+          // Append to existing thinking message or create new one
+          const last = msgs[msgs.length - 1];
+          if (last?.role === 'system' && last.content === '::thinking_content::') {
+            const updated = [...msgs];
+            updated[updated.length - 1] = { ...last, thinking: (last.thinking || '') + tchunk };
+            return updated;
+          }
+          return [...msgs, { id: nextId(), role: 'system', content: '::thinking_content::', thinking: tchunk }];
+        });
+        break;
+      }
+      case 'thinking_end': {
+        const duration = data?.duration_seconds || 0;
+        setMessages((prev) => {
+          const idx = findLastIndex(prev, (m: Message) => m.role === 'system' && m.content === '::thinking_content::');
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], thinkingDuration: duration };
+            return updated;
+          }
+          return prev;
+        });
+        break;
+      }
       case 'assistant_chunk': {
         const chunk = data?.chunk || data?.content || '';
         if (!chunk) break;
         setMessages((prev) => {
           let msgs = prev;
+          // Remove plain ::thinking:: indicator if present
           if (msgs.length > 0 && msgs[msgs.length - 1].content === '::thinking::') msgs = msgs.slice(0, -1);
+          // Collapse thinking block when reply starts
+          const thinkIdx = findLastIndex(msgs, (m: Message) => m.role === 'system' && m.content === '::thinking_content::' && !m.thinkingCollapsed);
+          if (thinkIdx >= 0) {
+            msgs = [...msgs];
+            msgs[thinkIdx] = { ...msgs[thinkIdx], thinkingCollapsed: true };
+          }
           const last = msgs[msgs.length - 1];
           if (last?.role === 'assistant' && last.streaming) {
             const updated = [...msgs]; updated[updated.length - 1] = { ...last, content: last.content + chunk }; return updated;
@@ -512,7 +550,13 @@ function ChatUI({
         break;
       case 'tool_call':
         setMessages((prev) => {
-          const msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+          let msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+          // Collapse thinking block when tool call arrives
+          const thinkIdx = findLastIndex(msgs, (m: Message) => m.role === 'system' && m.content === '::thinking_content::' && !m.thinkingCollapsed);
+          if (thinkIdx >= 0) {
+            msgs = [...msgs];
+            msgs[thinkIdx] = { ...msgs[thinkIdx], thinkingCollapsed: true };
+          }
           return [...msgs, { id: nextId(), role: 'tool', content: '', metadata: { tool: data?.tool ?? '', tool_call_id: data?.id, args: typeof data?.arguments === 'string' ? data.arguments.slice(0, 120) : JSON.stringify(data?.arguments ?? {}).slice(0, 120) } }];
         });
         break;
@@ -608,7 +652,11 @@ function ChatUI({
         // Cancel any pending job_complete reload — SSE events already updated state
         if (reloadTimerRef.current) { clearTimeout(reloadTimerRef.current); reloadTimerRef.current = null; }
         setMessages((prev) => {
-          const c = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+          // Remove plain thinking indicator, collapse any uncollapsed thinking blocks
+          const c = prev
+            .filter((m) => !(m.role === 'system' && m.content === '::thinking::'))
+            .map((m) => (m.role === 'system' && m.content === '::thinking_content::' && !m.thinkingCollapsed)
+              ? { ...m, thinkingCollapsed: true } : m);
           const last = c[c.length - 1];
           setCurrentConvStatus(last?.role === 'assistant' && last.content.trim().endsWith('?') ? 'waiting_input' : 'idle');
           return c;
