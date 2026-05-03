@@ -185,15 +185,11 @@ export function Terminal({ projectUuid, visible, onConnectionChange }: Props) {
     };
   }, []);
 
-  if (!visible) {
-    return null;
-  }
-
   return (
     <div
       className={`bg-[#0d0d0d] flex flex-col ${
         maximized ? 'fixed inset-0 z-50' : 'flex-1 h-full'
-      }`}
+      } ${visible ? '' : 'hidden'}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] border-b border-border shrink-0">

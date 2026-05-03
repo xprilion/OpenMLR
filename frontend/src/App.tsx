@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Copy, Check, Menu, PanelRightOpen } from 'lucide-react';
 import { ComputeSelector } from './components/ComputeSelector';
@@ -19,7 +19,7 @@ import { ReportDrawer } from './components/ReportDrawer';
 import { TodoReviewDrawer } from './components/TodoReviewDrawer';
 import { AuthGuard } from './components/AuthGuard';
 import { OnboardingModal } from './components/OnboardingModal';
-import { Terminal } from './components/Terminal';
+const TerminalPanel = lazy(() => import('./components/Terminal').then(m => ({ default: m.Terminal })));
 import { ProjectModal } from './components/ProjectModal';
 import { ProjectManageModal } from './components/ProjectManageModal';
 import { SettingsPage } from './components/SettingsPage';
@@ -28,7 +28,7 @@ import { AgentSettings } from './components/settings/AgentSettings';
 import { McpSettings } from './components/settings/McpSettings';
 import { ComputeSettings } from './components/settings/ComputeSettings';
 import { WritingSettings } from './components/settings/WritingSettings';
-import { EditorPanel } from './components/EditorPanel';
+const EditorPanel = lazy(() => import('./components/EditorPanel').then(m => ({ default: m.EditorPanel })));
 import { ImageViewer } from './components/ImageViewer';
 
 let msgId = 0;
@@ -146,6 +146,7 @@ function ChatUI({
   const [mcpServers, setMcpServers] = useState<McpServerStatus[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [conversationLoading, setConversationLoading] = useState(false);
 
   // Refs to always have current values in SSE callback (avoids stale closure)
   const currentConvUuidRef = useRef<string | null>(currentConvUuid);
@@ -311,6 +312,9 @@ function ChatUI({
     const seq = ++switchSeqRef.current;
     // Cancel any pending reload timer from a previous conversation's job_complete
     if (reloadTimerRef.current) { clearTimeout(reloadTimerRef.current); reloadTimerRef.current = null; }
+    // Show loading skeleton immediately
+    setConversationLoading(true);
+    setMessages([]);
     try {
       await api.switchConversation(uuid);
       if (seq !== switchSeqRef.current) return; // stale — a newer switch started
@@ -346,16 +350,18 @@ function ChatUI({
 
       // Load active compute for this conversation
       if (seq === switchSeqRef.current) await loadActiveCompute(uuid);
-    } catch { /* */ }
+    } catch { /* */ } finally {
+      if (seq === switchSeqRef.current) setConversationLoading(false);
+    }
   };
 
-  const handleSwitchConversation = (uuid: string) => {
+  const handleSwitchConversation = useCallback((uuid: string) => {
     // Only navigate; the routeUuid useEffect will trigger switchConv,
     // avoiding the previous double-call race condition
     navigate(`/${uuid}`, { replace: true });
-  };
+  }, [navigate]);
 
-  const handleNewConversation = async () => {
+  const handleNewConversation = useCallback(async () => {
     if (!activeProject) {
       setShowProjectModal(true);
       return;
@@ -372,9 +378,9 @@ function ChatUI({
       await loadActiveCompute(conv.uuid);
       navigate(`/${conv.uuid}`, { replace: true });
     } catch { /* */ }
-  };
+  }, [activeProject, navigate, loadActiveCompute, setModel]);
 
-  const handleDeleteConversation = async (uuid: string) => {
+  const handleDeleteConversation = useCallback(async (uuid: string) => {
     try {
       await api.deleteConversation(uuid);
       setConversations((prev) => prev.filter((c) => c.uuid !== uuid));
@@ -386,7 +392,7 @@ function ChatUI({
         navigate('/', { replace: true });
       }
     } catch { /* */ }
-  };
+  }, [currentConvUuid, navigate]);
 
   const handleComputeChange = useCallback(async (nodeId: number | null) => {
     if (!currentConvUuid) return;
@@ -737,6 +743,15 @@ function ChatUI({
   const effectiveProcessing = isProcessing || jobProcessing;
   const effectiveTurnActive = agentTurnActive || jobProcessing;
 
+  // Memoized callbacks for child components (prevents React.memo invalidation)
+  const handleMobileSidebarClose = useCallback(() => setMobileSidebarOpen(false), []);
+  const handleStop = useCallback(() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }, []);
+  const handleRightPanelToggle = useCallback(() => setRightPanelOpen((v) => !v), []);
+  const handleMobileRightClose = useCallback(() => setMobileRightOpen(false), []);
+  const handleViewReport = useCallback((r: Resource) => setViewingReport(r), []);
+  const handleSearchBudgetChange = useCallback((newMax: number) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev), []);
+  const handleCloseViewingReport = useCallback(() => setViewingReport(null), []);
+
   const modelLabel = contextUsage
     ? `${model || 'select model'} (${(contextUsage.used / 1000).toFixed(0)}k/${(contextUsage.max / 1000).toFixed(0)}k)`
     : (model || 'select model');
@@ -795,7 +810,7 @@ function ChatUI({
           mobileOpen={mobileSidebarOpen}
           onSwitch={handleSwitchConversation} onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
-          onMobileClose={() => setMobileSidebarOpen(false)}
+          onMobileClose={handleMobileSidebarClose}
         />
         
         <div 
@@ -803,8 +818,10 @@ function ChatUI({
           style={{ paddingRight: rightPanelOpen ? '288px' : '48px' }}
         >
           {/* Agent / Editor / Terminal tab bar */}
-          <div className="flex items-center border-b border-border shrink-0 bg-surface">
+          <div role="tablist" className="flex items-center border-b border-border shrink-0 bg-surface">
             <button
+              role="tab"
+              aria-selected={mainTab === 'agent'}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 mainTab === 'agent'
                   ? 'text-primary border-b-2 border-primary'
@@ -815,6 +832,8 @@ function ChatUI({
               Agent
             </button>
             <button
+              role="tab"
+              aria-selected={mainTab === 'editor'}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 mainTab === 'editor'
                   ? 'text-primary border-b-2 border-primary'
@@ -830,6 +849,8 @@ function ChatUI({
               )}
             </button>
             <button
+              role="tab"
+              aria-selected={mainTab === 'terminal'}
               className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                 mainTab === 'terminal'
                   ? 'text-primary border-b-2 border-primary'
@@ -864,76 +885,87 @@ function ChatUI({
           </div>
 
           {/* Agent tab */}
-          {mainTab === 'agent' && (
-            <div className="flex flex-col flex-1 overflow-hidden relative">
-              {/* Empty state */}
-              {messages.length === 0 && !effectiveProcessing && (
-                <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
-                  <div className="relative mb-8">
-                    <div
-                      className="absolute inset-0 rounded-full animate-[hero-glow_6s_ease-in-out_infinite]"
-                      style={{
-                        background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
-                        transform: 'scale(2.5)',
-                      }}
-                    />
-                    <img
-                      src="/logo-512.png"
-                      alt="OpenMLR"
-                      className="relative w-24 h-24 sm:w-32 sm:h-32 select-none pointer-events-none animate-[hero-float_6s_ease-in-out_infinite]"
-                      style={{ opacity: 0.35 }}
-                      draggable={false}
-                    />
-                  </div>
-                  <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
+          <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden relative ${mainTab === 'agent' ? '' : 'hidden'}`}>
+            {/* Empty state */}
+            {messages.length === 0 && !effectiveProcessing && (
+              <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
+                <div className="relative mb-8">
+                  <div
+                    className="absolute inset-0 rounded-full animate-[hero-glow_6s_ease-in-out_infinite]"
+                    style={{
+                      background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
+                      transform: 'scale(2.5)',
+                    }}
+                  />
+                  <img
+                    src="/logo-512.png"
+                    alt="OpenMLR"
+                    className="relative w-24 h-24 sm:w-32 sm:h-32 select-none pointer-events-none animate-[hero-float_6s_ease-in-out_infinite]"
+                    style={{ opacity: 0.35 }}
+                    draggable={false}
+                  />
                 </div>
-              )}
-              
-              <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} />
-              {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
-              {todoApprovalPayload && <TodoReviewDrawer payload={todoApprovalPayload} onDone={() => { 
-                setTodoApprovalPayload(null); 
-                setCurrentConvStatus('processing');
-              }} onClose={() => { setTodoApprovalPayload(null); setCurrentConvStatus('idle'); }} />}
-              {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
-                setQuestionsPayload(null); 
-                setCurrentConvStatus('processing');
-                setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]);
-                if (switchToExecute) setInputMode('execute');
-              }} onClose={() => setQuestionsPayload(null)} />}
-              <InputArea 
-                disabled={effectiveProcessing} 
-                showStop={effectiveTurnActive}
-                mode={inputMode}
-                onModeChange={setInputMode}
-                text={inputText}
-                onTextChange={setInputText}
-                onSend={sendMessage} 
-                onStop={() => { api.interrupt().catch(() => {}); setCurrentConvStatus('idle'); }}
-                mcpServers={mcpServers}
-                projectUuid={activeProject?.uuid ?? null}
-              />
-            </div>
-          )}
+                <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
+              </div>
+            )}
+            
+            {conversationLoading ? (
+              <div className="flex-1 flex flex-col gap-4 p-6 animate-pulse">
+                <div className="h-4 bg-surface-hover rounded w-3/4" />
+                <div className="h-4 bg-surface-hover rounded w-1/2" />
+                <div className="h-4 bg-surface-hover rounded w-5/6" />
+                <div className="h-4 bg-surface-hover rounded w-2/3" />
+              </div>
+            ) : (
+              <MessageList messages={messages} hasDrawerOpen={!!questionsPayload} visible={mainTab === 'agent'} />
+            )}
+            {approvalEvent && <ApprovalModal event={approvalEvent} onClose={() => setApprovalEvent(null)} />}
+            {todoApprovalPayload && <TodoReviewDrawer payload={todoApprovalPayload} onDone={() => { 
+              setTodoApprovalPayload(null); 
+              setCurrentConvStatus('processing');
+            }} onClose={() => { setTodoApprovalPayload(null); setCurrentConvStatus('idle'); }} />}
+            {questionsPayload && <QuestionDrawer payload={questionsPayload} onDone={(summary, switchToExecute) => { 
+              setQuestionsPayload(null); 
+              setCurrentConvStatus('processing');
+              setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: `Answered:\n${summary}` }]);
+              if (switchToExecute) setInputMode('execute');
+            }} onClose={() => setQuestionsPayload(null)} />}
+            <InputArea 
+              disabled={effectiveProcessing} 
+              showStop={effectiveTurnActive}
+              mode={inputMode}
+              onModeChange={setInputMode}
+              text={inputText}
+              onTextChange={setInputText}
+              onSend={sendMessage} 
+              onStop={handleStop}
+              mcpServers={mcpServers}
+              projectUuid={activeProject?.uuid ?? null}
+            />
+          </div>
 
           {/* Editor tab */}
-          {mainTab === 'editor' && (
-            <EditorPanel
-              openFiles={openFiles}
-              activeFilePath={activeFilePath}
-              onActivateFile={setActiveFilePath}
-              onCloseFile={handleCloseFile}
-            />
-          )}
+          <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'editor' ? '' : 'hidden'}`}>
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading...</div>}>
+              <EditorPanel
+                openFiles={openFiles}
+                activeFilePath={activeFilePath}
+                onActivateFile={setActiveFilePath}
+                onCloseFile={handleCloseFile}
+              />
+            </Suspense>
+          </div>
 
           {/* Terminal tab */}
-          {mainTab === 'terminal' && (
-            <Terminal
-              projectUuid={activeProject?.uuid || null}
-              visible={mainTab === 'terminal'}
-              onConnectionChange={setTerminalConnected}
-            />
-          )}
+          <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'terminal' ? '' : 'hidden'}`}>
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading...</div>}>
+              <TerminalPanel
+                projectUuid={activeProject?.uuid || null}
+                visible={mainTab === 'terminal'}
+                onConnectionChange={setTerminalConnected}
+              />
+            </Suspense>
+          </div>
 
           {/* Image tab */}
           {mainTab === 'image' && imageTab && (
@@ -945,10 +977,10 @@ function ChatUI({
         </div>
         
         {/* RightPanel is fixed position, doesn't affect flex layout */}
-        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} mcpServers={mcpServers} visible={rightPanelOpen} mobileOpen={mobileRightOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={() => setRightPanelOpen((v) => !v)} onMobileClose={() => setMobileRightOpen(false)} onViewReport={(r) => setViewingReport(r)} onFileOpen={handleFileOpen} onSearchBudgetChange={(newMax) => setSearchBudget((prev) => prev ? { ...prev, max: newMax } : prev)} />
+        <RightPanel tasks={tasks} resources={resources} contextUsage={contextUsage} searchBudget={searchBudget} mcpServers={mcpServers} visible={rightPanelOpen} mobileOpen={mobileRightOpen} projectUuid={activeProject?.uuid || null} fileTreeRefreshKey={fileTreeRefreshKey} onToggle={handleRightPanelToggle} onMobileClose={handleMobileRightClose} onViewReport={handleViewReport} onFileOpen={handleFileOpen} onSearchBudgetChange={handleSearchBudgetChange} />
       </div>
       
-      {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={() => setViewingReport(null)} />}
+      {viewingReport && <ReportDrawer reportId={viewingReport.id || ''} title={viewingReport.title} cachedContent={viewingReport.content} onClose={handleCloseViewingReport} />}
       {showProjectModal && <ProjectModal onClose={() => setShowProjectModal(false)} onCreate={async (p) => { 
         setProjects((prev) => [p, ...prev]); 
         setActiveProject(p);

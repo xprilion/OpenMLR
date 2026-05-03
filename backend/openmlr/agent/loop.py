@@ -11,6 +11,18 @@ from .session import Session
 from .types import AgentEvent, LLMResult, Message, OpType, Submission, ToolCall
 
 
+def _append_hint_to_last_user_msg(messages: list[Message], hint: str) -> None:
+    """Append a system hint to the last user message instead of injecting a
+    separate system role message.  This avoids breaking Anthropic's strict
+    user/assistant alternation requirement."""
+    for msg in reversed(messages):
+        if msg.role == "user":
+            msg.content = (msg.content or "") + f"\n\n{hint}"
+            return
+    # No user message found — this shouldn't happen in normal flow, but
+    # if it does, just skip the hint rather than injecting a broken message.
+
+
 async def submission_loop(session: Session, tool_router) -> None:
     """Top-level loop: process submissions from the queue indefinitely."""
     await session.emit(AgentEvent(event_type="ready", data={"status": "ready"}))
@@ -60,7 +72,8 @@ async def _run_agent(
         effective_mode = session.current_mode  # preserved from the last explicit mode
     tool_router.set_mode(effective_mode)
 
-    # Inject per-message mode hint (short reinforcement of system prompt rules)
+    # Inject per-message mode hint as part of the user message
+    # (using role="system" breaks Anthropic's strict user/assistant alternation)
     mode_hint = f"[Mode: {effective_mode.upper()}] " + (
         "Plan only — ask questions, create plan. "
         "Use search/papers only for quick feasibility checks. "
@@ -68,9 +81,11 @@ async def _run_agent(
         if effective_mode == "plan"
         else "Execute the plan — do the work, no questions. All tools except ask_user."
     )
-    session.context_manager.add_message(Message(role="system", content=mode_hint))
-
-    session.context_manager.add_message(Message(role="user", content=user_message))
+    # Only add the user message if there's actual content (skip empty
+    # strings from approval continuations to avoid junk messages)
+    if user_message:
+        user_content = f"{mode_hint}\n\n{user_message}"
+        session.context_manager.add_message(Message(role="user", content=user_content))
 
     await session.emit(AgentEvent(event_type="processing", data={"status": "thinking..."}))
 
@@ -82,6 +97,14 @@ async def _run_agent(
 
             # Auto-compaction check
             if session.context_manager.needs_compaction():
+                # Pre-compaction knowledge flush nudge — append to last user msg
+                # (only once per compaction, not every iteration)
+                _append_hint_to_last_user_msg(
+                    session.context_manager.messages,
+                    "[URGENT: Context compaction imminent] Save any unsaved findings, "
+                    "paper references, or research decisions NOW using `memory`, "
+                    "`workspace knowledge_add`, or `workspace note` before context is compressed.",
+                )
                 await session.emit(
                     AgentEvent(
                         event_type="tool_log",
@@ -99,10 +122,25 @@ async def _run_agent(
                         )
                     )
 
-            # Doom loop detection
+            # Inject at most ONE hint per iteration to avoid accumulating
+            # multiple hints on the same user message across loop iterations.
+            # Priority: doom loop > knowledge nudge (compaction nudge is above).
+            hint_injected = False
+
+            # Doom loop detection — append hint to last user msg
             doom_msg = detect_doom_loop(session.context_manager.messages)
             if doom_msg:
-                session.context_manager.add_message(Message(role="system", content=doom_msg))
+                _append_hint_to_last_user_msg(session.context_manager.messages, doom_msg)
+                hint_injected = True
+
+            # Knowledge persistence nudge (every N turns, skip if doom hint already added)
+            if not hint_injected and session.turns_since_nudge >= session.nudge_interval:
+                session.turns_since_nudge = 0
+                _append_hint_to_last_user_msg(
+                    session.context_manager.messages,
+                    "[Knowledge nudge] Consider saving recent findings via `memory`, "
+                    "`workspace knowledge_add`, or `workspace note`.",
+                )
 
             # Emit context usage for frontend gauge
             await session.emit(
@@ -136,15 +174,11 @@ async def _run_agent(
 
             # Handle finish_reason == "length" with truncated tool calls
             if result.finish_reason == "length" and result.tool_calls:
-                # Drop truncated tool calls and hint
-                session.context_manager.add_message(
-                    Message(
-                        role="system",
-                        content=(
-                            "[System: Your response was truncated due to length. "
-                            "Please be more concise and focus on essential tool calls only.]"
-                        ),
-                    )
+                # Drop truncated tool calls and hint — append to last user msg
+                # (using role="system" gets hoisted into Anthropic system prompt)
+                _append_hint_to_last_user_msg(
+                    session.context_manager.messages,
+                    "[System: Your response was truncated. Be more concise and focus on essential tool calls only.]",
                 )
                 continue
 
@@ -261,6 +295,8 @@ async def _run_agent(
         )
     finally:
         session.turn_count += 1
+        # Self-nudge: remind agent to persist knowledge periodically
+        session.turns_since_nudge += 1
         # Emit final context usage
         await session.emit(
             AgentEvent(

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message, SubAgentChild } from '../types';
@@ -6,6 +6,7 @@ import type { Message, SubAgentChild } from '../types';
 interface Props {
   messages: Message[];
   hasDrawerOpen?: boolean; // When QuestionDrawer is visible
+  visible?: boolean; // Whether the agent tab is currently visible
 }
 
 /** Format seconds into human-readable duration */
@@ -124,7 +125,97 @@ function SubAgentBlock({ msg, expanded, onToggle }: { msg: Message; expanded: bo
   );
 }
 
-export function MessageList({ messages, hasDrawerOpen }: Props) {
+/** Individual message row — memoized to skip re-renders when other messages update */
+const MessageRow = React.memo(function MessageRow({ msg, isExpanded, onToggle }: {
+  msg: Message;
+  isExpanded: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const handleToggle = useCallback(() => onToggle(msg.id), [onToggle, msg.id]);
+  return (
+    <div className="flex animate-fade-in">
+      {/* User messages */}
+      {msg.role === 'user' && (
+        <div className={`bg-surface text-text py-3 px-4 max-w-[90%] leading-relaxed whitespace-pre-wrap mt-4 border-l-[3px] ${
+          msg.metadata?.tool === 'execute' ? 'border-l-primary' : 'border-l-warning'
+        }`}>
+          {msg.metadata?.tool && (
+            <span className={`inline-block text-[10px] font-bold uppercase tracking-wide mr-2 px-1.5 py-0.5 rounded align-middle ${
+              msg.metadata.tool === 'execute' 
+                ? 'text-primary bg-primary/10' 
+                : 'text-warning bg-warning/10'
+            }`}>
+              {msg.metadata.tool}
+            </span>
+          )}
+          {msg.content}
+        </div>
+      )}
+
+      {/* Assistant messages — defer markdown while streaming for performance */}
+      {msg.role === 'assistant' && (
+        <div className="prose max-w-[95%] mt-1">
+          {msg.streaming ? (
+            <pre className="whitespace-pre-wrap font-sans text-text leading-relaxed m-0 p-0 bg-transparent prose-sm">
+              {msg.content}
+              <span className="inline-block w-[2px] h-[1em] bg-primary animate-pulse align-middle ml-0.5" />
+            </pre>
+          ) : (
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {msg.content}
+            </ReactMarkdown>
+          )}
+        </div>
+      )}
+
+      {/* Tool calls */}
+      {msg.role === 'tool' && !msg.metadata?.isSubAgent && (
+        <ToolCallRow
+          msg={msg}
+          expanded={isExpanded}
+          onToggle={handleToggle}
+        />
+      )}
+
+      {/* Sub-agent blocks */}
+      {msg.role === 'tool' && msg.metadata?.isSubAgent && (
+        <SubAgentBlock
+          msg={msg}
+          expanded={isExpanded}
+          onToggle={handleToggle}
+        />
+      )}
+
+      {/* Thinking indicator */}
+      {msg.role === 'system' && msg.content === '::thinking::' && (
+        <div className="flex items-center gap-3 py-3 text-text-dim">
+          <span className="flex gap-1">
+            <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </span>
+          <span className="text-sm">Thinking...</span>
+        </div>
+      )}
+
+      {/* System messages */}
+      {msg.role === 'system' && msg.content !== '::thinking::' && (
+        <div className="text-sm text-text-dim italic py-2 px-3 bg-surface/50 rounded-md">
+          {msg.content}
+        </div>
+      )}
+
+      {/* Error messages */}
+      {msg.role === 'error' && (
+        <div className="text-sm text-error bg-error-bg py-3 px-4 rounded-md border border-error/30">
+          {msg.content}
+        </div>
+      )}
+    </div>
+  );
+});
+
+export const MessageList = React.memo(function MessageList({ messages, hasDrawerOpen, visible = true }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   // Track message count to detect new messages (not layout changes)
@@ -153,14 +244,25 @@ export function MessageList({ messages, hasDrawerOpen }: Props) {
     prevMessageCountRef.current = currentCount;
   }, [messages.length]);
 
-  const toggle = (id: string) => {
+  // Scroll to bottom when the agent tab becomes visible again
+  // (scroll events during display:none have no effect)
+  const prevVisibleRef = useRef(visible);
+  useEffect(() => {
+    if (visible && !prevVisibleRef.current) {
+      const container = containerRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    }
+    prevVisibleRef.current = visible;
+  }, [visible]);
+
+  const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
 
   return (
     <div 
@@ -169,85 +271,13 @@ export function MessageList({ messages, hasDrawerOpen }: Props) {
       style={{ paddingBottom: hasDrawerOpen ? '280px' : undefined }}
     >
       {messages.map((msg) => (
-        <div key={msg.id} className="flex animate-fade-in">
-          {/* User messages */}
-          {msg.role === 'user' && (
-            <div className={`bg-surface text-text py-3 px-4 max-w-[90%] leading-relaxed whitespace-pre-wrap mt-4 border-l-[3px] ${
-              msg.metadata?.tool === 'execute' ? 'border-l-primary' : 'border-l-warning'
-            }`}>
-              {msg.metadata?.tool && (
-                <span className={`inline-block text-[10px] font-bold uppercase tracking-wide mr-2 px-1.5 py-0.5 rounded align-middle ${
-                  msg.metadata.tool === 'execute' 
-                    ? 'text-primary bg-primary/10' 
-                    : 'text-warning bg-warning/10'
-                }`}>
-                  {msg.metadata.tool}
-                </span>
-              )}
-              {msg.content}
-            </div>
-          )}
-
-          {/* Assistant messages */}
-          {msg.role === 'assistant' && (
-            <div className="prose max-w-[95%] mt-1">
-              {msg.streaming ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content + '\u258C'}
-                </ReactMarkdown>
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown>
-              )}
-            </div>
-          )}
-
-          {/* Tool calls */}
-          {msg.role === 'tool' && !msg.metadata?.isSubAgent && (
-            <ToolCallRow
-              msg={msg}
-              expanded={expanded.has(msg.id)}
-              onToggle={() => toggle(msg.id)}
-            />
-          )}
-
-          {/* Sub-agent blocks */}
-          {msg.role === 'tool' && msg.metadata?.isSubAgent && (
-            <SubAgentBlock
-              msg={msg}
-              expanded={expanded.has(msg.id)}
-              onToggle={() => toggle(msg.id)}
-            />
-          )}
-
-          {/* Thinking indicator */}
-          {msg.role === 'system' && msg.content === '::thinking::' && (
-            <div className="flex items-center gap-3 py-3 text-text-dim">
-              <span className="flex gap-1">
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </span>
-              <span className="text-sm">Thinking...</span>
-            </div>
-          )}
-
-          {/* System messages */}
-          {msg.role === 'system' && msg.content !== '::thinking::' && (
-            <div className="text-sm text-text-dim italic py-2 px-3 bg-surface/50 rounded-md">
-              {msg.content}
-            </div>
-          )}
-
-          {/* Error messages */}
-          {msg.role === 'error' && (
-            <div className="text-sm text-error bg-error-bg py-3 px-4 rounded-md border border-error/30">
-              {msg.content}
-            </div>
-          )}
-        </div>
+        <MessageRow
+          key={msg.id}
+          msg={msg}
+          isExpanded={expanded.has(msg.id)}
+          onToggle={toggle}
+        />
       ))}
     </div>
   );
-}
+});

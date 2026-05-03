@@ -1,6 +1,9 @@
 """Session manager — manages per-conversation agent sessions."""
 
+import asyncio
 import logging
+import os
+import re
 
 from ..agent.llm import LLMProvider
 from ..agent.loop import run_agent_turn
@@ -14,6 +17,48 @@ from ..tools.registry import ToolRouter, create_tool_router
 from .event_bus import EventBus
 
 log = logging.getLogger(__name__)
+
+# Maximum character length for .openmlr.md content
+_CONTEXT_MAX_CHARS = 8000
+_CONTEXT_HEAD_CHARS = 5600
+_CONTEXT_TAIL_CHARS = 1600
+
+# Patterns that indicate potential prompt injection
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+previous\s+instructions", re.IGNORECASE),
+    re.compile(r"disregard\s+your\s+rules", re.IGNORECASE),
+    re.compile(r"system\s+prompt\s+override", re.IGNORECASE),
+    re.compile(r"curl.*\$", re.IGNORECASE),
+    re.compile(r"cat\s+\.env", re.IGNORECASE),
+]
+
+# Invisible Unicode characters (zero-width spaces and BOM)
+_INVISIBLE_CHARS = {"\u200b", "\u200c", "\u200d", "\ufeff"}
+
+
+def _read_context_file(context_path: str) -> str:
+    """Synchronous helper to read a context file (called via asyncio.to_thread)."""
+    with open(context_path, encoding="utf-8") as f:
+        return f.read()
+
+
+def _scan_context_file(content: str) -> tuple[bool, str]:
+    """Scan .openmlr.md content for potential prompt injection.
+
+    Returns (is_safe, threat_type) where threat_type describes the issue
+    if is_safe is False.
+    """
+    # Check for injection patterns
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(content):
+            return False, f"injection pattern: {pattern.pattern}"
+
+    # Check for invisible Unicode characters
+    for char in _INVISIBLE_CHARS:
+        if char in content:
+            return False, f"invisible unicode character: U+{ord(char):04X}"
+
+    return True, ""
 
 
 class ActiveSession:
@@ -162,6 +207,41 @@ class SessionManager:
                 f"Session {conversation_id}: workspace context set to {project_workspace_path}"
             )
 
+        # Load project context file (.openmlr.md) if it exists in the workspace root
+        project_context = ""
+        if project_workspace_path:
+            context_file = os.path.join(project_workspace_path, ".openmlr.md")
+            if os.path.isfile(context_file):
+                try:
+                    raw_content = await asyncio.to_thread(_read_context_file, context_file)
+
+                    # Truncate if too long: keep head + marker + tail
+                    if len(raw_content) > _CONTEXT_MAX_CHARS:
+                        raw_content = (
+                            raw_content[:_CONTEXT_HEAD_CHARS]
+                            + "\n\n[... content truncated ...]\n\n"
+                            + raw_content[-_CONTEXT_TAIL_CHARS:]
+                        )
+
+                    # Security scan
+                    is_safe, threat_type = _scan_context_file(raw_content)
+                    if not is_safe:
+                        project_context = (
+                            "[BLOCKED: .openmlr.md contained potential prompt injection. "
+                            "Content not loaded.]"
+                        )
+                        log.warning(
+                            f"Session {conversation_id}: .openmlr.md blocked — {threat_type}"
+                        )
+                    else:
+                        project_context = raw_content
+                        log.info(
+                            f"Session {conversation_id}: loaded .openmlr.md "
+                            f"({len(project_context)} chars)"
+                        )
+                except Exception as e:
+                    log.warning(f"Session {conversation_id}: failed to read .openmlr.md - {e}")
+
         # If a compute node is configured, activate it
         if effective_node:
             try:
@@ -248,12 +328,36 @@ class SessionManager:
 
             compute_env = "\n".join(lines)
 
+        # Load persistent memory for system prompt injection
+        memory_context = ""
+        if user_id and db:
+            try:
+                from ..tools.memory_tool import load_memory_for_prompt
+
+                memory_context = await load_memory_for_prompt(user_id, session, db)
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to load memory - {e}")
+
+        # Load knowledge graph context for session start
+        knowledge_context = ""
+        if project_workspace_path:
+            try:
+                from ..workspace.knowledge import KnowledgeGraph
+
+                kg = KnowledgeGraph(project_workspace_path)
+                knowledge_context = kg.get_context_for_conversation(max_tokens_approx=1500)
+            except Exception as e:
+                log.warning(f"Session {conversation_id}: failed to load knowledge context - {e}")
+
         # Build and set system prompt (after MCP tools are registered)
         session.context_manager.system_prompt = build_system_prompt(
             tool_specs=tool_router.get_raw_specs(),
             mode=mode,
             username=username,
             compute_env=compute_env,
+            project_context=project_context,
+            memory_context=memory_context,
+            knowledge_context=knowledge_context,
         )
 
         # Wire event broadcasting — inject conversation_uuid so the frontend
@@ -368,4 +472,4 @@ class SessionManager:
 
     @property
     def is_processing(self) -> bool:
-        return self._is_processing
+        return bool(self._processing)

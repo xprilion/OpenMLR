@@ -39,8 +39,14 @@ MODE_TOOL_RESTRICTIONS = {
             "compute_probe",
             # Workspace (knowledge graph, notes, search — always accessible)
             "workspace",
+            # Persistent memory (read/write quick facts — always accessible)
+            "memory",
             # Parallel file inspection (read-only)
             "inspect_files",
+            # Session search (read-only conversation history search)
+            "session_search",
+            # Process management (read-only actions: list, poll, log)
+            "process",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -436,6 +442,11 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router.register(create_writing_tool())
     router.register(create_ask_user_tool())
 
+    # Register session search tool
+    from .session_search import create_session_search_tool
+
+    router.register(create_session_search_tool())
+
     # Register compute tools
     from .compute_tools import create_compute_tools
 
@@ -445,6 +456,16 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .workspace_tools import create_workspace_tools
 
     router.register_many(create_workspace_tools())
+
+    # Register memory tool
+    from .memory_tool import create_memory_tool
+
+    router.register(create_memory_tool())
+
+    # Register process management tool
+    from .process_tool import create_process_tool
+
+    router.register(create_process_tool())
 
     # Register sandbox tools if manager provided
     if sandbox_manager:

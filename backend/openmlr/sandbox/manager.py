@@ -54,6 +54,10 @@ class SandboxManager:
             sandbox = SSHSandbox()
         elif provider == "modal":
             sandbox = ModalSandbox()
+        elif provider == "singularity":
+            from .singularity import SingularitySandbox
+
+            sandbox = SingularitySandbox()
         else:
             raise ValueError(f"Unknown sandbox provider: {provider}")
 

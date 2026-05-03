@@ -308,3 +308,31 @@ class AgentJob(Base):
 
     conversation = relationship("Conversation", back_populates="jobs")
     user = relationship("User")
+
+
+class BackgroundProcess(Base):
+    """Persistent background process tracking (survives session closure)."""
+
+    __tablename__ = "background_processes"
+
+    id = Column(Integer, primary_key=True)
+    uuid = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    command = Column(Text, nullable=False)
+    pid = Column(Integer, nullable=True)
+    host = Column(String(255), default="local", nullable=False)  # local, ssh host, etc.
+    status = Column(
+        String(20), default="running", nullable=False
+    )  # running, completed, failed, killed
+    exit_code = Column(Integer, nullable=True)
+    output_path = Column(String(1000), nullable=True)  # Path to log file
+    started_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    conversation = relationship("Conversation")
+    user = relationship("User")

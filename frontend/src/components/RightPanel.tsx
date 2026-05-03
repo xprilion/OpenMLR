@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Circle, 
   CircleDot, 
@@ -114,7 +114,7 @@ function mcpDotColor(server: McpServerStatus): string {
   return 'bg-text-dim';
 }
 
-export function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, mcpServers, visible, mobileOpen, projectUuid, fileTreeRefreshKey, onToggle, onMobileClose, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
+export const RightPanel = React.memo(function RightPanel({ tasks, resources: _resources, contextUsage, searchBudget, mcpServers, visible, mobileOpen, projectUuid, fileTreeRefreshKey, onToggle, onMobileClose, onViewReport: _onViewReport, onFileOpen, onSearchBudgetChange }: Props) {
   const [showBudgetDialog, setShowBudgetDialog] = useState(false);
 
   const done = tasks.filter((t) => t.status === 'completed').length;
@@ -320,4 +320,4 @@ export function RightPanel({ tasks, resources: _resources, contextUsage, searchB
       {panelBody}
     </aside>
   );
-}
+});

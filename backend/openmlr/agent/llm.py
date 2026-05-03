@@ -412,46 +412,81 @@ class LLMProvider:
         return result
 
     @staticmethod
+    def _merge_consecutive_user_messages(chat: list[dict]) -> list[dict]:
+        """Merge consecutive user messages to satisfy Anthropic's strict alternation.
+
+        Handles all combinations of string and list content blocks.
+        """
+        merged: list[dict] = []
+        for msg in chat:
+            if not (merged and merged[-1]["role"] == "user" and msg["role"] == "user"):
+                merged.append(msg)
+                continue
+
+            prev_content = merged[-1]["content"]
+            curr_content = msg["content"]
+
+            if isinstance(prev_content, list) and isinstance(curr_content, list):
+                merged[-1]["content"] = prev_content + curr_content
+            elif isinstance(prev_content, str) and isinstance(curr_content, str):
+                merged[-1]["content"] = prev_content + "\n\n" + curr_content
+            elif isinstance(prev_content, str) and isinstance(curr_content, list):
+                merged[-1]["content"] = [{"type": "text", "text": prev_content}] + curr_content
+            elif isinstance(prev_content, list) and isinstance(curr_content, str):
+                merged[-1]["content"] = prev_content + [{"type": "text", "text": curr_content}]
+            else:
+                merged.append(msg)
+
+        return merged
+
+    @staticmethod
+    def _convert_assistant_msg(m: dict) -> dict:
+        """Convert an assistant message to Anthropic format with tool_use blocks."""
+        content_blocks = []
+        if m.get("content"):
+            content_blocks.append({"type": "text", "text": m["content"]})
+        for tc in m.get("tool_calls", []):
+            func = tc.get("function", tc)
+            content_blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": tc.get("id", ""),
+                    "name": func.get("name", tc.get("name", "")),
+                    "input": func.get("arguments", tc.get("arguments", {})),
+                }
+            )
+        return {"role": "assistant", "content": content_blocks or m.get("content", "")}
+
+    @staticmethod
+    def _append_tool_result(chat: list[dict], m: dict) -> None:
+        """Append a tool result to the chat list, merging with previous user message if possible."""
+        tool_block = {
+            "type": "tool_result",
+            "tool_use_id": m.get("tool_call_id", ""),
+            "content": m["content"],
+        }
+        if chat and chat[-1]["role"] == "user" and isinstance(chat[-1]["content"], list):
+            chat[-1]["content"].append(tool_block)
+        else:
+            chat.append({"role": "user", "content": [tool_block]})
+
+    @staticmethod
     def _to_anthropic_messages(messages: list[dict]) -> tuple[str, list[dict]]:
         """Split system prompt and convert messages to Anthropic format."""
         system_parts = []
         chat = []
         for m in messages:
-            if m["role"] == "system":
+            role = m["role"]
+            if role == "system":
                 system_parts.append(m["content"])
-            elif m["role"] == "user":
+            elif role == "user":
                 chat.append({"role": "user", "content": m["content"]})
-            elif m["role"] == "assistant":
-                content_blocks = []
-                if m.get("content"):
-                    content_blocks.append({"type": "text", "text": m["content"]})
-                for tc in m.get("tool_calls", []):
-                    func = tc.get("function", tc)
-                    content_blocks.append(
-                        {
-                            "type": "tool_use",
-                            "id": tc.get("id", ""),
-                            "name": func.get("name", tc.get("name", "")),
-                            "input": func.get("arguments", tc.get("arguments", {})),
-                        }
-                    )
-                chat.append(
-                    {"role": "assistant", "content": content_blocks or m.get("content", "")}
-                )
-            elif m["role"] == "tool":
-                chat.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": m.get("tool_call_id", ""),
-                                "content": m["content"],
-                            }
-                        ],
-                    }
-                )
-        return "\n\n".join(system_parts), chat
+            elif role == "assistant":
+                chat.append(LLMProvider._convert_assistant_msg(m))
+            elif role == "tool":
+                LLMProvider._append_tool_result(chat, m)
+
+        return "\n\n".join(system_parts), LLMProvider._merge_consecutive_user_messages(chat)
 
     @staticmethod
     def _anthropic_client(config: AgentConfig):
@@ -487,11 +522,18 @@ class LLMProvider:
 
         params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
         if system_prompt:
-            params["system"] = system_prompt
+            params["system"] = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         anthropic_tools = LLMProvider._anthropic_tool_param(tools)
         if anthropic_tools:
             params["tools"] = anthropic_tools
 
+        params["extra_headers"] = {"anthropic-beta": "prompt-caching-2024-07-31"}
         response = await client.messages.create(**params)
 
         tool_calls = []
@@ -529,11 +571,18 @@ class LLMProvider:
 
         params = {"model": model, "messages": chat_msgs, "max_tokens": 4096}
         if system_prompt:
-            params["system"] = system_prompt
+            params["system"] = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         anthropic_tools = LLMProvider._anthropic_tool_param(tools)
         if anthropic_tools:
             params["tools"] = anthropic_tools
 
+        params["extra_headers"] = {"anthropic-beta": "prompt-caching-2024-07-31"}
         async with client.messages.stream(**params) as stream:
             async for event in stream:
                 if event.type == "content_block_delta":
