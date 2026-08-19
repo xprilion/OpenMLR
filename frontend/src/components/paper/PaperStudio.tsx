@@ -33,7 +33,7 @@ const INITIAL_SECTIONS: PaperSection[] = [
     title: 'Introduction',
     level: 1,
     content:
-      'Autonomous research agents hold great promise for democratizing scientific discovery. Traditional workflows require manual literature surveys, script debugging, and paper typesetting. In this paper, we propose a modular architecture utilizing reactive SSE streaming, asynchronous compute execution, and multi-agent peer review simulation \\cite{vaswani2017attention}.',
+      String.raw`Autonomous research agents hold great promise for democratizing scientific discovery. Traditional workflows require manual literature surveys, script debugging, and paper typesetting. In this paper, we propose a modular architecture utilizing reactive SSE streaming, asynchronous compute execution, and multi-agent peer review simulation \cite{vaswani2017attention}.`,
   },
   {
     id: 'sec-method',
@@ -176,33 +176,37 @@ export function PaperStudio() {
   }, []);
 
   const generateFullLatex = useCallback(() => {
-    return `\\documentclass[11pt,a4paper]{article}
-\\usepackage{amsmath,amssymb,amsfonts}
-\\usepackage{graphicx}
-\\usepackage{hyperref}
+    const docHeader = String.raw`\documentclass[11pt,a4paper]{article}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}`;
 
-\\title{${metadata.title}}
-\\author{${metadata.authors.join(' \\and ')}}
-\\date{\\today}
+    const andSep = String.raw`\and`;
+    const titleBlock = String.raw`\title{` + metadata.title + String.raw`}
+\author{` + metadata.authors.join(` ${andSep} `) + String.raw`}
+\date{\today}`;
 
-\\begin{document}
-\\maketitle
+    const bodySections = sections
+      .map((s) => String.raw`\section{` + s.title + '}\n' + s.content)
+      .join('\n\n');
 
-\\begin{abstract}
-${metadata.abstract}
-\\end{abstract}
+    return `${docHeader}
 
-${sections
-  .map(
-    (s) => `\\section{${s.title}}
-${s.content}`
-  )
-  .join('\n\n')}
+${titleBlock}
 
-\\bibliographystyle{plain}
-\\bibliography{references}
+` + String.raw`\begin{document}
+\maketitle
 
-\\end{document}`;
+\begin{abstract}
+` + metadata.abstract + String.raw`
+\end{abstract}
+
+` + `${bodySections}
+
+` + String.raw`\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}`;
   }, [metadata, sections]);
 
   const handleCopyLatex = useCallback(async () => {
@@ -441,7 +445,8 @@ ${s.content}`
               onDeleteEntry={(id) => setBibtexEntries((prev) => prev.filter((b) => b.id !== id))}
               onInsertCite={(key) => {
                 if (activeSection) {
-                  handleUpdateSectionContent(activeSection.id, `${activeSection.content} \\cite{${key}}`);
+                  const citeCode = String.raw`\cite{${key}}`;
+                  handleUpdateSectionContent(activeSection.id, `${activeSection.content} ${citeCode}`);
                 }
               }}
             />

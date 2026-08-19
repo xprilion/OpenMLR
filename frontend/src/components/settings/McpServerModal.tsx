@@ -46,18 +46,12 @@ export function McpServerModal({
 
   return (
     <dialog
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 open:flex m-0 w-full h-full max-w-none max-h-none border-none"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 open:flex m-0 w-full h-full max-w-none max-h-none border-none p-0"
       open
-      onClose={onClose}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
+      onCancel={onClose}
     >
       <div
-        className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-lg mx-4"
+        className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-lg mx-4 z-10"
       >
         {/* Modal header */}
         <div className="px-6 py-4 border-b border-border">

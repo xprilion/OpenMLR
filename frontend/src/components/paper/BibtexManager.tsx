@@ -36,7 +36,7 @@ export function BibtexManager({
   }, [entries, searchQuery]);
 
   const handleCopyCite = useCallback(async (key: string) => {
-    const citeCmd = `\\cite{${key}}`;
+    const citeCmd = String.raw`\cite{${key}}`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(citeCmd);
@@ -51,8 +51,8 @@ export function BibtexManager({
   const handleParseAndAdd = useCallback(() => {
     if (!rawBibtex.trim()) return;
     try {
-      // Basic BibTeX regex parser
-      const typeMatch = rawBibtex.match(/@(\w+)\s*\{\s*([^,]+),/);
+      // Basic BibTeX regex parser with bounded non-backtracking matching
+      const typeMatch = /@([a-zA-Z0-9_-]+)\s*\{\s*([^,\s]+)\s*,/.exec(rawBibtex);
       if (!typeMatch) {
         setParseError('Invalid BibTeX syntax: Missing @type{key, header');
         return;
@@ -60,14 +60,15 @@ export function BibtexManager({
       const entryType = typeMatch[1].toLowerCase();
       const citationKey = typeMatch[2].trim();
 
-      const titleMatch = rawBibtex.match(/title\s*=\s*[{"]([^"}]+)[}"]/i);
-      const authorMatch = rawBibtex.match(/author\s*=\s*[{"]([^"}]+)[}"]/i);
-      const yearMatch = rawBibtex.match(/year\s*=\s*[{"]?(\d{4})[}"]?/i);
-      const journalMatch = rawBibtex.match(/journal\s*=\s*[{"]([^"}]+)[}"]/i);
-      const booktitleMatch = rawBibtex.match(/booktitle\s*=\s*[{"]([^"}]+)[}"]/i);
+      const titleMatch = /title\s*=\s*[{"]([^"}]+)[}"]/i.exec(rawBibtex);
+      const authorMatch = /author\s*=\s*[{"]([^"}]+)[}"]/i.exec(rawBibtex);
+      const yearMatch = /year\s*=\s*[{"]?(\d{4})[}"]?/i.exec(rawBibtex);
+      const journalMatch = /journal\s*=\s*[{"]([^"}]+)[}"]/i.exec(rawBibtex);
+      const booktitleMatch = /booktitle\s*=\s*[{"]([^"}]+)[}"]/i.exec(rawBibtex);
 
+      const uniqueSuffix = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID().slice(0, 8) : Date.now().toString(36);
       const entry: BibtexEntry = {
-        id: `bib-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `bib-${Date.now()}-${uniqueSuffix}`,
         citationKey,
         entryType,
         title: titleMatch ? titleMatch[1].trim() : citationKey,

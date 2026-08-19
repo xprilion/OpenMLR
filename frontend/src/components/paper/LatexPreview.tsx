@@ -20,7 +20,7 @@ export function LatexPreview({
       let processedContent = sec.content;
       processedContent = processedContent.replace(/\\cite\{([^}]+)\}/g, (_match, key: string) => {
         const entry = bibtexEntries.find((b) => b.citationKey === key.trim());
-        const firstAuthor = entry ? entry.author.replace(/[,;].*$/, '').trim() : '';
+        const firstAuthor = entry ? (entry.author.split(/[,;]/)[0] ?? '').trim() : '';
         const label = entry ? `${firstAuthor} et al., ${entry.year}` : key;
         return ` [**${label}**](#ref-${key.trim()})`;
       });

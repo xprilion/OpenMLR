@@ -33,6 +33,18 @@ function computeSimpleDiff(original: string, proposed: string): DiffLine[] {
   return lines;
 }
 
+function getLineClasses(type: DiffLine['type']): string {
+  if (type === 'add') return 'bg-success/15 text-success';
+  if (type === 'remove') return 'bg-error/15 text-error line-through';
+  return 'text-text/80';
+}
+
+function getLinePrefix(type: DiffLine['type']): string {
+  if (type === 'add') return '+';
+  if (type === 'remove') return '-';
+  return ' ';
+}
+
 export function SectionDiffViewer({
   diffs,
   onApplyDiff,
@@ -105,16 +117,10 @@ export function SectionDiffViewer({
               {diffLines.map((line, idx) => (
                 <div
                   key={`${diff.id}-line-${idx}`}
-                  className={`px-2 py-0.5 rounded flex items-start gap-2 ${
-                    line.type === 'add'
-                      ? 'bg-success/15 text-success'
-                      : line.type === 'remove'
-                      ? 'bg-error/15 text-error line-through'
-                      : 'text-text/80'
-                  }`}
+                  className={`px-2 py-0.5 rounded flex items-start gap-2 ${getLineClasses(line.type)}`}
                 >
                   <span className="select-none text-text-dim w-4 shrink-0">
-                    {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
+                    {getLinePrefix(line.type)}
                   </span>
                   <span className="whitespace-pre-wrap break-words">{line.text || ' '}</span>
                 </div>
