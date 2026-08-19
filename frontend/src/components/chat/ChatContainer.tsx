@@ -13,6 +13,9 @@ import { nextMsgId } from '../../context/agentEventReducers';
 const TerminalPanel = lazy(() => import('../Terminal').then((m) => ({ default: m.Terminal })));
 const EditorPanel = lazy(() => import('../EditorPanel').then((m) => ({ default: m.EditorPanel })));
 const PaperStudio = lazy(() => import('../paper/PaperStudio').then((m) => ({ default: m.PaperStudio })));
+const CitationGraph = lazy(() =>
+  import('../research/CitationGraph').then((m) => ({ default: m.CitationGraph }))
+);
 
 export function ChatContainer() {
   const {
@@ -52,7 +55,7 @@ export function ChatContainer() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden relative">
-      {/* Agent / Editor / Terminal tab bar */}
+      {/* Agent / Editor / Terminal / Paper / Research tab bar */}
       <div role="tablist" className="flex items-center border-b border-border shrink-0 bg-surface">
         <button
           type="button"
@@ -103,6 +106,17 @@ export function ChatContainer() {
           onClick={() => setMainTab('paper')}
         >
           Paper Studio
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'research'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'research' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('research')}
+        >
+          Citation Graph
         </button>
         {/* Closable Image tab */}
         {imageTab && (
@@ -234,6 +248,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'paper' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Paper Studio...</div>}>
           <PaperStudio />
+        </Suspense>
+      </div>
+
+      {/* Citation Graph tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'research' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Citation Graph...</div>}>
+          <CitationGraph />
         </Suspense>
       </div>
 
