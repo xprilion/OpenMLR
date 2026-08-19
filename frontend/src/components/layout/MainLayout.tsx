@@ -17,15 +17,17 @@ import { useCompute } from '../../context/ComputeContext';
 import { api } from '../../api';
 import type { User, Resource, Project } from '../../types';
 
+export interface MainLayoutProps {
+  user: User;
+  model: string;
+  setModel: (m: string) => void;
+}
+
 export function MainLayout({
   user,
   model,
   setModel,
-}: {
-  user: User;
-  model: string;
-  setModel: (m: string) => void;
-}) {
+}: Readonly<MainLayoutProps>) {
   const navigate = useNavigate();
 
   const {
@@ -95,6 +97,7 @@ export function MainLayout({
       <header className="flex items-center justify-between px-3 sm:px-6 h-14 bg-surface border-b border-border shrink-0 gap-2 sm:gap-4">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
+            type="button"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors md:hidden"
             onClick={() => setMobileSidebarOpen(true)}
             title="Open sidebar"
@@ -124,6 +127,7 @@ export function MainLayout({
           <ModelModal currentModel={modelLabel} onModelChange={setModel} />
           <CopyModelButton model={model} />
           <button
+            type="button"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-text-dim hover:bg-surface-hover hover:text-text transition-colors lg:hidden"
             onClick={() => setMobileRightOpen(true)}
             title="Open panel"

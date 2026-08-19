@@ -17,7 +17,7 @@ import { ChatProvider } from './context/ChatContext';
 import { MainLayout } from './components/layout/MainLayout';
 
 // ── Login wrapper ───────────────────────────────────────
-function LoginRoute({ onAuth }: { onAuth: (u: User) => void }) {
+function LoginRoute({ onAuth }: Readonly<{ onAuth: (u: User) => void }>) {
   return <LoginPage onAuth={onAuth} />;
 }
 
@@ -26,11 +26,11 @@ function AuthenticatedApp({
   user,
   model,
   setModel,
-}: {
+}: Readonly<{
   user: User;
   model: string;
   setModel: (m: string) => void;
-}) {
+}>) {
   return (
     <ProjectProvider>
       <ComputeProvider>

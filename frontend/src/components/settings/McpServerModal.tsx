@@ -41,7 +41,7 @@ export function McpServerModal({
   onClose,
   onTest,
   onSave,
-}: McpServerModalProps) {
+}: Readonly<McpServerModalProps>) {
   if (!isOpen) return null;
 
   return (
@@ -58,7 +58,6 @@ export function McpServerModal({
     >
       <div
         className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-lg mx-4"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Modal header */}
         <div className="px-6 py-4 border-b border-border">
@@ -142,7 +141,7 @@ export function McpServerModal({
                     });
                   }}
                 />
-                Plan mode
+                <span>Plan mode</span>
               </label>
               <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
                 <input
@@ -161,7 +160,7 @@ export function McpServerModal({
                     });
                   }}
                 />
-                Execute mode
+                <span>Execute mode</span>
               </label>
             </div>
           </div>
@@ -191,6 +190,7 @@ export function McpServerModal({
         {/* Modal footer */}
         <div className="px-6 py-4 border-t border-border flex items-center gap-3">
           <button
+            type="button"
             className="px-4 py-2 text-sm font-medium text-text-dim hover:text-text hover:bg-surface-hover rounded-lg transition-colors"
             onClick={onClose}
           >
@@ -198,6 +198,7 @@ export function McpServerModal({
           </button>
           <div className="flex-1" />
           <button
+            type="button"
             className="px-4 py-2 text-sm font-medium rounded-lg border border-border text-text hover:bg-surface-hover transition-colors flex items-center gap-2 disabled:opacity-50"
             onClick={onTest}
             disabled={testing || !form.url.trim()}
@@ -206,6 +207,7 @@ export function McpServerModal({
             {testing ? 'Testing...' : 'Test Connection'}
           </button>
           <button
+            type="button"
             className="px-5 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50"
             onClick={onSave}
             disabled={saving || !form.name.trim() || !form.url.trim()}

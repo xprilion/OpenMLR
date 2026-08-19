@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { api } from '../api';
 import type { McpServerStatus } from '../types';
 import type { ComputeNode } from '../components/ComputeSelector';
@@ -20,7 +20,7 @@ export interface ComputeContextType {
 
 const ComputeContext = createContext<ComputeContextType | null>(null);
 
-export function ComputeProvider({ children }: { children: ReactNode }) {
+export function ComputeProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [computeNodes, setComputeNodes] = useState<ComputeNode[]>([]);
   const [activeCompute, setActiveCompute] = useState<ComputeNode | null>(null);
   const [mcpServers, setMcpServers] = useState<McpServerStatus[]>([]);
@@ -67,22 +67,34 @@ export function ComputeProvider({ children }: { children: ReactNode }) {
     }
   }, [loadActiveCompute]);
 
+  const value = useMemo(
+    () => ({
+      computeNodes,
+      activeCompute,
+      mcpServers,
+      terminalConnected,
+      loadComputeNodes,
+      loadActiveCompute,
+      loadMcpServers,
+      handleComputeChange,
+      setTerminalConnected,
+      setMcpServers,
+      setActiveCompute,
+    }),
+    [
+      computeNodes,
+      activeCompute,
+      mcpServers,
+      terminalConnected,
+      loadComputeNodes,
+      loadActiveCompute,
+      loadMcpServers,
+      handleComputeChange,
+    ]
+  );
+
   return (
-    <ComputeContext.Provider
-      value={{
-        computeNodes,
-        activeCompute,
-        mcpServers,
-        terminalConnected,
-        loadComputeNodes,
-        loadActiveCompute,
-        loadMcpServers,
-        handleComputeChange,
-        setTerminalConnected,
-        setMcpServers,
-        setActiveCompute,
-      }}
-    >
+    <ComputeContext.Provider value={value}>
       {children}
     </ComputeContext.Provider>
   );

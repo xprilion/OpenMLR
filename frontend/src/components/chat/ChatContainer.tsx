@@ -54,6 +54,7 @@ export function ChatContainer() {
       {/* Agent / Editor / Terminal tab bar */}
       <div role="tablist" className="flex items-center border-b border-border shrink-0 bg-surface">
         <button
+          type="button"
           role="tab"
           aria-selected={mainTab === 'agent'}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
@@ -64,6 +65,7 @@ export function ChatContainer() {
           Agent
         </button>
         <button
+          type="button"
           role="tab"
           aria-selected={mainTab === 'editor'}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
@@ -79,6 +81,7 @@ export function ChatContainer() {
           )}
         </button>
         <button
+          type="button"
           role="tab"
           aria-selected={mainTab === 'terminal'}
           className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
@@ -96,10 +99,11 @@ export function ChatContainer() {
               mainTab === 'image' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
             }`}
           >
-            <button className="truncate" onClick={() => setMainTab('image')}>
+            <button type="button" className="truncate" onClick={() => setMainTab('image')}>
               {imageTab.path.split('/').pop()}
             </button>
             <button
+              type="button"
               className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors opacity-0 group-hover:opacity-100"
               onClick={() => {
                 setImageTab(null);

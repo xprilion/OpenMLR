@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useSSE } from '../hooks/useSSE';
@@ -20,6 +20,7 @@ import type { Mode } from '../components/InputArea';
 import { useProject } from './ProjectContext';
 import { useCompute } from './ComputeContext';
 import { useAgentEvents, nextMsgId } from './useAgentEvents';
+import { mapApiMessages } from './agentEventReducers';
 import type { ChatContextType, ConvStatus } from './chatTypes';
 
 export type { ChatContextType, ConvStatus };
@@ -29,10 +30,10 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({
   children,
   setModel,
-}: {
+}: Readonly<{
   children: ReactNode;
   setModel: (m: string) => void;
-}) {
+}>) {
   const navigate = useNavigate();
   const { uuid: routeUuid } = useParams<{ uuid: string }>();
   const { activeProject, activeProjectRef, setProjects, setActiveProject, setShowProjectModal, triggerFileTreeRefresh } = useProject();
@@ -111,39 +112,15 @@ export function ChatProvider({
       const rawTasks = (data.tasks || []) as Array<{ title: string; status: PlanTask['status'] }>;
       setTasks(rawTasks.map((t) => ({ title: t.title, status: t.status })));
       const rawResources = (data.resources || []) as Array<{ title: string; url?: string; type: Resource['type']; id?: string }>;
-      setResources(
-        rawResources.map((r) => ({
-          title: r.title,
-          url: r.url || '',
-          type: r.type,
-          id: r.id,
-        }))
-      );
+      setResources(rawResources.map((r) => ({ title: r.title, url: r.url || '', type: r.type, id: r.id })));
 
       if ((data.tasks?.length > 0) || (data.resources?.length > 0)) {
         setRightPanelOpen(true);
       }
 
-      const rawMessages = (data.messages || []) as Array<{ role: Message['role']; content: string; metadata?: Record<string, unknown> }>;
-      setMessages(
-        rawMessages.map((m) => {
-          if (m.role === 'tool') {
-            const meta = m.metadata || {};
-            return {
-              id: nextMsgId(),
-              role: 'tool' as const,
-              content: '',
-              metadata: {
-                tool: (meta.tool as string) || 'tool',
-                args: '',
-                output: m.content,
-                outputSuccess: meta.success !== false,
-              },
-            };
-          }
-          return { id: nextMsgId(), role: m.role, content: m.content };
-        })
-      );
+      if (data.messages) {
+        setMessages(mapApiMessages(data.messages));
+      }
 
       if (seq === switchSeqRef.current) await loadActiveCompute(uuid);
     } catch {
@@ -158,26 +135,7 @@ export function ChatProvider({
       const data = await api.getConversation(uuid);
       if (uuid !== currentConvUuidRef.current) return;
       if (data.messages) {
-        const rawMessages = data.messages as Array<{ role: Message['role']; content: string; metadata?: Record<string, unknown> }>;
-        setMessages(
-          rawMessages.map((m) => {
-            if (m.role === 'tool') {
-              const meta = m.metadata || {};
-              return {
-                id: nextMsgId(),
-                role: 'tool' as const,
-                content: '',
-                metadata: {
-                  tool: (meta.tool as string) || 'tool',
-                  args: '',
-                  output: m.content,
-                  outputSuccess: meta.success !== false,
-                },
-              };
-            }
-            return { id: nextMsgId(), role: m.role, content: m.content };
-          })
-        );
+        setMessages(mapApiMessages(data.messages));
       }
       if (data.tasks?.length > 0 || data.resources?.length > 0) {
         const rawTasks = (data.tasks || []) as Array<{ title: string; status: PlanTask['status'] }>;
@@ -423,52 +381,97 @@ export function ChatProvider({
   const effectiveProcessing = isProcessing || jobProcessing;
   const effectiveTurnActive = agentTurnActive || jobProcessing;
 
+  const value = useMemo(
+    () => ({
+      messages,
+      conversations,
+      currentConvUuid,
+      convStatuses,
+      questionsPayload,
+      tasks,
+      resources,
+      rightPanelOpen,
+      contextUsage,
+      searchBudget,
+      viewingReport,
+      inputMode,
+      inputText,
+      approvalEvent,
+      todoApprovalPayload,
+      mobileSidebarOpen,
+      mobileRightOpen,
+      conversationLoading,
+      connected,
+      effectiveProcessing,
+      effectiveTurnActive,
+      loadConversations,
+      switchConv,
+      handleSwitchConversation,
+      handleNewConversation,
+      handleDeleteConversation,
+      sendMessage,
+      handleStop,
+      setInputMode,
+      setInputText,
+      setRightPanelOpen,
+      setMobileSidebarOpen,
+      setMobileRightOpen,
+      setApprovalEvent,
+      setQuestionsPayload,
+      setTodoApprovalPayload,
+      setViewingReport,
+      handleSearchBudgetChange,
+      reloadConversationMessages,
+      setCurrentConvStatus,
+      setMessages,
+    }),
+    [
+      messages,
+      conversations,
+      currentConvUuid,
+      convStatuses,
+      questionsPayload,
+      tasks,
+      resources,
+      rightPanelOpen,
+      contextUsage,
+      searchBudget,
+      viewingReport,
+      inputMode,
+      inputText,
+      approvalEvent,
+      todoApprovalPayload,
+      mobileSidebarOpen,
+      mobileRightOpen,
+      conversationLoading,
+      connected,
+      effectiveProcessing,
+      effectiveTurnActive,
+      loadConversations,
+      switchConv,
+      handleSwitchConversation,
+      handleNewConversation,
+      handleDeleteConversation,
+      sendMessage,
+      handleStop,
+      setInputMode,
+      setInputText,
+      setRightPanelOpen,
+      setMobileSidebarOpen,
+      setMobileRightOpen,
+      setApprovalEvent,
+      setQuestionsPayload,
+      setTodoApprovalPayload,
+      setViewingReport,
+      handleSearchBudgetChange,
+      reloadConversationMessages,
+      setCurrentConvStatus,
+      setMessages,
+    ]
+  );
+
   return (
-    <ChatContext.Provider
-      value={{
-        messages,
-        conversations,
-        currentConvUuid,
-        convStatuses,
-        questionsPayload,
-        tasks,
-        resources,
-        rightPanelOpen,
-        contextUsage,
-        searchBudget,
-        viewingReport,
-        inputMode,
-        inputText,
-        approvalEvent,
-        todoApprovalPayload,
-        mobileSidebarOpen,
-        mobileRightOpen,
-        conversationLoading,
-        connected,
-        effectiveProcessing,
-        effectiveTurnActive,
-        loadConversations,
-        switchConv,
-        handleSwitchConversation,
-        handleNewConversation,
-        handleDeleteConversation,
-        sendMessage,
-        handleStop,
-        setInputMode,
-        setInputText,
-        setRightPanelOpen,
-        setMobileSidebarOpen,
-        setMobileRightOpen,
-        setApprovalEvent,
-        setQuestionsPayload,
-        setTodoApprovalPayload,
-        setViewingReport,
-        handleSearchBudgetChange,
-        reloadConversationMessages,
-        setCurrentConvStatus,
-        setMessages,
-      }}
-    >
+    <ChatContext.Provider value={value}>
       {children}
     </ChatContext.Provider>
   );

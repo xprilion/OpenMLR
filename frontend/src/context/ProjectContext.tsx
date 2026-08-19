@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { api } from '../api';
 import type { Project, OpenFile } from '../types';
 import { isImageFile, detectLanguage } from '../utils/fileHelpers';
@@ -32,7 +32,7 @@ export interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
 
-export function ProjectProvider({ children }: { children: ReactNode }) {
+export function ProjectProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const activeProjectRef = useRef<Project | null>(activeProject);
@@ -92,32 +92,49 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     });
   }, [activeFilePath]);
 
+  const value = useMemo(
+    () => ({
+      projects,
+      activeProject,
+      activeProjectRef,
+      openFiles,
+      activeFilePath,
+      imageTab,
+      fileTreeRefreshKey,
+      showProjectModal,
+      showManageProjects,
+      mainTab,
+      setProjects,
+      setActiveProject,
+      setShowProjectModal,
+      setShowManageProjects,
+      setMainTab,
+      setImageTab,
+      setActiveFilePath,
+      triggerFileTreeRefresh,
+      loadProjects,
+      handleFileOpen,
+      handleCloseFile,
+    }),
+    [
+      projects,
+      activeProject,
+      openFiles,
+      activeFilePath,
+      imageTab,
+      fileTreeRefreshKey,
+      showProjectModal,
+      showManageProjects,
+      mainTab,
+      triggerFileTreeRefresh,
+      loadProjects,
+      handleFileOpen,
+      handleCloseFile,
+    ]
+  );
+
   return (
-    <ProjectContext.Provider
-      value={{
-        projects,
-        activeProject,
-        activeProjectRef,
-        openFiles,
-        activeFilePath,
-        imageTab,
-        fileTreeRefreshKey,
-        showProjectModal,
-        showManageProjects,
-        mainTab,
-        setProjects,
-        setActiveProject,
-        setShowProjectModal,
-        setShowManageProjects,
-        setMainTab,
-        setImageTab,
-        setActiveFilePath,
-        triggerFileTreeRefresh,
-        loadProjects,
-        handleFileOpen,
-        handleCloseFile,
-      }}
-    >
+    <ProjectContext.Provider value={value}>
       {children}
     </ProjectContext.Provider>
   );
