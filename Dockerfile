@@ -55,8 +55,4 @@ ENV PATH="/app/backend/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/backend"
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
-
-CMD ["sh", "-c", "uvicorn openmlr.app:app --host 0.0.0.0 --port ${PORT:-3000} --app-dir backend"]
+CMD ["uvicorn", "openmlr.app:app", "--host", "0.0.0.0", "--port", "3000", "--app-dir", "backend"]
