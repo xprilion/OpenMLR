@@ -169,4 +169,22 @@ export const api = {
   getMcpStatus: () => get('/api/mcp/status'),
   testMcpServer: (url: string, headers?: Record<string, string>, params?: Record<string, string>) =>
     post('/api/mcp/test', { url, headers: headers || null, params: params || null }),
+
+  // Evaluation & Benchmark Harness
+  listEvalSuites: () => get('/api/eval/suites'),
+  listEvalTasks: (category?: string) =>
+    get(`/api/eval/tasks${category ? `?category=${encodeURIComponent(category)}` : ''}`),
+  getEvalTask: (taskId: string) => get(`/api/eval/tasks/${encodeURIComponent(taskId)}`),
+  evaluateTask: (taskId: string, agentOutput: unknown) =>
+    post(`/api/eval/tasks/${encodeURIComponent(taskId)}/evaluate`, { agent_output: agentOutput }),
+  runEvalSuite: (suiteName = 'reproduction', maxConcurrency = 4, simulatedOutputs?: Record<string, unknown>) =>
+    post('/api/eval/run', {
+      suite_name: suiteName,
+      max_concurrency: maxConcurrency,
+      simulated_outputs: simulatedOutputs,
+    }),
+  registerCustomReproductionTask: (body: Record<string, unknown>) =>
+    post('/api/eval/custom-task/reproduction', body),
+  registerCustomOptimizationTask: (body: Record<string, unknown>) =>
+    post('/api/eval/custom-task/optimization', body),
 };

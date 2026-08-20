@@ -167,14 +167,16 @@
   - Create: `backend/openmlr/routes/review.py`
   - Create: `backend/tests/test_peer_review.py`
 
-### Task 3.4: Sandboxed LaTeX Compilation & BibTeX Validator (NEXT)
+### Task 3.4: Sandboxed LaTeX Compilation & BibTeX Validator (Completed - PR #51)
 - **Objective:** Built-in headless LaTeX compiler (Tectonic / `pdflatex`) that validates syntax, checks for missing citations, downloads missing packages, and produces clean PDF artifacts.
 - **Files:**
   - Create: `backend/openmlr/tools/latex_compiler.py`
   - Create: `backend/openmlr/services/bibtex_validator.py`
   - Modify: `backend/openmlr/tools/writing.py`
+  - Create: `backend/tests/test_latex_compiler.py`
+  - Create: `backend/tests/test_bibtex_validator.py`
 
-### Task 3.5: ML Agent Evaluation Benchmark Harness
+### Task 3.5: ML Agent Evaluation Benchmark Harness (Completed)
 - **Objective:** Implement an automated benchmark harness to evaluate OpenMLR agent performance across standard research benchmarks:
   - *Paper Reproduction Benchmark*: Ability to reproduce reported results from an arXiv paper given repository code.
   - *Kernel Optimization Benchmark*: Ability to accelerate PyTorch/Triton kernels by >1.5x.
@@ -183,7 +185,14 @@
   - Create: `backend/openmlr/eval/benchmark_harness.py`
   - Create: `backend/openmlr/eval/tasks/reproduction_task.py`
   - Create: `backend/openmlr/eval/tasks/optimization_task.py`
+  - Create: `backend/openmlr/eval/tasks/hypothesis_task.py`
+  - Create: `backend/openmlr/eval/tasks/base.py`
+  - Create: `backend/openmlr/eval/tasks/__init__.py`
   - Create: `backend/openmlr/eval/metrics.py`
+  - Create: `backend/openmlr/eval/__init__.py`
+  - Create: `backend/tests/test_eval_metrics.py`
+  - Create: `backend/tests/test_eval_tasks.py`
+  - Create: `backend/tests/test_benchmark_harness.py`
 
 ---
 
