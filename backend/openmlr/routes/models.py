@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, status
 
+from ..services.model_registry import ModelRegistryService
 from ..services.model_types import (
+    CompareModelsRequest,
+    GenerateModelCardRequest,
+    InspectCheckpointRequest,
+    PlanQuantizationRequest,
     RegisterModelRequest,
     UpdateModelRequest,
-    InspectCheckpointRequest,
-    GenerateModelCardRequest,
-    PlanQuantizationRequest,
-    CompareModelsRequest,
 )
-from ..services.model_registry import ModelRegistryService
 
 router = APIRouter(prefix="/api/model-registry", tags=["model-registry"])
 logger = logging.getLogger("openmlr.routes.models")

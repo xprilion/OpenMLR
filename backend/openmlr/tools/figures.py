@@ -5,16 +5,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 from ..agent.types import ToolSpec
+from ..services.figure_generator import FigureGeneratorService
 from ..services.figure_types import (
+    ColorPalette,
     GenerateFigureRequest,
     MultiPanelLayoutRequest,
     PlotType,
     StyleTheme,
-    ColorPalette,
 )
-from ..services.figure_generator import FigureGeneratorService
 
 log = logging.getLogger("openmlr.tools.figures")
 

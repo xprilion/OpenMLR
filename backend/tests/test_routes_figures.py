@@ -1,7 +1,8 @@
 """Unit tests for the Figures REST API endpoints."""
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
 from openmlr.app import app
 
 

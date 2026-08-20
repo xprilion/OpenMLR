@@ -112,13 +112,14 @@ from .routes.compute import router as compute_router
 from .routes.datasets import router as datasets_router
 from .routes.eval import router as eval_router
 from .routes.experiments import router as experiments_router
+from .routes.figures import router as figures_router
 from .routes.health import router as health_router
 from .routes.keys import router as keys_router
 from .routes.mcp import router as mcp_router
-from .routes.projects import router as projects_router
-from .routes.research import router as research_router
 from .routes.models import router as models_router
-from .routes.figures import router as figures_router
+from .routes.projects import router as projects_router
+from .routes.reproducibility import router as reproducibility_router
+from .routes.research import router as research_router
 from .routes.review import router as review_router
 from .routes.settings import router as settings_router
 from .routes.sweeps import router as sweeps_router
@@ -140,6 +141,7 @@ app.include_router(datasets_router)
 app.include_router(sweeps_router)
 app.include_router(models_router)
 app.include_router(figures_router)
+app.include_router(reproducibility_router)
 app.include_router(terminal_router)
 
 

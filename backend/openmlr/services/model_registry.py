@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
+
+from .model_card_generator import build_model_card
 from .model_types import (
-    ModelArtifact,
     CheckpointInspection,
-    QuantizationEstimate,
+    GenerateModelCardRequest,
+    InspectCheckpointRequest,
+    ModelArtifact,
     ModelCardContent,
+    QuantizationEstimate,
     RegisterModelRequest,
     UpdateModelRequest,
-    InspectCheckpointRequest,
-    GenerateModelCardRequest,
 )
-from .model_card_generator import build_model_card
 
 
 class ModelRegistryService:
@@ -35,7 +36,7 @@ class ModelRegistryService:
         """Register a new model artifact in the registry."""
         store = cls._get_project_store(project_id)
         model_id = f"model_{uuid.uuid4().hex[:12]}"
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # If parameters_count or model_size_mb is not explicitly provided, estimate from checkpoint
         params = request.parameters_count
@@ -132,7 +133,7 @@ class ModelRegistryService:
         if request.metadata is not None:
             artifact.metadata.update(request.metadata)
 
-        artifact.updated_at = datetime.now(timezone.utc).isoformat()
+        artifact.updated_at = datetime.now(UTC).isoformat()
         return artifact
 
     @classmethod

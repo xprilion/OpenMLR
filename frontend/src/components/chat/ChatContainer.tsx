@@ -40,6 +40,9 @@ const ModelStudio = lazy(() =>
 const FigureStudio = lazy(() =>
   import('../figures/FigureStudio').then((m) => ({ default: m.FigureStudio }))
 );
+const ReproducibilityStudio = lazy(() =>
+  import('../reproducibility/ReproducibilityStudio').then((m) => ({ default: m.ReproducibilityStudio }))
+);
 
 const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
   { id: 'agent', label: 'Agent' },
@@ -53,6 +56,7 @@ const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
   { id: 'sweeps', label: 'Sweeps' },
   { id: 'models', label: 'Models' },
   { id: 'figures', label: 'Figures' },
+  { id: 'reproducibility', label: 'Reproducibility' },
   { id: 'review', label: 'Peer Review' },
   { id: 'eval', label: 'Benchmarks' },
 ];
@@ -301,6 +305,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'figures' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Figure Studio...</div>}>
           <FigureStudio projectId={activeProject?.uuid} />
+        </Suspense>
+      </div>
+
+      {/* Reproducibility Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'reproducibility' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Reproducibility Studio...</div>}>
+          <ReproducibilityStudio />
         </Suspense>
       </div>
 

@@ -1,13 +1,12 @@
 """Unit tests for the Publication Figure Generator service."""
 
-import pytest
 from openmlr.services.figure_generator import FigureGeneratorService
 from openmlr.services.figure_types import (
+    ColorPalette,
     GenerateFigureRequest,
     MultiPanelLayoutRequest,
     PlotType,
     StyleTheme,
-    ColorPalette,
 )
 
 

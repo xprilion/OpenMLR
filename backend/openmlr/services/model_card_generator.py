@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 from .model_types import ModelArtifact, ModelCardContent
 
 # GPU TDP in Watts for carbon estimation

@@ -1,16 +1,16 @@
 """Tests for Model Registry Service, Model Card Generator, Checkpoint Inspection, and Quantization."""
 
 import pytest
-from openmlr.services.model_types import (
-    RegisterModelRequest,
-    UpdateModelRequest,
-    InspectCheckpointRequest,
-    GenerateModelCardRequest,
-)
-from openmlr.services.model_registry import ModelRegistryService
+
 from openmlr.services.model_card_generator import (
     estimate_carbon_footprint,
-    build_model_card,
+)
+from openmlr.services.model_registry import ModelRegistryService
+from openmlr.services.model_types import (
+    GenerateModelCardRequest,
+    InspectCheckpointRequest,
+    RegisterModelRequest,
+    UpdateModelRequest,
 )
 
 
