@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from ..tools.http_utils import RateLimitError, fetch_with_retry
 from .academic_providers import (
@@ -70,6 +71,35 @@ async def search_papers_parallel(
     return res, ok
 
 
+def _format_openalex_details(w: dict[str, Any]) -> str:
+    """Format OpenAlex work JSON payload into markdown details."""
+    authors = ", ".join(
+        a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])
+    )
+    doi = (w.get("doi") or "").replace("https://doi.org/", "")
+    oa_url = (w.get("open_access") or {}).get("oa_url", "")
+    arxiv_id = extract_arxiv_from_ids(w.get("ids", {}))
+
+    lines = [
+        f"# {w.get('title', 'Untitled')}",
+        f"**Year**: {w.get('publication_year', '?')}",
+        f"**Authors**: {authors}",
+        f"**Citations**: {w.get('cited_by_count', 0)}  |  **References**: {len(w.get('referenced_works', []))}",
+    ]
+    if doi:
+        lines.append(f"**DOI**: https://doi.org/{doi}")
+    if arxiv_id:
+        lines.append(f"**ArXiv**: https://arxiv.org/abs/{arxiv_id}")
+    if oa_url:
+        lines.append(f"**Open Access**: {oa_url}")
+
+    abstract = reconstruct_abstract(w.get("abstract_inverted_index"))
+    if abstract:
+        lines.append(f"\n**Abstract**:\n{abstract}")
+
+    return "\n".join(lines)
+
+
 async def get_paper_details(paper_id: str) -> tuple[str, bool]:
     """Fetch complete metadata for a paper by OpenAlex ID, DOI, or arXiv ID."""
     if not paper_id:
@@ -100,32 +130,7 @@ async def get_paper_details(paper_id: str) -> tuple[str, bool]:
             return await get_crossref_details(paper_id)
         return f"Paper not found: {paper_id}", False
 
-    w = r.json()
-    authors = ", ".join(
-        a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])
-    )
-    doi = (w.get("doi") or "").replace("https://doi.org/", "")
-    oa_url = (w.get("open_access") or {}).get("oa_url", "")
-    arxiv_id = extract_arxiv_from_ids(w.get("ids", {}))
-
-    lines = [
-        f"# {w.get('title', 'Untitled')}",
-        f"**Year**: {w.get('publication_year', '?')}",
-        f"**Authors**: {authors}",
-        f"**Citations**: {w.get('cited_by_count', 0)}  |  **References**: {len(w.get('referenced_works', []))}",
-    ]
-    if doi:
-        lines.append(f"**DOI**: https://doi.org/{doi}")
-    if arxiv_id:
-        lines.append(f"**ArXiv**: https://arxiv.org/abs/{arxiv_id}")
-    if oa_url:
-        lines.append(f"**Open Access**: {oa_url}")
-
-    abstract = reconstruct_abstract(w.get("abstract_inverted_index"))
-    if abstract:
-        lines.append(f"\n**Abstract**:\n{abstract}")
-
-    formatted = "\n".join(lines)
+    formatted = _format_openalex_details(r.json())
     await paper_cache.set_cached_paper(paper_id, formatted)
     return formatted, True
 

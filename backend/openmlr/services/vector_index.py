@@ -33,7 +33,7 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     norm_a = math.sqrt(sum(a * a for a in v1))
     norm_b = math.sqrt(sum(b * b for b in v2))
 
-    if norm_a == 0.0 or norm_b == 0.0:
+    if norm_a < 1e-12 or norm_b < 1e-12:
         return 0.0
 
     return dot / (norm_a * norm_b)
@@ -69,7 +69,7 @@ def generate_deterministic_embedding(text: str, dim: int = DEFAULT_EMBEDDING_DIM
 
     # Normalize vector to unit length
     magnitude = math.sqrt(sum(x * x for x in vec))
-    if magnitude > 0.0:
+    if magnitude > 1e-12:
         vec = [x / magnitude for x in vec]
 
     return vec

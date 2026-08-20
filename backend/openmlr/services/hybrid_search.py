@@ -278,6 +278,18 @@ class SearchResult:
         }
 
 
+def _normalize_scores_map(scores_dict: dict[str, float]) -> dict[str, float]:
+    """Normalize score values to [0, 1] range using min-max scaling."""
+    if not scores_dict:
+        return {}
+    vals = list(scores_dict.values())
+    mx, mn = max(vals), min(vals)
+    if mx == mn:
+        return dict.fromkeys(scores_dict, 1.0 if mx > 0 else 0.0)
+    diff = mx - mn
+    return {k: (v - mn) / diff for k, v in scores_dict.items()}
+
+
 class HybridSearchEngine:
     """Combines BM25 sparse search and dense vector similarity into hybrid retrieval."""
 
@@ -331,6 +343,15 @@ class HybridSearchEngine:
             return self._fuse_rrf(dense_res, sparse_res, top_k=top_k, rrf_k=rrf_k)
         return self._fuse_linear(dense_res, sparse_res, top_k=top_k, alpha=alpha)
 
+    def _resolve_item_info(self, cid: str) -> tuple[str, str, dict[str, Any]]:
+        """Resolve doc_id, text, and metadata for a chunk or document id."""
+        chunk = self.vector_index.get_chunk(cid)
+        if chunk:
+            return chunk.doc_id, chunk.text, chunk.metadata
+        doc_id = cid.split("#")[0]
+        doc = self.bm25_index._docs.get(doc_id)
+        return doc_id, (doc.text if doc else ""), (doc.metadata if doc else {})
+
     def _fuse_linear(
         self,
         dense_res: list[tuple[VectorChunk, float]],
@@ -338,55 +359,35 @@ class HybridSearchEngine:
         top_k: int,
         alpha: float,
     ) -> list[SearchResult]:
-        # Helper for min-max normalization
-        def _normalize(scores_dict: dict[str, float]) -> dict[str, float]:
-            if not scores_dict:
-                return {}
-            vals = list(scores_dict.values())
-            mx, mn = max(vals), min(vals)
-            if mx == mn:
-                return dict.fromkeys(scores_dict, 1.0 if mx > 0 else 0.0)
-            diff = mx - mn
-            return {k: (v - mn) / diff for k, v in scores_dict.items()}
-
         dense_map = {chunk.chunk_id: score for chunk, score in dense_res}
         sparse_map = {f"{doc.doc_id}#chunk_0": score for doc, score in sparse_res}
 
-        norm_dense = _normalize(dense_map)
-        norm_sparse = _normalize(sparse_map)
+        norm_dense = _normalize_scores_map(dense_map)
+        norm_sparse = _normalize_scores_map(sparse_map)
 
         all_keys = set(norm_dense.keys()) | set(norm_sparse.keys())
-        merged: dict[str, SearchResult] = {}
+        merged: list[SearchResult] = []
 
-        # Lookup chunk/doc metadata
         for cid in all_keys:
             d_score = dense_map.get(cid, 0.0)
             s_score = sparse_map.get(cid, 0.0)
             score = alpha * norm_dense.get(cid, 0.0) + (1.0 - alpha) * norm_sparse.get(cid, 0.0)
+            doc_id, text, meta = self._resolve_item_info(cid)
 
-            chunk = self.vector_index.get_chunk(cid)
-            if chunk:
-                doc_id = chunk.doc_id
-                text = chunk.text
-                meta = chunk.metadata
-            else:
-                doc_id = cid.split("#")[0]
-                doc = self.bm25_index._docs.get(doc_id)
-                text = doc.text if doc else ""
-                meta = doc.metadata if doc else {}
-
-            merged[cid] = SearchResult(
-                doc_id=doc_id,
-                chunk_id=cid,
-                text=text,
-                score=score,
-                dense_score=d_score,
-                sparse_score=s_score,
-                metadata=meta,
+            merged.append(
+                SearchResult(
+                    doc_id=doc_id,
+                    chunk_id=cid,
+                    text=text,
+                    score=score,
+                    dense_score=d_score,
+                    sparse_score=s_score,
+                    metadata=meta,
+                )
             )
 
-        ranked = sorted(merged.values(), key=lambda x: x.score, reverse=True)
-        return ranked[:top_k]
+        merged.sort(key=lambda x: (x.score, x.sparse_score + x.dense_score), reverse=True)
+        return merged[:top_k]
 
     def _fuse_rrf(
         self,

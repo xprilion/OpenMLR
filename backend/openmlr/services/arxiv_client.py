@@ -39,6 +39,52 @@ def extract_arxiv_id(text: str) -> str | None:
     return None
 
 
+def _is_entry_in_year_range(entry: ET.Element, year_from: int | None, year_to: int | None) -> bool:
+    """Check if an arXiv entry matches the specified year range."""
+    published = entry.find("atom:published", ARXIV_NS)
+    if published is not None and published.text:
+        try:
+            year = int(published.text[:4])
+            if year_from and year < year_from:
+                return False
+            if year_to and year > year_to:
+                return False
+        except ValueError:
+            pass
+    return True
+
+
+def _format_arxiv_entry(entry: ET.Element, index: int) -> str:
+    """Format a single parsed arXiv XML entry into markdown."""
+    title_el = entry.find("atom:title", ARXIV_NS)
+    title = (
+        title_el.text.strip().replace("\n", " ")
+        if title_el is not None and title_el.text
+        else "Untitled"
+    )
+
+    id_el = entry.find("atom:id", ARXIV_NS)
+    arxiv_id = id_el.text.split("/abs/")[-1] if id_el is not None and id_el.text else ""
+
+    authors_els = entry.findall("atom:author/atom:name", ARXIV_NS)
+    authors = ", ".join(a.text for a in authors_els[:3] if a.text)
+    if len(authors_els) > 3:
+        authors += " et al."
+
+    published = entry.find("atom:published", ARXIV_NS)
+    year = published.text[:4] if published is not None and published.text else "?"
+
+    categories_els = entry.findall("atom:category", ARXIV_NS)
+    categories = [c.get("term", "") for c in categories_els[:3] if c.get("term")]
+    cat_str = f"  |  Categories: {', '.join(categories)}" if categories else ""
+
+    return (
+        f"{index}. **{title}** ({year})\n"
+        f"   Authors: {authors}\n"
+        f"   arXiv: {arxiv_id}{cat_str}\n"
+    )
+
+
 async def search_arxiv(
     query: str,
     year_from: int | None = None,
@@ -85,52 +131,12 @@ async def search_arxiv(
     if not entries:
         return f"No arXiv papers found for: {query}", True
 
-    filtered_entries = []
-    for entry in entries:
-        published = entry.find("atom:published", ARXIV_NS)
-        if published is not None and published.text:
-            year = int(published.text[:4])
-            if year_from and year < year_from:
-                continue
-            if year_to and year > year_to:
-                continue
-        filtered_entries.append(entry)
-
+    filtered_entries = [e for e in entries if _is_entry_in_year_range(e, year_from, year_to)]
     if not filtered_entries:
         return f"No arXiv papers found for: {query} (in year range)", True
 
     lines = [f"Found {len(filtered_entries)} arXiv papers for '{query}':\n"]
-    for i, entry in enumerate(filtered_entries[:limit], 1):
-        title_el = entry.find("atom:title", ARXIV_NS)
-        title = (
-            title_el.text.strip().replace("\n", " ")
-            if title_el is not None and title_el.text
-            else "Untitled"
-        )
-
-        id_el = entry.find("atom:id", ARXIV_NS)
-        arxiv_id = ""
-        if id_el is not None and id_el.text:
-            arxiv_id = id_el.text.split("/abs/")[-1]
-
-        authors_els = entry.findall("atom:author/atom:name", ARXIV_NS)
-        authors = ", ".join(a.text for a in authors_els[:3] if a.text)
-        if len(authors_els) > 3:
-            authors += " et al."
-
-        published = entry.find("atom:published", ARXIV_NS)
-        year = published.text[:4] if published is not None and published.text else "?"
-
-        categories_els = entry.findall("atom:category", ARXIV_NS)
-        categories = [c.get("term", "") for c in categories_els[:3] if c.get("term")]
-        cat_str = ", ".join(categories) if categories else ""
-
-        lines.append(
-            f"{i}. **{title}** ({year})\n"
-            f"   Authors: {authors}\n"
-            f"   arXiv: {arxiv_id}"
-            f"{f'  |  Categories: {cat_str}' if cat_str else ''}\n"
-        )
+    lines.extend(_format_arxiv_entry(entry, i) for i, entry in enumerate(filtered_entries[:limit], 1))
 
     return "\n".join(lines), True
 
