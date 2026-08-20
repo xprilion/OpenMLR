@@ -2,21 +2,18 @@
 # Builds frontend and backend into a single container image
 # Usage: docker build -t openmlr . && docker run -p 3000:3000 openmlr
 
-# ── Stage 1: Build frontend ──────────────────────────────
+# ── Stage 1: Build frontend SPA ───────────────────────────
 FROM node:20-slim AS frontend-build
 
 WORKDIR /app/frontend
 
-# Install pnpm directly for speed and reliability
-RUN npm install -g pnpm@latest
-
-# Install dependencies (explicitly allow standalone package install without workspace lockfile)
+# Install dependencies (cached layer)
 COPY frontend/package.json ./
-RUN pnpm install --no-frozen-lockfile
+RUN npm install
 
-# Copy frontend source and build production SPA
+# Copy frontend source and build production static bundle
 COPY frontend/ ./
-RUN pnpm build
+RUN npm run build
 
 
 # ── Stage 2: Python backend runtime ───────────────────────
