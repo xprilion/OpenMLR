@@ -28,8 +28,8 @@ RUN apt-get update && \
         build-essential libpq-dev libxml2-dev libxslt1-dev curl git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install uv package manager
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Install uv package manager to /usr/local/bin
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Create non-root openmlr user
 RUN groupadd --gid 1000 openmlr && \
