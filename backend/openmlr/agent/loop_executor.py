@@ -8,6 +8,7 @@ from typing import Any
 
 from ..config import AgentConfig
 from .llm import LLMProvider
+from .ml_debugger import diagnose_ml_error
 from .session import Session
 from .types import AgentEvent, LLMResult, ThinkingChunk, ToolCall
 
@@ -138,7 +139,7 @@ async def execute_tool(
     tool_router: Any,
     tool_call: ToolCall,
 ) -> tuple[str, bool]:
-    """Execute a single tool call and emit lifecycle events."""
+    """Execute a single tool call and emit lifecycle events, enriching ML errors with self-healing guidance."""
     await session.emit(
         AgentEvent(
             event_type="tool_state_change",
@@ -150,9 +151,17 @@ async def execute_tool(
         output, success = await tool_router.call_tool(
             tool_call.name, tool_call.arguments, session=session
         )
+        if output:
+            diag = diagnose_ml_error(output)
+            if diag and diag.remedy_prompt:
+                output = f"{output}\n\n{diag.remedy_prompt}"
         return output, success
     except Exception as e:
-        return f"Tool execution error: {str(e)}", False
+        err_msg = f"Tool execution error: {str(e)}"
+        diag = diagnose_ml_error(err_msg)
+        if diag and diag.remedy_prompt:
+            err_msg = f"{err_msg}\n\n{diag.remedy_prompt}"
+        return err_msg, False
     finally:
         await session.emit(
             AgentEvent(

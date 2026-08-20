@@ -2,7 +2,7 @@
 
 import pytest
 
-from openmlr.agent.doom_loop import detect_doom_loop
+from openmlr.agent.doom_loop import detect_doom_loop, detect_ml_failure_loop
 from openmlr.agent.types import Message, ToolCall
 
 
@@ -156,3 +156,49 @@ class TestRepeatingSequences:
         ]
         # With a tight window only the 3 clean calls are visible
         assert detect_doom_loop(old_noise + recent_clean, window=3) is None
+
+
+# ── Pattern 3: recurring ML failures ──────────────────────────────────────
+
+
+class TestMLFailureLoopDetection:
+    def test_detects_recurring_cuda_oom(self):
+        msgs = [
+            Message(
+                role="tool",
+                content="torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4.0 GiB",
+                tool_call_id="call_1",
+                name="bash",
+            ),
+            Message(role="assistant", content="Trying smaller batch size"),
+            Message(
+                role="tool",
+                content="torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.0 GiB",
+                tool_call_id="call_2",
+                name="bash",
+            ),
+        ]
+        res = detect_ml_failure_loop(msgs)
+        assert res is not None
+        assert "REPETITIVE ML FAILURE DETECTED" in res
+        assert "cuda_oom" in res
+
+    def test_detects_recurring_loss_nan(self):
+        msgs = [
+            Message(
+                role="tool",
+                content="Epoch 1 | Step 10: loss = nan",
+                tool_call_id="call_1",
+                name="sandbox_exec",
+            ),
+            Message(role="assistant", content="Re-running script"),
+            Message(
+                role="tool",
+                content="RuntimeError: Function 'LogSoftmaxBackward0' returned nan values",
+                tool_call_id="call_2",
+                name="sandbox_exec",
+            ),
+        ]
+        res = detect_doom_loop(msgs)
+        assert res is not None
+        assert "loss_nan_inf" in res
