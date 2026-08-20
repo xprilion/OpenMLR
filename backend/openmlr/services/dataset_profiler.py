@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 def _hash_score(seed: int, index: int, item: Any) -> bytes:
     """Generate a deterministic SHA-256 hash digest for an item."""
-    encoded = f"{seed}:{index}:{json.dumps(item, sort_keys=True, default=str)}".encode("utf-8")
+    encoded = f"{seed}:{index}:{json.dumps(item, sort_keys=True, default=str)}".encode()
     return hashlib.sha256(encoded).digest()
 
 

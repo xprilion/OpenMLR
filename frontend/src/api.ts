@@ -314,4 +314,61 @@ export const api = {
     stratify_column?: string;
     seed?: number;
   }) => post('/api/datasets/split', body),
+
+  // Hyperparameter Sweeps & HPO
+  listSweeps: (projectUuid?: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/sweeps${q}`);
+  },
+  createSweep: (projectUuid: string | undefined, body: Record<string, unknown>) =>
+    post('/api/sweeps', { ...body, project_uuid: projectUuid }),
+  getSweep: (projectUuid: string | undefined, sweepId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/sweeps/${encodeURIComponent(sweepId)}${q}`);
+  },
+  suggestTrial: (projectUuid: string | undefined, sweepId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/sweeps/${encodeURIComponent(sweepId)}/suggest${q}`, {});
+  },
+  recordTrial: (
+    projectUuid: string | undefined,
+    sweepId: string,
+    trialId: string,
+    body: {
+      metrics: Record<string, unknown>;
+      status?: string;
+      step_history?: Record<string, unknown>[];
+      error_message?: string;
+    }
+  ) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(
+      `/api/sweeps/${encodeURIComponent(sweepId)}/trials/${encodeURIComponent(trialId)}/record${q}`,
+      body
+    );
+  },
+  checkPrune: (
+    projectUuid: string | undefined,
+    sweepId: string,
+    trialId: string,
+    body: { current_step: number; current_metric_val: number }
+  ) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(
+      `/api/sweeps/${encodeURIComponent(sweepId)}/trials/${encodeURIComponent(trialId)}/prune-check${q}`,
+      body
+    );
+  },
+  getSweepAnalysis: (projectUuid: string | undefined, sweepId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/sweeps/${encodeURIComponent(sweepId)}/analysis${q}`);
+  },
+  exportSweepReport: (projectUuid: string | undefined, sweepId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/sweeps/${encodeURIComponent(sweepId)}/export${q}`, {});
+  },
+  deleteSweep: (projectUuid: string | undefined, sweepId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return del(`/api/sweeps/${encodeURIComponent(sweepId)}${q}`);
+  },
 };

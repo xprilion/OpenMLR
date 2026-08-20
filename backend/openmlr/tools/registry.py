@@ -51,6 +51,8 @@ MODE_TOOL_RESTRICTIONS = {
             "experiments",
             # Dataset profiling and inspection (read-only actions in plan mode)
             "datasets",
+            # Hyperparameter optimization and sweeps (read-only actions in plan mode)
+            "sweeps",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -482,6 +484,11 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .datasets import create_datasets_tool
 
     router.register(create_datasets_tool())
+
+    # Register sweeps and HPO tool
+    from .sweeps import create_sweeps_tool
+
+    router.register(create_sweeps_tool())
 
     # Register sandbox tools if manager provided
     if sandbox_manager:
