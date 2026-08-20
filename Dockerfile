@@ -7,16 +7,16 @@ FROM node:20-slim AS frontend-build
 
 WORKDIR /app
 
-# Install pnpm directly for speed and reliability
+# Install pnpm
 RUN npm install -g pnpm@latest
 
 # Copy package configurations for layer caching
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 COPY frontend/package.json ./frontend/
 
-RUN pnpm install --frozen-lockfile || pnpm install
+# Install dependencies and build frontend SPA
+RUN pnpm install
 
-# Copy frontend source and build static bundle
 COPY frontend/ ./frontend/
 RUN cd frontend && pnpm build
 
@@ -24,14 +24,14 @@ RUN cd frontend && pnpm build
 # ── Stage 2: Python backend runtime ───────────────────────
 FROM python:3.12-slim AS runtime
 
-# System dependencies for asyncpg, lxml, cryptography
+# System dependencies for asyncpg, lxml, cryptography, git
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential libpq-dev libxml2-dev libxslt1-dev curl && \
+        build-essential libpq-dev libxml2-dev libxslt1-dev curl git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Create non-root openmlr user
 RUN groupadd --gid 1000 openmlr && \
@@ -39,11 +39,7 @@ RUN groupadd --gid 1000 openmlr && \
 
 WORKDIR /app
 
-# Install Python dependencies (cached layer)
-COPY backend/pyproject.toml backend/uv.lock* backend/.python-version ./backend/
-RUN cd backend && uv sync --no-dev --no-install-project
-
-# Copy backend source and install package
+# Copy backend source and install dependencies
 COPY backend/ ./backend/
 RUN cd backend && uv sync --no-dev
 
