@@ -10,9 +10,9 @@ WORKDIR /app/frontend
 # Install pnpm directly for speed and reliability
 RUN npm install -g pnpm@latest
 
-# Install dependencies (cached layer)
+# Install dependencies (explicitly allow standalone package install without workspace lockfile)
 COPY frontend/package.json ./
-RUN pnpm install
+RUN pnpm install --no-frozen-lockfile
 
 # Copy frontend source and build production SPA
 COPY frontend/ ./
@@ -28,8 +28,8 @@ RUN apt-get update && \
         build-essential libpq-dev libxml2-dev libxslt1-dev curl git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install uv package manager to /usr/local/bin
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# Install uv package manager
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Create non-root openmlr user
 RUN groupadd --gid 1000 openmlr && \
