@@ -1,4 +1,6 @@
-"""SQLAlchemy ORM models for all tables."""
+"""SQLAlchemy ORM models for all tables with compound index optimizations."""
+
+from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
@@ -9,6 +11,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -68,7 +71,7 @@ class UserSetting(Base):
 
     user = relationship("User", back_populates="settings")
     __table_args__ = (
-        # Unique constraint on (user_id, category, key) defined in migration
+        Index("ix_user_settings_user_cat_key", "user_id", "category", "key"),
         {},
     )
 
@@ -93,7 +96,10 @@ class Project(Base):
     user = relationship("User", back_populates="projects")
     conversations = relationship("Conversation", back_populates="project")
 
-    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_projects_user_slug"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "slug", name="uq_projects_user_slug"),
+        Index("ix_projects_user_created", "user_id", "created_at"),
+    )
 
 
 class Conversation(Base):
@@ -126,6 +132,11 @@ class Conversation(Base):
     )
     jobs = relationship("AgentJob", back_populates="conversation", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        Index("ix_conversations_user_created", "user_id", "created_at"),
+        Index("ix_conversations_project_created", "project_id", "created_at"),
+    )
+
 
 class Message(Base):
     __tablename__ = "messages"
@@ -140,6 +151,10 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_messages_conv_created", "conversation_id", "created_at"),
+    )
 
 
 class SandboxConfig(Base):
@@ -170,7 +185,7 @@ class SSHKey(Base):
 
     user = relationship("User", back_populates="ssh_keys")
     __table_args__ = (
-        # Unique constraint on (user_id, filename)
+        Index("ix_ssh_keys_user_id", "user_id"),
         {},
     )
 
@@ -194,7 +209,7 @@ class ComputeNode(Base):
 
     user = relationship("User", back_populates="compute_nodes")
     __table_args__ = (
-        # Unique constraint on (user_id, name)
+        Index("ix_compute_nodes_user_priority", "user_id", "priority"),
         {},
     )
 
@@ -220,6 +235,10 @@ class ResearchCorpus(Base):
     user = relationship("User", back_populates="research_corpus")
     conversation = relationship("Conversation", back_populates="corpus")
 
+    __table_args__ = (
+        Index("ix_research_corpus_user_source", "user_id", "source"),
+    )
+
 
 class WritingProject(Base):
     __tablename__ = "writing_projects"
@@ -240,6 +259,10 @@ class WritingProject(Base):
 
     user = relationship("User", back_populates="writing_projects")
     conversation = relationship("Conversation", back_populates="writing_project")
+
+    __table_args__ = (
+        Index("ix_writing_projects_user_status", "user_id", "status"),
+    )
 
 
 class ConversationTask(Base):
@@ -262,6 +285,10 @@ class ConversationTask(Base):
 
     conversation = relationship("Conversation", back_populates="tasks")
 
+    __table_args__ = (
+        Index("ix_conversation_tasks_conv_status", "conversation_id", "status"),
+    )
+
 
 class ConversationResource(Base):
     """Persisted resources (papers, code, datasets, reports) for a conversation."""
@@ -282,6 +309,10 @@ class ConversationResource(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     conversation = relationship("Conversation", back_populates="resources")
+
+    __table_args__ = (
+        Index("ix_conversation_resources_conv_type", "conversation_id", "type"),
+    )
 
 
 class AgentJob(Base):
@@ -308,6 +339,11 @@ class AgentJob(Base):
 
     conversation = relationship("Conversation", back_populates="jobs")
     user = relationship("User")
+
+    __table_args__ = (
+        Index("ix_agent_jobs_conv_status", "conversation_id", "status"),
+        Index("ix_agent_jobs_user_status", "user_id", "status"),
+    )
 
 
 class BackgroundProcess(Base):
@@ -336,3 +372,8 @@ class BackgroundProcess(Base):
 
     conversation = relationship("Conversation")
     user = relationship("User")
+
+    __table_args__ = (
+        Index("ix_background_processes_conv_status", "conversation_id", "status"),
+        Index("ix_background_processes_user_status", "user_id", "status"),
+    )
