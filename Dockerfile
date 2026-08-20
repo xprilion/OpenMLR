@@ -8,8 +8,8 @@ FROM node:20-slim AS frontend-build
 WORKDIR /app/frontend
 
 # Install dependencies with locked versions and disabled lifecycle scripts
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --ignore-scripts || npm install --ignore-scripts
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
 
 # Copy frontend source and build production static bundle
 COPY frontend/ ./
@@ -34,9 +34,9 @@ RUN groupadd --gid 1000 openmlr && \
 
 WORKDIR /app
 
-# Copy backend source and install dependencies from frozen lockfile
+# Copy backend source and install dependencies from frozen lockfile without builds
 COPY backend/ ./backend/
-RUN cd backend && uv sync --frozen --no-dev
+RUN cd backend && uv sync --frozen --no-dev --no-install-project --no-build
 
 # Copy built frontend static bundle
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist

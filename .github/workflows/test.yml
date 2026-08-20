@@ -30,11 +30,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --no-install-project --no-build
         working-directory: backend
 
       - name: Run ruff
-        run: uv run ruff check openmlr/ tests/
+        run: uv run --no-build ruff check openmlr/ tests/
         working-directory: backend
 
   lint-frontend:
@@ -68,6 +68,8 @@ jobs:
     needs: lint-backend
     permissions:
       contents: read
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -80,11 +82,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --no-install-project --no-build
         working-directory: backend
 
       - name: Run backend tests
-        run: uv run pytest tests/ -v --tb=short
+        run: uv run --no-build pytest tests/ -v --tb=short
         working-directory: backend
 
   test-frontend:

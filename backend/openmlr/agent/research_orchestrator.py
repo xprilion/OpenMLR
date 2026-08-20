@@ -123,8 +123,7 @@ class ResearchOrchestrator:
         self.state.history.append(transition)
         self.state.current_phase = next_phase
         self.state.updated_at = time.time()
-        clean_reason = "".join(c for c in str(reason) if c.isprintable()).strip()[:150]
-        logger.info("Research phase transition: %s -> %s (%s)", from_phase.value, next_phase.value, clean_reason)
+        logger.info("Research phase transition: %s -> %s", from_phase.name, next_phase.name)
         return transition
 
     def add_milestone(
@@ -231,32 +230,26 @@ class ResearchOrchestrator:
 
         return "\n".join(lines)
 
-    def _get_safe_state_path(self, path: str | Path | None = None) -> Path:
-        """Resolve a safe, contained path for saving/loading state."""
-        base_dir = self.workspace_path.resolve() if self.workspace_path else Path.cwd().resolve()
-        meta_dir = (base_dir / ".project-meta").resolve()
-        meta_dir.mkdir(parents=True, exist_ok=True)
-        if path is not None:
-            filename = Path(path).name
-            return (meta_dir / filename).resolve()
-        return (meta_dir / "research_state.json").resolve()
-
     def save_state(self, path: str | Path | None = None) -> Path:
-        """Persist state JSON to disk."""
-        target = self._get_safe_state_path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
+        """Persist state JSON to standard metadata path."""
+        base_dir = self.workspace_path.resolve() if self.workspace_path else Path.cwd().resolve()
+        meta_dir = base_dir / ".project-meta"
+        meta_dir.mkdir(parents=True, exist_ok=True)
+        safe_filename = Path(path).name if path else "research_state.json"
+        target = meta_dir / safe_filename
         target.write_text(json.dumps(self.state.to_dict(), indent=2), encoding="utf-8")
         return target
 
     def load_state(self, path: str | Path | None = None) -> bool:
         """Load state JSON from disk."""
-        target = self._get_safe_state_path(path)
+        base_dir = self.workspace_path.resolve() if self.workspace_path else Path.cwd().resolve()
+        safe_filename = Path(path).name if path else "research_state.json"
+        target = base_dir / ".project-meta" / safe_filename
         if not target.exists():
             return False
         try:
             data = json.loads(target.read_text(encoding="utf-8"))
             self.state = ResearchState.from_dict(data)
             return True
-        except Exception as e:
-            logger.warning("Failed to load research state from %s: %s", target, e)
+        except Exception:
             return False
