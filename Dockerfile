@@ -5,20 +5,18 @@
 # ── Stage 1: Build frontend ──────────────────────────────
 FROM node:20-slim AS frontend-build
 
-WORKDIR /app
+WORKDIR /app/frontend
 
-# Install pnpm
+# Install pnpm directly for speed and reliability
 RUN npm install -g pnpm@latest
 
-# Copy package configurations for layer caching
-COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
-COPY frontend/package.json ./frontend/
-
-# Install dependencies and build frontend SPA
+# Install dependencies (cached layer)
+COPY frontend/package.json ./
 RUN pnpm install
 
-COPY frontend/ ./frontend/
-RUN cd frontend && pnpm build
+# Copy frontend source and build production SPA
+COPY frontend/ ./
+RUN pnpm build
 
 
 # ── Stage 2: Python backend runtime ───────────────────────
@@ -46,8 +44,8 @@ RUN cd backend && uv sync --no-dev
 # Copy built frontend static bundle
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Create runtime data directory
-RUN mkdir -p /app/data && chown -R openmlr:openmlr /app
+# Create runtime directories with non-root ownership
+RUN mkdir -p /app/data /app/.workspaces /app/.keys && chown -R openmlr:openmlr /app
 
 # Switch to non-root user
 USER openmlr
