@@ -39,8 +39,14 @@ def _bus(request: Request):
 
 
 @router.get("/events")
-async def events(request: Request, token: str = None):
-    """SSE event stream. Uses raw StreamingResponse for immediate flushing."""
+async def events(
+    request: Request,
+    token: str | None = None,
+    conv_id: str | None = None,
+    project_id: str | None = None,
+    last_event_id: int | None = None,
+):
+    """SSE event stream with channel scoping and replay buffer support."""
     if token:
         from ..auth.security import decode_access_token
 
@@ -50,32 +56,37 @@ async def events(request: Request, token: str = None):
 
             return JSONResponse(status_code=401, content={"error": "Invalid token"})
 
+    # Check for Last-Event-ID header if query param not provided
+    if last_event_id is None:
+        header_last_id = request.headers.get("Last-Event-ID")
+        if header_last_id and header_last_id.isdigit():
+            last_event_id = int(header_last_id)
+
     event_bus = _bus(request)
-    queue = event_bus.subscribe()
-    logger.info(f"SSE client connected (subscribers: {event_bus.subscriber_count})")
+    queue = event_bus.subscribe(
+        conv_id=conv_id,
+        project_id=project_id,
+        last_event_id=last_event_id,
+    )
+    logger.info(
+        "SSE client connected (conv_id=%s, last_id=%s, subscribers: %d)",
+        conv_id,
+        last_event_id,
+        event_bus.subscriber_count,
+    )
 
-    async def _stream():
-        import json
+    from ..services.event_bus import sse_generator
 
+    async def _wrapped_stream():
         try:
-            while True:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=25)
-                    event.get("event_type", "?") if isinstance(event, dict) else "?"
-                    payload = f"data: {json.dumps(event)}\n\n"
-                    yield payload
-                except TimeoutError:
-                    yield ":ping\n\n"
-        except asyncio.CancelledError:
-            raise
-        except GeneratorExit:
-            pass
+            async for chunk in sse_generator(queue):
+                yield chunk
         finally:
             event_bus.unsubscribe(queue)
-            logger.info(f"SSE client disconnected (subscribers: {event_bus.subscriber_count})")
+            logger.info("SSE client disconnected (subscribers: %d)", event_bus.subscriber_count)
 
     return StreamingResponse(
-        _stream(),
+        _wrapped_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -83,6 +94,13 @@ async def events(request: Request, token: str = None):
             "X-Accel-Buffering": "no",  # disable nginx buffering if behind proxy
         },
     )
+
+
+@router.get("/events/stats")
+async def events_stats(request: Request):
+    """Return runtime event bus metrics and buffer status."""
+    event_bus = _bus(request)
+    return event_bus.get_metrics()
 
 
 @router.get("/events/test")
