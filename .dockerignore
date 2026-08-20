@@ -1,4 +1,5 @@
 # Node
+node_modules
 frontend/node_modules
 frontend/dist
 
@@ -7,10 +8,16 @@ backend/.venv
 backend/__pycache__
 **/__pycache__
 *.pyc
+.ruff_cache
+.pytest_cache
 
 # Git
 .git
 .gitignore
+
+# Keys and local data
+.keys
+data/
 
 # IDE
 .vscode
@@ -18,5 +25,6 @@ backend/__pycache__
 
 # Misc
 *.log
+.env
 .env.local
 .DS_Store

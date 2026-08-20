@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile || pnpm install
 
 # Copy frontend source and build static bundle
 COPY frontend/ ./frontend/
-RUN pnpm --filter frontend build
+RUN cd frontend && pnpm build
 
 
 # ── Stage 2: Python backend runtime ───────────────────────
