@@ -16,6 +16,9 @@ const PaperStudio = lazy(() => import('../paper/PaperStudio').then((m) => ({ def
 const CitationGraph = lazy(() =>
   import('../research/CitationGraph').then((m) => ({ default: m.CitationGraph }))
 );
+const RunDashboard = lazy(() =>
+  import('../experiments/RunDashboard').then((m) => ({ default: m.RunDashboard }))
+);
 
 export function ChatContainer() {
   const {
@@ -117,6 +120,17 @@ export function ChatContainer() {
           onClick={() => setMainTab('research')}
         >
           Citation Graph
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'experiments'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'experiments' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('experiments')}
+        >
+          Experiments
         </button>
         {/* Closable Image tab */}
         {imageTab && (
@@ -255,6 +269,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'research' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Citation Graph...</div>}>
           <CitationGraph />
+        </Suspense>
+      </div>
+
+      {/* Experiments Dashboard tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'experiments' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Experiment Dashboard...</div>}>
+          <RunDashboard />
         </Suspense>
       </div>
 
