@@ -371,4 +371,46 @@ export const api = {
     const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
     return del(`/api/sweeps/${encodeURIComponent(sweepId)}${q}`);
   },
+
+  // Model Registry & Governance
+  listRegisteredModels: (projectUuid?: string, filters?: { task_type?: string; framework?: string; status?: string; tag?: string }) => {
+    const params = new URLSearchParams();
+    if (projectUuid) params.set('project_id', projectUuid);
+    if (filters?.task_type) params.set('task_type', filters.task_type);
+    if (filters?.framework) params.set('framework', filters.framework);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.tag) params.set('tag', filters.tag);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return get(`/api/model-registry${qs}`);
+  },
+  registerModel: (projectUuid: string | undefined, body: Record<string, unknown>) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/model-registry${q}`, body);
+  },
+  getRegisteredModel: (projectUuid: string | undefined, modelId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/model-registry/${encodeURIComponent(modelId)}${q}`);
+  },
+  updateRegisteredModel: (projectUuid: string | undefined, modelId: string, body: Record<string, unknown>) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return put(`/api/model-registry/${encodeURIComponent(modelId)}${q}`, body);
+  },
+  deleteRegisteredModel: (projectUuid: string | undefined, modelId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return del(`/api/model-registry/${encodeURIComponent(modelId)}${q}`);
+  },
+  generateModelCard: (projectUuid: string | undefined, modelId: string, body: Record<string, unknown>) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/model-registry/${encodeURIComponent(modelId)}/card${q}`, body);
+  },
+  planModelQuantization: (projectUuid: string | undefined, modelId: string, targetPrecisions: string[]) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/model-registry/${encodeURIComponent(modelId)}/quantization${q}`, { target_precisions: targetPrecisions });
+  },
+  inspectCheckpoint: (body: { checkpoint_path: string; parameters_count?: number; model_size_mb?: number; framework?: string }) =>
+    post('/api/model-registry/inspect', body),
+  compareRegisteredModels: (projectUuid: string | undefined, modelIds: string[]) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/model-registry/compare${q}`, { model_ids: modelIds });
+  },
 };

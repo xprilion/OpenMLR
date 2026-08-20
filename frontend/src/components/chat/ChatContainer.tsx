@@ -34,6 +34,9 @@ const DatasetStudio = lazy(() =>
 const SweepStudio = lazy(() =>
   import('../sweeps/SweepStudio').then((m) => ({ default: m.SweepStudio }))
 );
+const ModelStudio = lazy(() =>
+  import('../models/ModelStudio').then((m) => ({ default: m.ModelStudio }))
+);
 
 const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
   { id: 'agent', label: 'Agent' },
@@ -45,6 +48,7 @@ const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
   { id: 'experiments', label: 'Experiments' },
   { id: 'datasets', label: 'Datasets' },
   { id: 'sweeps', label: 'Sweeps' },
+  { id: 'models', label: 'Models' },
   { id: 'review', label: 'Peer Review' },
   { id: 'eval', label: 'Benchmarks' },
 ];
@@ -279,6 +283,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'sweeps' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Sweep Studio...</div>}>
           <SweepStudio projectId={activeProject?.uuid} />
+        </Suspense>
+      </div>
+
+      {/* Models Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'models' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Model Studio...</div>}>
+          <ModelStudio />
         </Suspense>
       </div>
 
