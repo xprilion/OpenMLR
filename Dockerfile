@@ -5,17 +5,19 @@
 # ── Stage 1: Build frontend SPA ───────────────────────────
 FROM node:20-slim AS frontend-build
 
-WORKDIR /app/frontend
+WORKDIR /app
 
-# Install pnpm for reproducible frontend builds
-RUN npm install -g pnpm@latest
+# Install pinned pnpm with disabled lifecycle scripts
+RUN npm install -g --ignore-scripts pnpm@10.5.2
 
-# Install dependencies and build static assets
-COPY frontend/package.json ./
-RUN pnpm install --no-frozen-lockfile
+# Copy workspace lockfile and manifest for locked installation
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY frontend/package.json ./frontend/
+RUN pnpm --filter openmlr-frontend install --frozen-lockfile --ignore-scripts
 
-COPY frontend/ ./
-RUN pnpm build
+# Copy frontend source and build production bundle
+COPY frontend/ ./frontend/
+RUN pnpm --filter openmlr-frontend build
 
 
 # ── Stage 2: Python backend runtime ───────────────────────
@@ -36,9 +38,9 @@ RUN groupadd --gid 1000 openmlr && \
 
 WORKDIR /app
 
-# Copy backend source and install dependencies
+# Copy backend source and install dependencies from frozen lockfile
 COPY backend/ ./backend/
-RUN cd backend && uv sync --frozen --no-dev
+RUN cd backend && uv sync --frozen --no-dev --no-install-project --no-build
 
 # Copy built frontend static bundle
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
