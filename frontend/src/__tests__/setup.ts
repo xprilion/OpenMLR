@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom';
 import '@testing-library/jest-dom/vitest';
 
 // Mock HTMLDialogElement methods not implemented in jsdom

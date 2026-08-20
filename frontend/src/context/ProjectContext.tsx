@@ -1,10 +1,35 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import { api } from '../api';
 import type { Project, OpenFile } from '../types';
 import { isImageFile, detectLanguage } from '../utils/fileHelpers';
 
-export type MainTab = 'agent' | 'workflow' | 'editor' | 'terminal' | 'image' | 'paper' | 'research' | 'experiments' | 'datasets' | 'sweeps' | 'models' | 'figures' | 'ablation' | 'reproducibility' | 'review' | 'eval';
+export type MainTab =
+  | 'agent'
+  | 'editor'
+  | 'terminal'
+  | 'image'
+  | 'workflow'
+  | 'paper'
+  | 'research'
+  | 'experiments'
+  | 'datasets'
+  | 'sweeps'
+  | 'models'
+  | 'figures'
+  | 'ablation'
+  | 'reproducibility'
+  | 'review'
+  | 'eval';
+
+export const CORE_TABS: readonly MainTab[] = ['agent', 'editor', 'terminal'] as const;
+
+export interface TabSuggestion {
+  tab: MainTab;
+  title: string;
+  description: string;
+  sourceEvent?: string;
+}
 
 export interface ProjectContextType {
   projects: Project[];
@@ -17,11 +42,17 @@ export interface ProjectContextType {
   showProjectModal: boolean;
   showManageProjects: boolean;
   mainTab: MainTab;
+  enabledTabs: MainTab[];
+  suggestedTabPrompt: TabSuggestion | null;
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setActiveProject: React.Dispatch<React.SetStateAction<Project | null>>;
   setShowProjectModal: (show: boolean) => void;
   setShowManageProjects: (show: boolean) => void;
   setMainTab: (tab: MainTab) => void;
+  enableTab: (tab: MainTab, switchTo?: boolean) => void;
+  disableTab: (tab: MainTab) => void;
+  promptToOpenTab: (tab: MainTab, title: string, description: string, sourceEvent?: string) => void;
+  dismissSuggestedTabPrompt: () => void;
   setImageTab: (img: { path: string; url: string } | null) => void;
   setActiveFilePath: (path: string | null) => void;
   triggerFileTreeRefresh: () => void;
@@ -31,6 +62,25 @@ export interface ProjectContextType {
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
+
+const STORAGE_KEY_TABS = 'openmlr_enabled_tabs';
+
+function getInitialEnabledTabs(): MainTab[] {
+  if (typeof window === 'undefined') return [...CORE_TABS];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_TABS);
+    if (!raw) return [...CORE_TABS];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Ensure all core tabs are always present
+      const combined = Array.from(new Set([...CORE_TABS, ...parsed])) as MainTab[];
+      return combined;
+    }
+  } catch {
+    // ignore parse error
+  }
+  return [...CORE_TABS];
+}
 
 export function ProjectProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -45,6 +95,16 @@ export function ProjectProvider({ children }: Readonly<{ children: ReactNode }>)
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showManageProjects, setShowManageProjects] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>('agent');
+  const [enabledTabs, setEnabledTabs] = useState<MainTab[]>(getInitialEnabledTabs);
+  const [suggestedTabPrompt, setSuggestedTabPrompt] = useState<TabSuggestion | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_TABS, JSON.stringify(enabledTabs));
+    } catch {
+      // ignore
+    }
+  }, [enabledTabs]);
 
   const triggerFileTreeRefresh = useCallback(() => {
     setFileTreeRefreshKey((k) => k + 1);
@@ -60,6 +120,39 @@ export function ProjectProvider({ children }: Readonly<{ children: ReactNode }>)
       setProjects([]);
       return [];
     }
+  }, []);
+
+  const enableTab = useCallback((tab: MainTab, switchTo = true) => {
+    setEnabledTabs((prev) => {
+      if (prev.includes(tab)) return prev;
+      return [...prev, tab];
+    });
+    if (switchTo) {
+      setMainTab(tab);
+    }
+    setSuggestedTabPrompt((curr) => (curr?.tab === tab ? null : curr));
+  }, []);
+
+  const disableTab = useCallback((tab: MainTab) => {
+    // Core tabs cannot be closed
+    if (CORE_TABS.includes(tab)) return;
+    setEnabledTabs((prev) => prev.filter((t) => t !== tab));
+    setMainTab((curr) => (curr === tab ? 'agent' : curr));
+  }, []);
+
+  const promptToOpenTab = useCallback((tab: MainTab, title: string, description: string, sourceEvent?: string) => {
+    setEnabledTabs((curr) => {
+      if (curr.includes(tab)) {
+        // Tab is already enabled; no prompt needed
+        return curr;
+      }
+      setSuggestedTabPrompt({ tab, title, description, sourceEvent });
+      return curr;
+    });
+  }, []);
+
+  const dismissSuggestedTabPrompt = useCallback(() => {
+    setSuggestedTabPrompt(null);
   }, []);
 
   const handleFileOpen = useCallback((path: string, content: string) => {
@@ -104,11 +197,17 @@ export function ProjectProvider({ children }: Readonly<{ children: ReactNode }>)
       showProjectModal,
       showManageProjects,
       mainTab,
+      enabledTabs,
+      suggestedTabPrompt,
       setProjects,
       setActiveProject,
       setShowProjectModal,
       setShowManageProjects,
       setMainTab,
+      enableTab,
+      disableTab,
+      promptToOpenTab,
+      dismissSuggestedTabPrompt,
       setImageTab,
       setActiveFilePath,
       triggerFileTreeRefresh,
@@ -126,6 +225,12 @@ export function ProjectProvider({ children }: Readonly<{ children: ReactNode }>)
       showProjectModal,
       showManageProjects,
       mainTab,
+      enabledTabs,
+      suggestedTabPrompt,
+      enableTab,
+      disableTab,
+      promptToOpenTab,
+      dismissSuggestedTabPrompt,
       triggerFileTreeRefresh,
       loadProjects,
       handleFileOpen,

@@ -113,4 +113,59 @@ describe('ProjectContext', () => {
     expect(result.current.activeFilePath).toBeNull();
     expect(result.current.mainTab).toBe('agent');
   });
+
+  it('initializes with default core tabs and allows enabling/disabling optional studios', () => {
+    localStorage.clear();
+    const { result } = renderHook(() => useProject(), { wrapper: ProjectProvider });
+
+    expect(result.current.enabledTabs).toEqual(['agent', 'editor', 'terminal']);
+    expect(result.current.mainTab).toBe('agent');
+
+    // Enable an optional tab with switch
+    act(() => {
+      result.current.enableTab('ablation', true);
+    });
+
+    expect(result.current.enabledTabs).toContain('ablation');
+    expect(result.current.mainTab).toBe('ablation');
+
+    // Disable an optional tab
+    act(() => {
+      result.current.disableTab('ablation');
+    });
+
+    expect(result.current.enabledTabs).not.toContain('ablation');
+    expect(result.current.mainTab).toBe('agent');
+
+    // Core tabs cannot be disabled
+    act(() => {
+      result.current.disableTab('agent');
+    });
+    expect(result.current.enabledTabs).toContain('agent');
+  });
+
+  it('manages generative tab prompt suggestions and dismissal', () => {
+    localStorage.clear();
+    const { result } = renderHook(() => useProject(), { wrapper: ProjectProvider });
+
+    expect(result.current.suggestedTabPrompt).toBeNull();
+
+    act(() => {
+      result.current.promptToOpenTab('paper', 'Paper Studio', 'LaTeX drafting detected');
+    });
+
+    expect(result.current.suggestedTabPrompt).toEqual({
+      tab: 'paper',
+      title: 'Paper Studio',
+      description: 'LaTeX drafting detected',
+      sourceEvent: undefined,
+    });
+
+    // Dismissing clears the prompt
+    act(() => {
+      result.current.dismissSuggestedTabPrompt();
+    });
+
+    expect(result.current.suggestedTabPrompt).toBeNull();
+  });
 });

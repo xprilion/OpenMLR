@@ -1,12 +1,15 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { MessageList } from '../MessageList';
 import { InputArea } from '../InputArea';
 import { ApprovalModal } from '../ApprovalModal';
 import { TodoReviewDrawer } from '../TodoReviewDrawer';
 import { QuestionDrawer } from '../QuestionDrawer';
 import { ImageViewer } from '../ImageViewer';
+import { StudioTabsPicker } from './StudioTabsPicker';
+import { GenerativeTabPromptBanner } from './GenerativeTabPromptBanner';
 import { useChat } from '../../context/ChatContext';
-import { useProject, type MainTab } from '../../context/ProjectContext';
+import { useProject, type MainTab, CORE_TABS } from '../../context/ProjectContext';
 import { useCompute } from '../../context/ComputeContext';
 import { nextMsgId } from '../../context/agentEventReducers';
 
@@ -47,23 +50,29 @@ const ReproducibilityStudio = lazy(() =>
   import('../reproducibility/ReproducibilityStudio').then((m) => ({ default: m.ReproducibilityStudio }))
 );
 
-const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
-  { id: 'agent', label: 'Agent' },
-  { id: 'workflow', label: 'Workflow' },
-  { id: 'editor', label: 'Editor' },
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'paper', label: 'Paper Studio' },
-  { id: 'research', label: 'Citation Graph' },
-  { id: 'experiments', label: 'Experiments' },
-  { id: 'datasets', label: 'Datasets' },
-  { id: 'sweeps', label: 'Sweeps' },
-  { id: 'models', label: 'Models' },
-  { id: 'figures', label: 'Figures' },
-  { id: 'ablation', label: 'Ablations' },
-  { id: 'reproducibility', label: 'Reproducibility' },
-  { id: 'review', label: 'Peer Review' },
-  { id: 'eval', label: 'Benchmarks' },
-];
+interface TabLabelMeta {
+  id: MainTab;
+  label: string;
+}
+
+const TAB_METADATA: Record<MainTab, TabLabelMeta> = {
+  agent: { id: 'agent', label: 'Agent' },
+  editor: { id: 'editor', label: 'Editor' },
+  terminal: { id: 'terminal', label: 'Terminal' },
+  image: { id: 'image', label: 'Image Preview' },
+  workflow: { id: 'workflow', label: 'Workflow' },
+  paper: { id: 'paper', label: 'Paper Studio' },
+  research: { id: 'research', label: 'Citation Graph' },
+  experiments: { id: 'experiments', label: 'Experiments' },
+  datasets: { id: 'datasets', label: 'Datasets' },
+  sweeps: { id: 'sweeps', label: 'Sweeps' },
+  models: { id: 'models', label: 'Models' },
+  figures: { id: 'figures', label: 'Figures' },
+  ablation: { id: 'ablation', label: 'Ablations' },
+  reproducibility: { id: 'reproducibility', label: 'Reproducibility' },
+  review: { id: 'review', label: 'Peer Review' },
+  eval: { id: 'eval', label: 'Benchmarks' },
+};
 
 export function ChatContainer() {
   const {
@@ -91,6 +100,9 @@ export function ChatContainer() {
     activeProject,
     mainTab,
     setMainTab,
+    enabledTabs,
+    disableTab,
+    promptToOpenTab,
     openFiles,
     activeFilePath,
     setActiveFilePath,
@@ -101,62 +113,148 @@ export function ChatContainer() {
 
   const { mcpServers, terminalConnected, setTerminalConnected } = useCompute();
 
+  // Generative UI: inspect recent tool events to suggest specialized tabs with user permission
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role !== 'assistant') return;
+
+    const content = lastMsg.content.toLowerCase();
+    if (content.includes('ablation') && !enabledTabs.includes('ablation')) {
+      promptToOpenTab(
+        'ablation',
+        'Ablation Studio',
+        'Ablation study or significance testing detected in research flow.'
+      );
+    } else if ((content.includes('latex') || content.includes('bibtex') || content.includes('paper draft')) && !enabledTabs.includes('paper')) {
+      promptToOpenTab(
+        'paper',
+        'Paper Studio',
+        'LaTeX paper drafting or BibTeX compilation activity detected.'
+      );
+    } else if ((content.includes('figure') || content.includes('tikz') || content.includes('plot')) && !enabledTabs.includes('figures')) {
+      promptToOpenTab(
+        'figures',
+        'Figures Studio',
+        'Publication diagram and vector plot activity detected.'
+      );
+    } else if (content.includes('hyperparameter sweep') && !enabledTabs.includes('sweeps')) {
+      promptToOpenTab(
+        'sweeps',
+        'Sweep Studio',
+        'Hyperparameter exploration and parallel coordinates detected.'
+      );
+    } else if (content.includes('reproducibility audit') && !enabledTabs.includes('reproducibility')) {
+      promptToOpenTab(
+        'reproducibility',
+        'Reproducibility Studio',
+        'Reproducibility checklist or audit score ready for inspection.'
+      );
+    }
+  }, [messages, enabledTabs, promptToOpenTab]);
+
+  const activeTabsList = useMemo(() => {
+    return enabledTabs.map((id) => TAB_METADATA[id] || { id, label: id });
+  }, [enabledTabs]);
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden relative">
-      {/* Agent / Editor / Terminal / Paper / Research tab bar */}
-      <div role="tablist" className="flex items-center border-b border-border shrink-0 bg-surface">
-        {NAVIGATION_TABS.map((tab) => {
-          const isSelected = mainTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={isSelected}
-              className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                isSelected ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+      {/* Focused tab bar with dynamic on-demand tabs */}
+      <div
+        role="tablist"
+        className="flex items-center justify-between border-b border-border shrink-0 bg-surface px-2 sm:px-4 overflow-x-auto"
+      >
+        <div className="flex items-center gap-1">
+          {activeTabsList.map((tab) => {
+            const isSelected = mainTab === tab.id;
+            const isCore = CORE_TABS.includes(tab.id);
+
+            return (
+              <div
+                key={tab.id}
+                className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 group ${
+                  isSelected ? 'text-primary border-primary' : 'text-text-dim hover:text-text border-transparent'
+                }`}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  className="flex items-center gap-1.5 focus:outline-none"
+                  onClick={() => setMainTab(tab.id)}
+                >
+                  <span>{tab.label}</span>
+                  {tab.id === 'editor' && openFiles.length > 0 && (
+                    <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-semibold">
+                      {openFiles.length}
+                    </span>
+                  )}
+                  {tab.id === 'terminal' && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        terminalConnected ? 'bg-success' : 'bg-text-dim'
+                      }`}
+                    />
+                  )}
+                </button>
+
+                {/* Optional tab close button */}
+                {!isCore && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      disableTab(tab.id);
+                    }}
+                    className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors ml-0.5"
+                    title={`Hide ${tab.label}`}
+                    aria-label={`Close ${tab.label} tab`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Closable Image preview tab */}
+          {imageTab && (
+            <div
+              className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 group ${
+                mainTab === 'image' ? 'text-primary border-primary' : 'text-text-dim hover:text-text border-transparent'
               }`}
-              onClick={() => setMainTab(tab.id)}
             >
-              {tab.label}
-              {tab.id === 'editor' && openFiles.length > 0 && (
-                <span className="ml-1 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
-                  {openFiles.length}
-                </span>
-              )}
-              {tab.id === 'terminal' && (
-                <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
-              )}
-            </button>
-          );
-        })}
-        {/* Closable Image tab */}
-        {imageTab && (
-          <div
-            className={`flex items-center gap-1 px-4 py-2 text-sm font-medium transition-colors group ${
-              mainTab === 'image' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-            }`}
-          >
-            <button type="button" className="truncate" onClick={() => setMainTab('image')}>
-              {imageTab.path.split('/').pop()}
-            </button>
-            <button
-              type="button"
-              className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors opacity-0 group-hover:opacity-100"
-              onClick={() => {
-                setImageTab(null);
-                if (mainTab === 'image') setMainTab('agent');
-              }}
-              title="Close image"
-            >
-              &times;
-            </button>
-          </div>
-        )}
+              <button type="button" className="truncate max-w-[120px]" onClick={() => setMainTab('image')}>
+                {imageTab.path.split('/').pop()}
+              </button>
+              <button
+                type="button"
+                className="w-4 h-4 rounded flex items-center justify-center text-text-dim hover:text-error hover:bg-surface-hover transition-colors"
+                onClick={() => {
+                  setImageTab(null);
+                  if (mainTab === 'image') setMainTab('agent');
+                }}
+                title="Close image"
+                aria-label="Close image tab"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Add Tab Picker */}
+        <StudioTabsPicker />
       </div>
 
+      {/* Generative Tab Suggestion Banner */}
+      <GenerativeTabPromptBanner />
+
       {/* Agent tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden relative ${mainTab === 'agent' ? '' : 'hidden'}`}>
+      <div
+        role="tabpanel"
+        className={`flex flex-col flex-1 overflow-hidden relative ${mainTab === 'agent' ? '' : 'hidden'}`}
+      >
         {messages.length === 0 && !effectiveProcessing && (
           <div className="flex flex-col items-center justify-center flex-1 text-center px-4 sm:px-6 py-8 sm:py-12">
             <div className="relative mb-8">
@@ -175,7 +273,9 @@ export function ChatContainer() {
                 draggable={false}
               />
             </div>
-            <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">What would you like to research?</p>
+            <p className="text-lg sm:text-xl text-text-dim animate-[fade-in_0.6s_ease-out]">
+              What would you like to research?
+            </p>
           </div>
         )}
 
@@ -212,7 +312,10 @@ export function ChatContainer() {
             onDone={(summary, switchToExecute) => {
               setQuestionsPayload(null);
               setCurrentConvStatus('processing');
-              setMessages((prev) => [...prev, { id: nextMsgId(), role: 'user', content: `Answered:\n${summary}` }]);
+              setMessages((prev) => [
+                ...prev,
+                { id: nextMsgId(), role: 'user', content: `Answered:\n${summary}` },
+              ]);
               if (switchToExecute) setInputMode('execute');
             }}
             onClose={() => setQuestionsPayload(null)}
@@ -233,15 +336,11 @@ export function ChatContainer() {
         />
       </div>
 
-      {/* Workflow Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'workflow' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Workflow Studio...</div>}>
-          <ResearchWorkflowStudio />
-        </Suspense>
-      </div>
-
       {/* Editor tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'editor' ? '' : 'hidden'}`}>
+      <div
+        role="tabpanel"
+        className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'editor' ? '' : 'hidden'}`}
+      >
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading...</div>}>
           <EditorPanel
             openFiles={openFiles}
@@ -253,7 +352,10 @@ export function ChatContainer() {
       </div>
 
       {/* Terminal tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'terminal' ? '' : 'hidden'}`}>
+      <div
+        role="tabpanel"
+        className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'terminal' ? '' : 'hidden'}`}
+      >
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading...</div>}>
           <TerminalPanel
             projectUuid={activeProject?.uuid || null}
@@ -263,82 +365,210 @@ export function ChatContainer() {
         </Suspense>
       </div>
 
-      {/* Paper Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'paper' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Paper Studio...</div>}>
-          <PaperStudio />
-        </Suspense>
-      </div>
+      {/* Optional Specialized Studios (rendered when active/enabled) */}
+      {enabledTabs.includes('workflow') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'workflow' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Workflow Studio...
+              </div>
+            }
+          >
+            <ResearchWorkflowStudio />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Citation Graph tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'research' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Citation Graph...</div>}>
-          <CitationGraph />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('paper') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'paper' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Paper Studio...
+              </div>
+            }
+          >
+            <PaperStudio />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Experiments Dashboard tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'experiments' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Experiment Dashboard...</div>}>
-          <RunDashboard />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('research') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'research' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Citation Graph...
+              </div>
+            }
+          >
+            <CitationGraph />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Dataset Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'datasets' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Dataset Studio...</div>}>
-          <DatasetStudio />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('experiments') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'experiments' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Experiment Dashboard...
+              </div>
+            }
+          >
+            <RunDashboard />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Sweep Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'sweeps' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Sweep Studio...</div>}>
-          <SweepStudio projectId={activeProject?.uuid} />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('datasets') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'datasets' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Dataset Studio...
+              </div>
+            }
+          >
+            <DatasetStudio />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Models Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'models' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Model Studio...</div>}>
-          <ModelStudio />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('sweeps') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'sweeps' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Sweep Studio...
+              </div>
+            }
+          >
+            <SweepStudio projectId={activeProject?.uuid} />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Publication Figures Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'figures' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Figure Studio...</div>}>
-          <FigureStudio projectId={activeProject?.uuid} />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('models') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'models' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Model Studio...
+              </div>
+            }
+          >
+            <ModelStudio />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Ablation Studies & Significance Testing tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'ablation' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Ablation Studio...</div>}>
-          <AblationStudio projectId={activeProject?.uuid} />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('figures') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'figures' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Figure Studio...
+              </div>
+            }
+          >
+            <FigureStudio projectId={activeProject?.uuid} />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Reproducibility Studio tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'reproducibility' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Reproducibility Studio...</div>}>
-          <ReproducibilityStudio />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('ablation') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'ablation' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Ablation Studio...
+              </div>
+            }
+          >
+            <AblationStudio projectId={activeProject?.uuid} />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Peer Review tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'review' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Peer Review Studio...</div>}>
-          <PeerReviewStudio />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('reproducibility') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'reproducibility' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Reproducibility Studio...
+              </div>
+            }
+          >
+            <ReproducibilityStudio />
+          </Suspense>
+        </div>
+      )}
 
-      {/* Evaluation Benchmark tab */}
-      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'eval' ? '' : 'hidden'}`}>
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Benchmark Harness...</div>}>
-          <EvalBenchmarkDashboard />
-        </Suspense>
-      </div>
+      {enabledTabs.includes('review') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'review' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Peer Review Studio...
+              </div>
+            }
+          >
+            <PeerReviewStudio />
+          </Suspense>
+        </div>
+      )}
+
+      {enabledTabs.includes('eval') && (
+        <div
+          role="tabpanel"
+          className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'eval' ? '' : 'hidden'}`}
+        >
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-text-dim">
+                Loading Benchmark Harness...
+              </div>
+            }
+          >
+            <EvalBenchmarkDashboard />
+          </Suspense>
+        </div>
+      )}
 
       {/* Image tab */}
       {mainTab === 'image' && imageTab && (
