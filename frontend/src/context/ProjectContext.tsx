@@ -4,7 +4,7 @@ import { api } from '../api';
 import type { Project, OpenFile } from '../types';
 import { isImageFile, detectLanguage } from '../utils/fileHelpers';
 
-export type MainTab = 'agent' | 'editor' | 'terminal' | 'image' | 'paper';
+export type MainTab = 'agent' | 'editor' | 'terminal' | 'image' | 'paper' | 'research';
 
 export interface ProjectContextType {
   projects: Project[];
