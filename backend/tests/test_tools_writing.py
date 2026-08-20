@@ -400,3 +400,45 @@ class TestGetDraftIncompleteWarning:
         assert ok is True
         assert "WARNING" not in draft
         _projects.clear()
+
+
+class TestValidateCitationsAndExportLatex:
+    async def test_validate_citations_in_project(self):
+        from openmlr.tools.writing import _projects, _validate_citations
+
+        _projects.clear()
+        _create_project(conv_id=1, title="Test")
+        _set_outline(conv_id=1, outline=[{"id": "s1", "title": "Intro"}])
+        _write_section(conv_id=1, section_id="s1", content="We cite [@vaswani2017].")
+        _add_citation(
+            conv_id=1,
+            citation={
+                "key": "vaswani2017",
+                "type": "article",
+                "title": "Attention",
+                "author": "Vaswani",
+                "year": "2017",
+            },
+        )
+        report, ok = _validate_citations(conv_id=1)
+        assert ok is True
+        assert "Total Citations: 1" in report
+        _projects.clear()
+
+    async def test_export_latex_from_project(self):
+        from unittest.mock import AsyncMock, patch
+
+        from openmlr.tools.writing import _export_latex, _projects
+
+        _projects.clear()
+        _create_project(conv_id=1, title="Test Paper")
+        _set_outline(conv_id=1, outline=[{"id": "s1", "title": "Intro"}])
+        _write_section(conv_id=1, section_id="s1", content="Section content.")
+
+        with patch("openmlr.tools.writing._get_author_info", new_callable=AsyncMock, return_value=None):
+            tex_code, ok = await _export_latex(conv_id=1)
+        assert ok is True
+        assert r"\documentclass" in tex_code
+        assert r"\title{Test Paper}" in tex_code
+        _projects.clear()
+
