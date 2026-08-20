@@ -155,7 +155,7 @@
   - Modify: `backend/openmlr/agent/loop_executor.py`
   - Create: `backend/tests/test_ml_debugger.py`
 
-### Task 3.3: Autonomous Multi-Agent Peer Review Simulation (NEXT)
+### Task 3.3: Autonomous Multi-Agent Peer Review Simulation (Completed - PR #49)
 - **Objective:** Deploy a committee of 3 independent reviewer subagents + 1 Meta-Reviewer that evaluate research plans and drafted papers against standard conference rubrics (ICLR / NeurIPS / ICML):
   - Reviewer 1 (Theory & Novelty): Rigor, mathematical correctness, theoretical claims.
   - Reviewer 2 (Empirical Validation): Baselines, ablation completeness, statistical significance.
@@ -165,8 +165,9 @@
   - Create: `backend/openmlr/agent/peer_review.py`
   - Create: `backend/openmlr/agent/review_prompts.py`
   - Create: `backend/openmlr/routes/review.py`
+  - Create: `backend/tests/test_peer_review.py`
 
-### Task 3.4: Sandboxed LaTeX Compilation & BibTeX Validator
+### Task 3.4: Sandboxed LaTeX Compilation & BibTeX Validator (NEXT)
 - **Objective:** Built-in headless LaTeX compiler (Tectonic / `pdflatex`) that validates syntax, checks for missing citations, downloads missing packages, and produces clean PDF artifacts.
 - **Files:**
   - Create: `backend/openmlr/tools/latex_compiler.py`

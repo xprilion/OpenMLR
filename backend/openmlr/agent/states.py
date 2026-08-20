@@ -120,6 +120,7 @@ class ResearchArtifacts:
     manuscript_sections: dict[str, str] = field(default_factory=dict)
     bibtex_entries: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    reviews: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -134,6 +135,7 @@ class ResearchArtifacts:
             manuscript_sections=data.get("manuscript_sections", {}),
             bibtex_entries=data.get("bibtex_entries", []),
             notes=data.get("notes", []),
+            reviews=data.get("reviews", []),
         )
 
 
