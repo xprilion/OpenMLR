@@ -68,12 +68,7 @@ async def events(
         project_id=project_id,
         last_event_id=last_event_id,
     )
-    logger.info(
-        "SSE client connected (conv_id=%s, last_id=%s, subscribers: %d)",
-        conv_id,
-        last_event_id,
-        event_bus.subscriber_count,
-    )
+    logger.info("SSE client connected (subscribers: %d)", event_bus.subscriber_count)
 
     from ..services.event_bus import sse_generator
 

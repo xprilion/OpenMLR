@@ -104,11 +104,7 @@ class EventBus:
 
         self._subscriptions.append(sub)
         self._subscribers.append(queue)
-        logger.info(
-            "SSE subscriber added (conv_id=%s, total: %d)",
-            conv_id,
-            len(self._subscriptions),
-        )
+        logger.info("SSE subscriber added (total: %d)", len(self._subscriptions))
         return queue
 
     def unsubscribe(self, queue: asyncio.Queue) -> None:
