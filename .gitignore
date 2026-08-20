@@ -50,6 +50,7 @@ site/docs/.vitepress/cache/
 site/docs/changelog.md
 
 # Misc
+.hermes/
 tmp/
 temp/
 coverage/
