@@ -170,6 +170,19 @@ export const api = {
   testMcpServer: (url: string, headers?: Record<string, string>, params?: Record<string, string>) =>
     post('/api/mcp/test', { url, headers: headers || null, params: params || null }),
 
+  // Peer Review Simulation
+  getReviewRubrics: () => get('/api/review/rubrics'),
+  evaluateSubmission: (body: {
+    submission_text: string;
+    venue?: string;
+    title?: string;
+    context?: Record<string, unknown>;
+  }) => post('/api/review/evaluate', body),
+  reviewProjectWorkspace: (
+    projectId: number,
+    body: { venue?: string; include_latex?: boolean; include_notes?: boolean }
+  ) => post(`/api/projects/${projectId}/review`, body),
+
   // Evaluation & Benchmark Harness
   listEvalSuites: () => get('/api/eval/suites'),
   listEvalTasks: (category?: string) =>

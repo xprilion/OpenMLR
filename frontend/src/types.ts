@@ -187,6 +187,34 @@ export interface AgentJob {
 
 // ── Peer Review Simulation ──────────────────────────────
 
+export interface ReviewCriteria {
+  name: string;
+  weight: number;
+  description: string;
+  scale?: string;
+}
+
+export interface ConferenceRubric {
+  venue: string;
+  name: string;
+  description: string;
+  criteria: ReviewCriteria[];
+  acceptance_threshold: number;
+  score_range: [number, number];
+}
+
+export interface ReviewerPersona {
+  id: string;
+  name: string;
+  role: string;
+  focus_areas: string[];
+}
+
+export interface ReviewRubricsResponse {
+  rubrics: Record<string, ConferenceRubric>;
+  personas: ReviewerPersona[];
+}
+
 export interface SingleReview {
   reviewer_id: string;
   reviewer_name: string;
@@ -223,4 +251,61 @@ export interface PeerReviewResult {
   evaluated_at: number;
   status: string;
   markdown_report?: string;
+}
+
+// ── Evaluation & Benchmark Suite ─────────────────────────
+
+export interface EvalTaskInfo {
+  task_id: string;
+  name: string;
+  description: string;
+  category: 'reproduction' | 'optimization' | 'hypothesis';
+  difficulty: 'easy' | 'medium' | 'hard';
+  timeout_seconds: number;
+  paper_title?: string;
+  dataset_name?: string;
+  target_metrics?: Record<string, number>;
+  kernel_name?: string;
+  framework?: string;
+  baseline_latency_ms?: number;
+  target_speedup?: number;
+}
+
+export interface EvalSuiteInfo {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  tasks: string[];
+}
+
+export interface EvalMetricResult {
+  metric_name: string;
+  target_value: number;
+  achieved_value: number;
+  passed: boolean;
+  relative_error: number;
+  tolerance: number;
+}
+
+export interface EvalTaskResult {
+  task_id: string;
+  task_name: string;
+  category: string;
+  passed: boolean;
+  score: number;
+  metrics: EvalMetricResult[];
+  execution_time_seconds: number;
+  error?: string | null;
+}
+
+export interface EvalSuiteRunResult {
+  suite_name: string;
+  total_tasks: number;
+  passed_tasks: number;
+  failed_tasks: number;
+  pass_rate: number;
+  average_score: number;
+  execution_time_seconds: number;
+  results: EvalTaskResult[];
 }
