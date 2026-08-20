@@ -233,18 +233,13 @@ class ResearchOrchestrator:
 
     def _get_safe_state_path(self, path: str | Path | None = None) -> Path:
         """Resolve a safe, contained path for saving/loading state."""
+        base_dir = self.workspace_path.resolve() if self.workspace_path else Path.cwd().resolve()
+        meta_dir = (base_dir / ".project-meta").resolve()
+        meta_dir.mkdir(parents=True, exist_ok=True)
         if path is not None:
-            raw_path = Path(path)
-            # Prevent absolute escapes or directory traversals if workspace is configured
-            if self.workspace_path:
-                resolved_base = self.workspace_path.resolve()
-                resolved_target = (resolved_base / raw_path.name).resolve()
-                return resolved_target
-            return raw_path.resolve()
-
-        if self.workspace_path:
-            return (self.workspace_path / ".project-meta" / "research_state.json").resolve()
-        return Path("research_state.json").resolve()
+            filename = Path(path).name
+            return (meta_dir / filename).resolve()
+        return (meta_dir / "research_state.json").resolve()
 
     def save_state(self, path: str | Path | None = None) -> Path:
         """Persist state JSON to disk."""

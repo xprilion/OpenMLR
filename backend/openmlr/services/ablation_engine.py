@@ -6,7 +6,8 @@ correction (Holm-Bonferroni), and LaTeX publication table generation.
 """
 
 import math
-import random
+import secrets
+import uuid
 from datetime import UTC, datetime
 
 from .ablation_types import (
@@ -111,7 +112,7 @@ def compute_metrics_aggregate(values: list[float], n_bootstrap: int = 1000) -> M
         ci_lower = mean_val
         ci_upper = mean_val
     else:
-        rng = random.Random(42)
+        rng = secrets.SystemRandom()
         boot_means = [
             sum(rng.choice(values) for _ in range(n)) / n
             for _ in range(n_bootstrap)
@@ -190,7 +191,7 @@ def compute_bootstrap_difference_ci(
     if n1 < 1 or n2 < 1:
         return 0.0, 0.0
 
-    rng = random.Random(42)
+    rng = secrets.SystemRandom()
     diffs = []
     for _ in range(n_resamples):
         b_mean = sum(rng.choice(baseline) for _ in range(n1)) / n1
@@ -235,7 +236,7 @@ class AblationEngine:
     ) -> AblationStudy:
         """Create a new ablation study initialized with a baseline variant."""
         now = datetime.now(UTC).isoformat()
-        sid = study_id or f"ablation_{int(datetime.now().timestamp())}_{random.randint(100, 999)}"
+        sid = study_id or f"ablation_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}"
 
         baseline = VariantResult(
             name=baseline_variant_name,
