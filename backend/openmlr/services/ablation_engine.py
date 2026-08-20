@@ -6,7 +6,6 @@ correction (Holm-Bonferroni), and LaTeX publication table generation.
 """
 
 import math
-import secrets
 import uuid
 from datetime import UTC, datetime
 
