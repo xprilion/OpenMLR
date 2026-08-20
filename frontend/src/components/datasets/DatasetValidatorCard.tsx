@@ -28,7 +28,7 @@ export function DatasetValidatorCard({ filePath, availableColumns }: Props) {
         max_null_pct: maxNullPct,
         max_token_length: Number.isNaN(parsedTokens) ? undefined : parsedTokens,
       });
-      if (res && res.validation) {
+      if (res?.validation) {
         setResult(res.validation);
       }
     } catch (err: unknown) {
@@ -57,9 +57,9 @@ export function DatasetValidatorCard({ filePath, availableColumns }: Props) {
 
         {/* Expected Columns */}
         <div>
-          <label className="block text-xs font-medium text-text mb-1.5">
+          <span className="block text-xs font-medium text-text mb-1.5">
             Required Columns ({expectedColumns.length} selected):
-          </label>
+          </span>
           <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-surface-subtle rounded border border-border">
             {availableColumns.map((col) => {
               const isSelected = expectedColumns.includes(col);
@@ -84,10 +84,13 @@ export function DatasetValidatorCard({ filePath, availableColumns }: Props) {
         {/* Max Null Pct */}
         <div>
           <div className="flex justify-between items-center text-xs mb-1">
-            <span className="text-text font-medium">Max Null Percentage:</span>
+            <label htmlFor="max-null-pct-input" className="text-text font-medium">
+              Max Null Percentage:
+            </label>
             <span className="text-primary font-mono">{maxNullPct}%</span>
           </div>
           <input
+            id="max-null-pct-input"
             type="range"
             min="0"
             max="50"
@@ -100,10 +103,11 @@ export function DatasetValidatorCard({ filePath, availableColumns }: Props) {
 
         {/* Max Token Length */}
         <div>
-          <label className="block text-xs font-medium text-text mb-1">
+          <label htmlFor="max-token-len-input" className="block text-xs font-medium text-text mb-1">
             Max Token Length for Text Columns:
           </label>
           <input
+            id="max-token-len-input"
             type="number"
             value={maxTokenLen}
             onChange={(e) => setMaxTokenLen(e.target.value)}

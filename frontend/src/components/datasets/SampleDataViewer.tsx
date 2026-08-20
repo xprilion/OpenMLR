@@ -7,6 +7,16 @@ interface Props {
   readonly availableColumns: string[];
 }
 
+function formatCellDisplay(val: unknown): string {
+  if (val === null || val === undefined) {
+    return '<null>';
+  }
+  if (typeof val === 'object') {
+    return JSON.stringify(val);
+  }
+  return String(val);
+}
+
 export function SampleDataViewer({ filePath, availableColumns }: Props) {
   const [samples, setSamples] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
@@ -146,7 +156,7 @@ export function SampleDataViewer({ filePath, availableColumns }: Props) {
                     <td className="py-2 px-3 text-text-dim">{idx + 1}</td>
                     {headers.map((h) => {
                       const val = row[h];
-                      const displayVal = val === null || val === undefined ? '<null>' : typeof val === 'object' ? JSON.stringify(val) : String(val);
+                      const displayVal = formatCellDisplay(val);
                       const isNull = val === null || val === undefined;
                       return (
                         <td

@@ -35,7 +35,7 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
         stratify_column: stratifyCol || undefined,
         seed,
       });
-      if (res && res.manifest) {
+      if (res?.manifest) {
         setManifest(res.manifest);
       }
     } catch (err: unknown) {
@@ -46,19 +46,8 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={onClose}
-      onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      role="dialog"
-      tabIndex={-1}
-    >
-      <div
-        className="w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl p-5 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-        role="document"
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl p-5 space-y-4">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2">
             <Scissors size={18} className="text-primary" />
@@ -82,8 +71,11 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
         {/* Form */}
         <div className="space-y-3 text-xs">
           <div>
-            <label className="block text-text font-medium mb-1">Target Output Directory:</label>
+            <label htmlFor="target-output-dir" className="block text-text font-medium mb-1">
+              Target Output Directory:
+            </label>
             <input
+              id="target-output-dir"
               type="text"
               value={outputDir}
               onChange={(e) => setOutputDir(e.target.value)}
@@ -102,8 +94,11 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <span className="text-[11px] text-text-dim">Train:</span>
+                <label htmlFor="train-ratio-input" className="text-[11px] text-text-dim block">
+                  Train:
+                </label>
                 <input
+                  id="train-ratio-input"
                   type="number"
                   step="0.05"
                   min="0.1"
@@ -114,8 +109,11 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
                 />
               </div>
               <div>
-                <span className="text-[11px] text-text-dim">Val:</span>
+                <label htmlFor="val-ratio-input" className="text-[11px] text-text-dim block">
+                  Val:
+                </label>
                 <input
+                  id="val-ratio-input"
                   type="number"
                   step="0.05"
                   min="0.0"
@@ -126,8 +124,11 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
                 />
               </div>
               <div>
-                <span className="text-[11px] text-text-dim">Test:</span>
+                <label htmlFor="test-ratio-input" className="text-[11px] text-text-dim block">
+                  Test:
+                </label>
                 <input
+                  id="test-ratio-input"
                   type="number"
                   step="0.05"
                   min="0.0"
@@ -143,8 +144,11 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
           {/* Stratification */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-text font-medium mb-1">Stratify by Column (Optional):</label>
+              <label htmlFor="stratify-col-select" className="block text-text font-medium mb-1">
+                Stratify by Column (Optional):
+              </label>
               <select
+                id="stratify-col-select"
                 value={stratifyCol}
                 onChange={(e) => setStratifyCol(e.target.value)}
                 className="w-full bg-surface-subtle border border-border rounded px-2 py-1.5 text-xs text-text focus:outline-none focus:border-primary"
@@ -159,8 +163,11 @@ export function DatasetSplitterModal({ filePath, availableColumns, onClose }: Pr
             </div>
 
             <div>
-              <label className="block text-text font-medium mb-1">Random Seed:</label>
+              <label htmlFor="seed-input" className="block text-text font-medium mb-1">
+                Random Seed:
+              </label>
               <input
+                id="seed-input"
                 type="number"
                 value={seed}
                 onChange={(e) => setSeed(Number(e.target.value))}

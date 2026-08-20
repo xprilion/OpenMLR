@@ -6,6 +6,27 @@ interface Props {
   readonly columns: Record<string, ColumnProfile>;
 }
 
+function getProgressColor(pct: number): string {
+  if (pct > 20) return 'bg-red-500';
+  if (pct > 5) return 'bg-amber-500';
+  return 'bg-emerald-500';
+}
+
+function getTypeIcon(dtype: string) {
+  switch (dtype.toLowerCase()) {
+    case 'numeric':
+      return <Hash size={14} className="text-blue-400" />;
+    case 'text':
+      return <Type size={14} className="text-emerald-400" />;
+    case 'categorical':
+      return <Layers size={14} className="text-purple-400" />;
+    case 'boolean':
+      return <ToggleLeft size={14} className="text-amber-400" />;
+    default:
+      return <Hash size={14} className="text-text-dim" />;
+  }
+}
+
 export function ColumnMetricsTable({ columns }: Props) {
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -20,21 +41,6 @@ export function ColumnMetricsTable({ columns }: Props) {
       return matchesSearch && matchesType;
     });
   }, [columnList, search, selectedType]);
-
-  const getTypeIcon = (dtype: string) => {
-    switch (dtype.toLowerCase()) {
-      case 'numeric':
-        return <Hash size={14} className="text-blue-400" />;
-      case 'text':
-        return <Type size={14} className="text-emerald-400" />;
-      case 'categorical':
-        return <Layers size={14} className="text-purple-400" />;
-      case 'boolean':
-        return <ToggleLeft size={14} className="text-amber-400" />;
-      default:
-        return <Hash size={14} className="text-text-dim" />;
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -116,13 +122,7 @@ export function ColumnMetricsTable({ columns }: Props) {
                         <div className="flex items-center gap-2">
                           <div className="w-16 bg-surface-subtle rounded-full h-1.5 overflow-hidden border border-border">
                             <div
-                              className={`h-full ${
-                                col.null_percentage > 20
-                                  ? 'bg-red-500'
-                                  : col.null_percentage > 5
-                                    ? 'bg-amber-500'
-                                    : 'bg-emerald-500'
-                              }`}
+                              className={`h-full ${getProgressColor(col.null_percentage)}`}
                               style={{ width: `${Math.min(100, col.null_percentage)}%` }}
                             />
                           </div>

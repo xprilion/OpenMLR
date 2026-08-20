@@ -4,7 +4,7 @@
 
 export interface ColumnProfile {
   name: string;
-  dtype: 'numeric' | 'text' | 'categorical' | 'boolean' | 'unknown' | string;
+  dtype: 'numeric' | 'text' | 'categorical' | 'boolean' | 'unknown';
   total_count: number;
   null_count: number;
   null_percentage: number;

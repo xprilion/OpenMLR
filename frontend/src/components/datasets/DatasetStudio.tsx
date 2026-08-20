@@ -17,6 +17,12 @@ import { SampleDataViewer } from './SampleDataViewer';
 import { DatasetValidatorCard } from './DatasetValidatorCard';
 import { DatasetSplitterModal } from './DatasetSplitterModal';
 
+function getHealthColor(score: number): string {
+  if (score >= 80) return 'text-emerald-400';
+  if (score >= 50) return 'text-amber-400';
+  return 'text-red-400';
+}
+
 export function DatasetStudio() {
   const { activeProject } = useProject();
   const [filePath, setFilePath] = useState<string>('data.csv');
@@ -32,7 +38,7 @@ export function DatasetStudio() {
     setError(null);
     try {
       const res = await api.profileDataset({ path: filePath.trim() });
-      if (res && res.profile) {
+      if (res?.profile) {
         setProfile(res.profile);
       }
     } catch (err: unknown) {
@@ -139,15 +145,7 @@ export function DatasetStudio() {
             <div className="p-3 bg-surface rounded-lg border border-border">
               <span className="text-[11px] text-text-dim uppercase tracking-wider block">Health Score</span>
               <div className="flex items-center gap-2">
-                <span
-                  className={`text-lg font-bold font-mono ${
-                    profile.health_score >= 80
-                      ? 'text-emerald-400'
-                      : profile.health_score >= 50
-                        ? 'text-amber-400'
-                        : 'text-red-400'
-                  }`}
-                >
+                <span className={`text-lg font-bold font-mono ${getHealthColor(profile.health_score)}`}>
                   {profile.health_score}/100
                 </span>
               </div>
