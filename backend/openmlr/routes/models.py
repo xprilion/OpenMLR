@@ -20,9 +20,12 @@ router = APIRouter(prefix="/api/model-registry", tags=["model-registry"])
 logger = logging.getLogger("openmlr.routes.models")
 
 
-@router.get("", response_model=dict[str, Any])
+PROJECT_ID_DESC = "Project ID"
+
+
+@router.get("")
 async def list_models(
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
     task_type: str | None = Query(None, description="Filter by task type"),
     framework: str | None = Query(None, description="Filter by framework"),
     status: str | None = Query(None, description="Filter by status"),
@@ -42,10 +45,10 @@ async def list_models(
     }
 
 
-@router.post("", response_model=dict[str, Any], status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def register_model(
     request: RegisterModelRequest,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Register a new model artifact."""
     artifact = ModelRegistryService.register_model(project_id, request)
@@ -55,10 +58,10 @@ async def register_model(
     }
 
 
-@router.get("/{model_id}", response_model=dict[str, Any])
+@router.get("/{model_id}")
 async def get_model(
     model_id: str,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Get full details of a registered model artifact."""
     artifact = ModelRegistryService.get_model(project_id, model_id)
@@ -70,11 +73,11 @@ async def get_model(
     return {"model": artifact.to_dict()}
 
 
-@router.put("/{model_id}", response_model=dict[str, Any])
+@router.put("/{model_id}")
 async def update_model(
     model_id: str,
     request: UpdateModelRequest,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Update metadata and properties of a model artifact."""
     artifact = ModelRegistryService.update_model(project_id, model_id, request)
@@ -89,10 +92,10 @@ async def update_model(
     }
 
 
-@router.delete("/{model_id}", response_model=dict[str, Any])
+@router.delete("/{model_id}")
 async def delete_model(
     model_id: str,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Delete a model artifact from the registry."""
     success = ModelRegistryService.delete_model(project_id, model_id)
@@ -107,11 +110,11 @@ async def delete_model(
     }
 
 
-@router.post("/{model_id}/card", response_model=dict[str, Any])
+@router.post("/{model_id}/card")
 async def generate_model_card(
     model_id: str,
     request: GenerateModelCardRequest,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Generate a multi-format Model Card (Markdown, LaTeX, BibTeX, Carbon)."""
     card = ModelRegistryService.generate_model_card(project_id, model_id, request)
@@ -131,11 +134,11 @@ async def generate_model_card(
     }
 
 
-@router.post("/{model_id}/quantization", response_model=dict[str, Any])
+@router.post("/{model_id}/quantization")
 async def plan_quantization(
     model_id: str,
     request: PlanQuantizationRequest,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Calculate quantization trade-offs and memory savings for target precisions."""
     artifact = ModelRegistryService.get_model(project_id, model_id)
@@ -164,7 +167,7 @@ async def plan_quantization(
     }
 
 
-@router.post("/inspect", response_model=dict[str, Any])
+@router.post("/inspect")
 async def inspect_checkpoint(request: InspectCheckpointRequest) -> dict[str, Any]:
     """Inspect checkpoint structure, layer breakdown, and memory requirements."""
     inspection = ModelRegistryService.inspect_checkpoint(request)
@@ -185,10 +188,10 @@ async def inspect_checkpoint(request: InspectCheckpointRequest) -> dict[str, Any
     }
 
 
-@router.post("/compare", response_model=dict[str, Any])
+@router.post("/compare")
 async def compare_models(
     request: CompareModelsRequest,
-    project_id: str = Query("default", description="Project ID"),
+    project_id: str = Query("default", description=PROJECT_ID_DESC),
 ) -> dict[str, Any]:
     """Compare multiple model artifacts side-by-side."""
     comparison = ModelRegistryService.compare_models(project_id, request.model_ids)

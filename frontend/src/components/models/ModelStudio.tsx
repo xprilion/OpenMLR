@@ -285,6 +285,13 @@ export function ModelStudio() {
                       isSelected ? 'bg-primary/10 border-l-2 border-primary' : 'hover:bg-surface-hover/60'
                     }`}
                     onClick={() => setSelectedModelId(m.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setSelectedModelId(m.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">

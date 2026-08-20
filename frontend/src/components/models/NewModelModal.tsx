@@ -97,10 +97,9 @@ export function NewModelModal({ isOpen, isSubmitting, onClose, onSubmit }: Reado
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto w-full h-full max-w-none max-h-none border-none m-0"
       aria-labelledby="new-model-modal-title"
     >
       <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden my-8">
@@ -366,6 +365,6 @@ export function NewModelModal({ isOpen, isSubmitting, onClose, onSubmit }: Reado
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
   );
 }

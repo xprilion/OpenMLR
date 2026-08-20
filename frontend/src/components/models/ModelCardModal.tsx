@@ -10,6 +10,88 @@ interface Props {
 
 type CardTab = 'markdown' | 'latex' | 'bibtex' | 'environmental';
 
+interface CodeSnippetViewProps {
+  readonly content: string;
+  readonly copyKey: string;
+  readonly copiedKey: string | null;
+  readonly onCopy: (text: string, key: string) => void;
+  readonly copyLabel: string;
+}
+
+function CodeSnippetView({ content, copyKey, copiedKey, onCopy, copyLabel }: CodeSnippetViewProps) {
+  const isCopied = copiedKey === copyKey;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => onCopy(content, copyKey)}
+        className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-text hover:bg-surface-hover flex items-center gap-1.5 transition-colors z-10"
+      >
+        {isCopied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+        <span>{isCopied ? 'Copied' : copyLabel}</span>
+      </button>
+      <pre className="p-4 rounded-lg bg-surface border border-border text-text-dim whitespace-pre-wrap leading-relaxed">
+        {content}
+      </pre>
+    </div>
+  );
+}
+
+function EnvironmentalTabContent({ cardData }: { readonly cardData: ModelCardData }) {
+  return (
+    <div className="space-y-4">
+      <div className="p-4 rounded-lg bg-surface border border-border">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <Leaf size={24} />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-text">Estimated Carbon Footprint</h4>
+            <p className="text-xs text-text-dim">
+              Estimated according to ML emissions standard guidelines (TDP × Hours × PUE × Grid)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-border/50">
+          <div className="p-3 bg-bg/80 rounded-lg">
+            <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
+              CO2 Equivalent
+            </span>
+            <span className="text-lg font-bold text-emerald-400">
+              {cardData.co2_emissions_kg.toFixed(2)} kg
+            </span>
+          </div>
+          <div className="p-3 bg-bg/80 rounded-lg">
+            <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
+              Total Parameters
+            </span>
+            <span className="text-lg font-bold text-text">
+              {(cardData.summary.parameters / 1_000_000).toFixed(1)}M
+            </span>
+          </div>
+          <div className="p-3 bg-bg/80 rounded-lg">
+            <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
+              Artifact Size
+            </span>
+            <span className="text-lg font-bold text-text">
+              {cardData.summary.size_mb.toFixed(1)} MB
+            </span>
+          </div>
+          <div className="p-3 bg-bg/80 rounded-lg">
+            <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
+              Framework
+            </span>
+            <span className="text-lg font-bold text-primary uppercase">
+              {cardData.summary.framework}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ModelCardModal({ cardData, isLoading, onClose }: Readonly<Props>) {
   const [activeTab, setActiveTab] = useState<CardTab>('markdown');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -23,10 +105,9 @@ export function ModelCardModal({ cardData, isLoading, onClose }: Readonly<Props>
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto w-full h-full max-w-none max-h-none border-none m-0"
       aria-labelledby="model-card-modal-title"
     >
       <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden my-8 flex flex-col max-h-[85vh]">
@@ -116,105 +197,33 @@ export function ModelCardModal({ cardData, isLoading, onClose }: Readonly<Props>
           ) : (
             <>
               {activeTab === 'markdown' && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(cardData.markdown, 'md')}
-                    className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-text hover:bg-surface-hover flex items-center gap-1.5 transition-colors z-10"
-                  >
-                    {copiedKey === 'md' ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-                    <span>{copiedKey === 'md' ? 'Copied' : 'Copy Markdown'}</span>
-                  </button>
-                  <pre className="p-4 rounded-lg bg-surface border border-border text-text-dim whitespace-pre-wrap leading-relaxed">
-                    {cardData.markdown}
-                  </pre>
-                </div>
+                <CodeSnippetView
+                  content={cardData.markdown}
+                  copyKey="md"
+                  copiedKey={copiedKey}
+                  onCopy={handleCopy}
+                  copyLabel="Copy Markdown"
+                />
               )}
-
               {activeTab === 'latex' && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(cardData.latex, 'latex')}
-                    className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-text hover:bg-surface-hover flex items-center gap-1.5 transition-colors z-10"
-                  >
-                    {copiedKey === 'latex' ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-                    <span>{copiedKey === 'latex' ? 'Copied' : 'Copy LaTeX'}</span>
-                  </button>
-                  <pre className="p-4 rounded-lg bg-surface border border-border text-text-dim whitespace-pre-wrap leading-relaxed">
-                    {cardData.latex}
-                  </pre>
-                </div>
+                <CodeSnippetView
+                  content={cardData.latex}
+                  copyKey="latex"
+                  copiedKey={copiedKey}
+                  onCopy={handleCopy}
+                  copyLabel="Copy LaTeX"
+                />
               )}
-
               {activeTab === 'bibtex' && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(cardData.bibtex, 'bibtex')}
-                    className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-text hover:bg-surface-hover flex items-center gap-1.5 transition-colors z-10"
-                  >
-                    {copiedKey === 'bibtex' ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-                    <span>{copiedKey === 'bibtex' ? 'Copied' : 'Copy BibTeX'}</span>
-                  </button>
-                  <pre className="p-4 rounded-lg bg-surface border border-border text-text-dim whitespace-pre-wrap leading-relaxed">
-                    {cardData.bibtex}
-                  </pre>
-                </div>
+                <CodeSnippetView
+                  content={cardData.bibtex}
+                  copyKey="bibtex"
+                  copiedKey={copiedKey}
+                  onCopy={handleCopy}
+                  copyLabel="Copy BibTeX"
+                />
               )}
-
-              {activeTab === 'environmental' && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-surface border border-border">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                        <Leaf size={24} />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-text">Estimated Carbon Footprint</h4>
-                        <p className="text-xs text-text-dim">
-                          Estimated according to ML emissions standard guidelines (TDP × Hours × PUE × Grid)
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-border/50">
-                      <div className="p-3 bg-bg/80 rounded-lg">
-                        <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
-                          CO2 Equivalent
-                        </span>
-                        <span className="text-lg font-bold text-emerald-400">
-                          {cardData.co2_emissions_kg.toFixed(2)} kg
-                        </span>
-                      </div>
-                      <div className="p-3 bg-bg/80 rounded-lg">
-                        <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
-                          Total Parameters
-                        </span>
-                        <span className="text-lg font-bold text-text">
-                          {(cardData.summary.parameters / 1_000_000).toFixed(1)}M
-                        </span>
-                      </div>
-                      <div className="p-3 bg-bg/80 rounded-lg">
-                        <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
-                          Artifact Size
-                        </span>
-                        <span className="text-lg font-bold text-text">
-                          {cardData.summary.size_mb.toFixed(1)} MB
-                        </span>
-                      </div>
-                      <div className="p-3 bg-bg/80 rounded-lg">
-                        <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1">
-                          Framework
-                        </span>
-                        <span className="text-lg font-bold text-primary uppercase">
-                          {cardData.summary.framework}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {activeTab === 'environmental' && <EnvironmentalTabContent cardData={cardData} />}
             </>
           )}
         </div>
@@ -230,6 +239,6 @@ export function ModelCardModal({ cardData, isLoading, onClose }: Readonly<Props>
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

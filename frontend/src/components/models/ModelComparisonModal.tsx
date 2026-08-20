@@ -7,14 +7,23 @@ interface Props {
   readonly onClose: () => void;
 }
 
+function formatMetricValue(val: string | number | undefined | null): string {
+  if (val === undefined || val === null) {
+    return 'N/A';
+  }
+  if (typeof val === 'number') {
+    return val.toFixed(4);
+  }
+  return String(val);
+}
+
 export function ModelComparisonModal({ comparison, isLoading, onClose }: Readonly<Props>) {
   if (!comparison && !isLoading) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto w-full h-full max-w-none max-h-none border-none m-0"
       aria-labelledby="model-comp-modal-title"
     >
       <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden my-8 flex flex-col max-h-[85vh]">
@@ -131,7 +140,7 @@ export function ModelComparisonModal({ comparison, isLoading, onClose }: Readonl
                           const val = comparison.metric_matrix[metricName]?.[m.id];
                           return (
                             <td key={m.id} className="px-4 py-2.5 font-mono font-bold text-emerald-400">
-                              {val !== undefined && val !== null ? (typeof val === 'number' ? val.toFixed(4) : val) : 'N/A'}
+                              {formatMetricValue(val)}
                             </td>
                           );
                         })}
@@ -155,6 +164,6 @@ export function ModelComparisonModal({ comparison, isLoading, onClose }: Readonl
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

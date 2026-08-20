@@ -59,6 +59,7 @@ def generate_latex_card(model: ModelArtifact, author: str, co2_kg: float) -> str
         "\\textbf{Model Property} & \\textbf{Specification} \\\\\n"
         "\\midrule\n"
         f"Model Name & {model.name} (v{model.version}) \\\\\n"
+        f"Author & {author} \\\\\n"
         f"Architecture & {model.architecture} \\\\\n"
         f"Framework & {model.framework.capitalize()} \\\\\n"
         f"Task Type & {model.task_type.replace('_', ' ').capitalize()} \\\\\n"
