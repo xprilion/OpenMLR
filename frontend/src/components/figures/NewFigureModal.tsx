@@ -65,7 +65,7 @@ export function NewFigureModal({ isOpen, isSubmitting, onClose, onSubmit }: Read
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    let parsedSeries = {};
+    let parsedSeries: Record<string, unknown>;
     try {
       parsedSeries = JSON.parse(seriesDataJson);
     } catch {

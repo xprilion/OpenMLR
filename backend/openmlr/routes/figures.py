@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, status
 
+from ..services.figure_generator import FigureGeneratorService
 from ..services.figure_types import (
     GenerateFigureRequest,
     MultiPanelLayoutRequest,
 )
-from ..services.figure_generator import FigureGeneratorService
 
 router = APIRouter(prefix="/api/figures", tags=["figures"])
 logger = logging.getLogger("openmlr.routes.figures")

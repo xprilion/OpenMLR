@@ -7,11 +7,11 @@ import logging
 import time
 import uuid
 from typing import Any
+
 from .figure_types import (
     FigureArtifact,
     GenerateFigureRequest,
     MultiPanelLayoutRequest,
-    PlotType,
 )
 
 logger = logging.getLogger("openmlr.services.figure_generator")

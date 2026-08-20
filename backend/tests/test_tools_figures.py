@@ -1,6 +1,7 @@
 """Unit tests for the Figures agent tool."""
 
 import pytest
+
 from openmlr.tools.figures import create_figures_tool
 
 

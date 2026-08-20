@@ -435,4 +435,30 @@ export const api = {
     const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
     return post(`/api/figures/multi-panel${q}`, body);
   },
+
+  // Reproducibility Studio & Artifact Verification
+  listReproducibilityReports: (projectUuid?: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/reproducibility/reports${q}`);
+  },
+  getReproducibilityReport: (projectUuid: string | undefined, reportId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/reproducibility/reports/${encodeURIComponent(reportId)}${q}`);
+  },
+  runReproducibilityAudit: (projectUuid: string | undefined, body: Record<string, unknown> | object) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/reproducibility/audit${q}`, body as Record<string, unknown>);
+  },
+  generateReproducibilityDockerfile: (body: Record<string, unknown> | object) =>
+    post('/api/reproducibility/dockerfile', body as Record<string, unknown>),
+  generateReproducibilityAppendix: (projectUuid: string | undefined, body: Record<string, unknown> | object) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/reproducibility/appendix${q}`, body as Record<string, unknown>);
+  },
+  getDeterminismFix: (body: Record<string, unknown> | object) =>
+    post('/api/reproducibility/fix-determinism', body as Record<string, unknown>),
+  deleteReproducibilityReport: (projectUuid: string | undefined, reportId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return del(`/api/reproducibility/reports/${encodeURIComponent(reportId)}${q}`);
+  },
 };

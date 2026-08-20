@@ -1,8 +1,9 @@
 """Tests for Models Agent Tool Spec & Actions."""
 
 import pytest
-from openmlr.tools.models import create_models_tool
+
 from openmlr.services.model_registry import ModelRegistryService
+from openmlr.tools.models import create_models_tool
 
 
 @pytest.fixture(autouse=True)

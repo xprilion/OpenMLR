@@ -5,14 +5,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 from ..agent.types import ToolSpec
-from ..services.model_types import (
-    RegisterModelRequest,
-    InspectCheckpointRequest,
-    GenerateModelCardRequest,
-)
 from ..services.model_registry import ModelRegistryService
+from ..services.model_types import (
+    GenerateModelCardRequest,
+    InspectCheckpointRequest,
+    RegisterModelRequest,
+)
 
 log = logging.getLogger("openmlr.tools.models")
 
