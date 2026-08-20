@@ -134,6 +134,7 @@ export function handleToolOutput(prev: Message[], data?: Record<string, unknown>
 
 export function handleSubAgentStart(prev: Message[], data?: Record<string, unknown>): Message[] {
   const msgs = prev.filter((m) => !(m.role === 'system' && m.content === '::thinking::'));
+  const agentTypeStr = typeof data?.agent_type === 'string' ? data.agent_type : 'task';
   return [
     ...msgs,
     {
@@ -141,11 +142,11 @@ export function handleSubAgentStart(prev: Message[], data?: Record<string, unkno
       role: 'tool',
       content: '',
       metadata: {
-        tool: `sub_agent:${data?.agent_type || 'task'}`,
-        tool_call_id: data?.parent_tool_call_id as string | undefined,
-        args: (data?.description as string) || '',
+        tool: `sub_agent:${agentTypeStr}`,
+        tool_call_id: typeof data?.parent_tool_call_id === 'string' ? data.parent_tool_call_id : undefined,
+        args: typeof data?.description === 'string' ? data.description : '',
         isSubAgent: true,
-        agentType: data?.agent_type as string | undefined,
+        agentType: typeof data?.agent_type === 'string' ? data.agent_type : undefined,
         children: [],
       },
     },

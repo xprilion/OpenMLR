@@ -12,6 +12,7 @@ import { nextMsgId } from '../../context/agentEventReducers';
 
 const TerminalPanel = lazy(() => import('../Terminal').then((m) => ({ default: m.Terminal })));
 const EditorPanel = lazy(() => import('../EditorPanel').then((m) => ({ default: m.EditorPanel })));
+const PaperStudio = lazy(() => import('../paper/PaperStudio').then((m) => ({ default: m.PaperStudio })));
 
 export function ChatContainer() {
   const {
@@ -91,6 +92,17 @@ export function ChatContainer() {
         >
           {'Terminal '}
           <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'paper'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'paper' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('paper')}
+        >
+          Paper Studio
         </button>
         {/* Closable Image tab */}
         {imageTab && (
@@ -215,6 +227,13 @@ export function ChatContainer() {
             visible={mainTab === 'terminal'}
             onConnectionChange={setTerminalConnected}
           />
+        </Suspense>
+      </div>
+
+      {/* Paper Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'paper' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Paper Studio...</div>}>
+          <PaperStudio />
         </Suspense>
       </div>
 
