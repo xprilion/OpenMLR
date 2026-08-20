@@ -3,15 +3,41 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import logging
 import math
-import random
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 log = logging.getLogger(__name__)
+
+
+def _hash_score(seed: int, index: int, item: Any) -> bytes:
+    """Generate a deterministic SHA-256 hash digest for an item."""
+    encoded = f"{seed}:{index}:{json.dumps(item, sort_keys=True, default=str)}".encode("utf-8")
+    return hashlib.sha256(encoded).digest()
+
+
+def _hash_sample(items: list[Any], k: int, seed: int = 42) -> list[Any]:
+    """Deterministically sample k items using cryptographic hash sorting (safe & reproducible)."""
+    if not items or k <= 0:
+        return []
+    if k >= len(items):
+        return list(items)
+    scored = [(_hash_score(seed, idx, item), item) for idx, item in enumerate(items)]
+    scored.sort(key=lambda x: x[0])
+    return [item for _, item in scored[:k]]
+
+
+def _hash_shuffle(items: list[Any], seed: int = 42) -> list[Any]:
+    """Deterministically shuffle items using cryptographic hash sorting."""
+    if not items:
+        return []
+    scored = [(_hash_score(seed, idx, item), item) for idx, item in enumerate(items)]
+    scored.sort(key=lambda x: x[0])
+    return [item for _, item in scored]
 
 
 @dataclass
@@ -63,67 +89,93 @@ class DatasetProfiler:
         return mapping.get(ext, "csv")
 
     @classmethod
+    def _load_csv(cls, path: Path, delimiter: str, limit: int | None) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        with open(path, encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f, delimiter=delimiter)
+            for row in reader:
+                records.append(dict(row))
+                if limit and len(records) >= limit:
+                    break
+        return records
+
+    @classmethod
+    def _load_jsonl(cls, path: Path, limit: int | None) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                try:
+                    obj = json.loads(line_str)
+                    if isinstance(obj, dict):
+                        records.append(obj)
+                except Exception:
+                    continue
+                if limit and len(records) >= limit:
+                    break
+        return records
+
+    @classmethod
+    def _load_json(cls, path: Path, limit: int | None) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        with open(path, encoding="utf-8", errors="replace") as f:
+            try:
+                data = json.load(f)
+                items = (
+                    data
+                    if isinstance(data, list)
+                    else next(
+                        (
+                            data[k]
+                            for k in ("data", "rows", "items", "records", "samples")
+                            if isinstance(data.get(k), list)
+                        ),
+                        [data],
+                    )
+                )
+                for item in items[:limit] if limit else items:
+                    if isinstance(item, dict):
+                        records.append(item)
+            except Exception as e:
+                log.warning("JSON parse error: %s", e)
+        return records
+
+    @classmethod
+    def _load_text(cls, path: Path, limit: int | None) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for idx, line in enumerate(f):
+                if line.strip():
+                    records.append({"line_number": idx + 1, "text": line.strip()})
+                if limit and len(records) >= limit:
+                    break
+        return records
+
+    @classmethod
     def load_records(
         cls, file_path: str | Path, limit: int | None = None
     ) -> tuple[list[dict[str, Any]], str, int]:
-        path = Path(file_path)
+        path = Path(file_path).resolve()
         if not path.exists():
             raise FileNotFoundError(f"Dataset file not found: {file_path}")
 
         fmt = cls.detect_format(path)
         file_size = path.stat().st_size
-        records: list[dict[str, Any]] = []
 
-        if fmt in ("csv", "tsv"):
-            delimiter = "\t" if fmt == "tsv" else ","
-            with open(path, encoding="utf-8", errors="replace") as f:
-                reader = csv.DictReader(f, delimiter=delimiter)
-                for row in reader:
-                    records.append(dict(row))
-                    if limit and len(records) >= limit:
-                        break
+        if fmt == "csv":
+            records = cls._load_csv(path, delimiter=",", limit=limit)
+        elif fmt == "tsv":
+            records = cls._load_csv(path, delimiter="\t", limit=limit)
         elif fmt == "jsonl":
-            with open(path, encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                        if isinstance(obj, dict):
-                            records.append(obj)
-                    except Exception:
-                        continue
-                    if limit and len(records) >= limit:
-                        break
+            records = cls._load_jsonl(path, limit=limit)
         elif fmt == "json":
-            with open(path, encoding="utf-8", errors="replace") as f:
-                try:
-                    data = json.load(f)
-                    items = (
-                        data
-                        if isinstance(data, list)
-                        else next(
-                            (
-                                data[k]
-                                for k in ("data", "rows", "items", "records", "samples")
-                                if isinstance(data.get(k), list)
-                            ),
-                            [data],
-                        )
-                    )
-                    for item in items[:limit] if limit else items:
-                        if isinstance(item, dict):
-                            records.append(item)
-                except Exception as e:
-                    log.warning("JSON parse error: %s", e)
+            records = cls._load_json(path, limit=limit)
         elif fmt == "text":
-            with open(path, encoding="utf-8", errors="replace") as f:
-                for idx, line in enumerate(f):
-                    if line.strip():
-                        records.append({"line_number": idx + 1, "text": line.strip()})
-                    if limit and len(records) >= limit:
-                        break
+            records = cls._load_text(path, limit=limit)
+        else:
+            records = cls._load_csv(path, delimiter=",", limit=limit)
 
         return records, fmt, file_size
 
@@ -236,11 +288,10 @@ class DatasetProfiler:
                 key=lambda x: x[1],
                 reverse=True,
             )
-            top_classes = dict(freqs[:10])
             imbalance = round(freqs[0][1] / max(1, freqs[-1][1]), 2)
             return "categorical", {
                 "unique_count": uniq_cnt,
-                "top_classes": top_classes,
+                "top_classes": dict(freqs[:10]),
                 "imbalance_ratio": imbalance,
                 "class_distribution": {
                     k: round((v / len(strs)) * 100, 2) for k, v in freqs[:10]
@@ -276,17 +327,16 @@ class DatasetProfiler:
         if not records:
             return []
         if strategy == "random":
-            rng = random.Random(seed)
-            return rng.sample(records, min(n, len(records)))
+            return _hash_sample(records, k=n, seed=seed)
         if strategy == "stratified" and label_column:
             classes: dict[str, list[dict[str, Any]]] = {}
             for r in records:
                 classes.setdefault(str(r.get(label_column, "missing")), []).append(r)
             sampled: list[dict[str, Any]] = []
             per_class = max(1, n // max(1, len(classes)))
-            rng = random.Random(seed)
-            for _, cl_records in sorted(classes.items()):
-                sampled.extend(rng.sample(cl_records, min(len(cl_records), per_class)))
+            for cl_name in sorted(classes.keys()):
+                cl_records = classes[cl_name]
+                sampled.extend(_hash_sample(cl_records, k=per_class, seed=seed))
             return sampled[:n]
         return records[offset : offset + n]
 
@@ -311,9 +361,8 @@ class DatasetProfiler:
         for col, prof in profile.columns.items():
             if prof.null_percentage > max_null_pct:
                 errors.append(f"Column '{col}' null percentage {prof.null_percentage}% > {max_null_pct}%")
-            if max_token_length and prof.dtype == "text":
-                if prof.stats.get("token_est_max", 0) > max_token_length:
-                    errors.append(f"Column '{col}' max tokens exceed {max_token_length}")
+            if max_token_length and prof.dtype == "text" and prof.stats.get("token_est_max", 0) > max_token_length:
+                errors.append(f"Column '{col}' max tokens exceed {max_token_length}")
 
         return {
             "valid": len(errors) == 0,
@@ -335,8 +384,8 @@ class DatasetProfiler:
         stratify_column: str | None = None,
         seed: int = 42,
     ) -> dict[str, Any]:
-        path = Path(file_path)
-        out_dir = Path(output_dir)
+        path = Path(file_path).resolve()
+        out_dir = Path(output_dir).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
         records, fmt, _ = cls.load_records(path)
         if not records:
@@ -344,23 +393,21 @@ class DatasetProfiler:
 
         tot = train_ratio + val_ratio + test_ratio
         tr_r, val_r = train_ratio / tot, val_ratio / tot
-        rng = random.Random(seed)
         train_set, val_set, test_set = [], [], []
 
         if stratify_column:
             classes: dict[str, list[dict[str, Any]]] = {}
             for r in records:
                 classes.setdefault(str(r.get(stratify_column, "missing")), []).append(r)
-            for _, cl_records in classes.items():
-                rng.shuffle(cl_records)
-                n = len(cl_records)
+            for cl_records in classes.values():
+                shuffled = _hash_shuffle(cl_records, seed=seed)
+                n = len(shuffled)
                 n_tr, n_v = int(n * tr_r), int(n * val_r)
-                train_set.extend(cl_records[:n_tr])
-                val_set.extend(cl_records[n_tr : n_tr + n_v])
-                test_set.extend(cl_records[n_tr + n_v :])
+                train_set.extend(shuffled[:n_tr])
+                val_set.extend(shuffled[n_tr : n_tr + n_v])
+                test_set.extend(shuffled[n_tr + n_v :])
         else:
-            shuffled = list(records)
-            rng.shuffle(shuffled)
+            shuffled = _hash_shuffle(records, seed=seed)
             n = len(shuffled)
             n_tr, n_v = int(n * tr_r), int(n * val_r)
             train_set = shuffled[:n_tr]
