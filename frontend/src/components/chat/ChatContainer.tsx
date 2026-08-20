@@ -28,6 +28,9 @@ const EvalBenchmarkDashboard = lazy(() =>
 const ResearchWorkflowStudio = lazy(() =>
   import('../research/ResearchWorkflowStudio').then((m) => ({ default: m.ResearchWorkflowStudio }))
 );
+const DatasetStudio = lazy(() =>
+  import('../datasets/DatasetStudio').then((m) => ({ default: m.DatasetStudio }))
+);
 
 export function ChatContainer() {
   const {
@@ -151,6 +154,17 @@ export function ChatContainer() {
           onClick={() => setMainTab('experiments')}
         >
           Experiments
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'datasets'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'datasets' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('datasets')}
+        >
+          Datasets
         </button>
         <button
           type="button"
@@ -325,6 +339,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'experiments' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Experiment Dashboard...</div>}>
           <RunDashboard />
+        </Suspense>
+      </div>
+
+      {/* Dataset Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'datasets' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Dataset Studio...</div>}>
+          <DatasetStudio />
         </Suspense>
       </div>
 

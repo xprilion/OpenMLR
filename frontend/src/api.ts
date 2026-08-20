@@ -288,4 +288,30 @@ export const api = {
     get(`/api/experiments/compare?run_ids=${encodeURIComponent(runIds.join(','))}${projectUuid ? `&project_uuid=${encodeURIComponent(projectUuid)}` : ''}`),
   deleteExperimentRun: (runId: string, projectUuid?: string) =>
     del(`/api/experiments/runs/${encodeURIComponent(runId)}${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`),
+
+  // Datasets Management & Profiling
+  profileDataset: (body: { path: string; sample_size?: number }) =>
+    post('/api/datasets/profile', body),
+  inspectDatasetSamples: (body: {
+    path: string;
+    n?: number;
+    offset?: number;
+    strategy?: string;
+    label_column?: string;
+  }) => post('/api/datasets/inspect', body),
+  validateDataset: (body: {
+    path: string;
+    expected_columns?: string[];
+    max_null_pct?: number;
+    max_token_length?: number;
+  }) => post('/api/datasets/validate', body),
+  splitDataset: (body: {
+    path: string;
+    output_dir: string;
+    train_ratio?: number;
+    val_ratio?: number;
+    test_ratio?: number;
+    stratify_column?: string;
+    seed?: number;
+  }) => post('/api/datasets/split', body),
 };
