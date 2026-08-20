@@ -110,6 +110,7 @@ from .auth.router import router as auth_router
 from .routes.agent import router as agent_router
 from .routes.compute import router as compute_router
 from .routes.eval import router as eval_router
+from .routes.experiments import router as experiments_router
 from .routes.health import router as health_router
 from .routes.keys import router as keys_router
 from .routes.mcp import router as mcp_router
@@ -130,6 +131,7 @@ app.include_router(projects_router)
 app.include_router(research_router)
 app.include_router(review_router)
 app.include_router(eval_router)
+app.include_router(experiments_router)
 app.include_router(terminal_router)
 
 
