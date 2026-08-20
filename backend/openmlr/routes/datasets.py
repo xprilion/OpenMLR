@@ -26,12 +26,19 @@ DATASET_PATH_DESC = "Path to the dataset file"
 def _safe_dataset_path(path_str: str) -> Path:
     """Safely validate and resolve a dataset file path, mitigating path injection risks."""
     clean = str(path_str).strip()
-    if not clean or "\0" in clean:
+    if not clean or "\0" in clean or ".." in clean:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid dataset path parameter",
         )
     resolved = Path(clean).resolve()
+    try:
+        resolved.relative_to(resolved.anchor)
+    except (ValueError, RuntimeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path traversal not allowed",
+        )
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -43,12 +50,20 @@ def _safe_dataset_path(path_str: str) -> Path:
 def _safe_output_dir(dir_str: str) -> Path:
     """Safely validate and resolve an output directory path."""
     clean = str(dir_str).strip()
-    if not clean or "\0" in clean:
+    if not clean or "\0" in clean or ".." in clean:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid output directory path parameter",
         )
-    return Path(clean).resolve()
+    resolved = Path(clean).resolve()
+    try:
+        resolved.relative_to(resolved.anchor)
+    except (ValueError, RuntimeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path traversal not allowed",
+        )
+    return resolved
 
 
 class ProfileDatasetRequest(BaseModel):

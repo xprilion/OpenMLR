@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..agent.types import ToolSpec
 from ..services.dataset_profiler import DatasetProfile, DatasetProfiler
@@ -65,20 +65,33 @@ def _format_profile_markdown(file_path: Path, profile: DatasetProfile) -> str:
     return "\n".join(output)
 
 
-def _handle_profile_op(file_path: Path, sample_size: int) -> tuple[str, bool]:
+def _resolve_target_file(path: str) -> Path | None:
+    if not path:
+        return None
+    p = Path(path).resolve()
+    return p if p.exists() else None
+
+
+def _op_profile(path: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    file_path = _resolve_target_file(path)
+    if not file_path:
+        return f"Error: Dataset file not found at '{path}'.", False
+    sample_size = int(kwargs.get("sample_size", 2000))
     profile = DatasetProfiler.profile(file_path, sample_size=sample_size)
     return _format_profile_markdown(file_path, profile), True
 
 
-def _handle_inspect_op(
-    file_path: Path, n: int, offset: int, strategy: str, label_column: str | None
-) -> tuple[str, bool]:
+def _op_inspect(path: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    file_path = _resolve_target_file(path)
+    if not file_path:
+        return f"Error: Dataset file not found at '{path}'.", False
+    strategy = str(kwargs.get("strategy", "head"))
     samples = DatasetProfiler.sample_records(
         file_path,
-        n=n,
-        offset=offset,
+        n=int(kwargs.get("n", 5)),
+        offset=int(kwargs.get("offset", 0)),
         strategy=strategy,
-        label_column=label_column,
+        label_column=kwargs.get("label_column"),
     )
     output = [
         f"# Dataset Samples: {file_path.name} (strategy={strategy}, n={len(samples)})",
@@ -89,18 +102,16 @@ def _handle_inspect_op(
     return "\n".join(output), True
 
 
-def _handle_validate_op(
-    file_path: Path,
-    expected_columns: Any,
-    max_null_pct: float,
-    max_token_length: int | None,
-) -> tuple[str, bool]:
-    exp_cols = _parse_list(expected_columns) if expected_columns else None
+def _op_validate(path: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    file_path = _resolve_target_file(path)
+    if not file_path:
+        return f"Error: Dataset file not found at '{path}'.", False
+    exp_cols = _parse_list(kwargs.get("expected_columns")) if kwargs.get("expected_columns") else None
     val_res = DatasetProfiler.validate_dataset(
         file_path,
         expected_columns=exp_cols,
-        max_null_pct=max_null_pct,
-        max_token_length=max_token_length,
+        max_null_pct=float(kwargs.get("max_null_pct", 20.0)),
+        max_token_length=kwargs.get("max_token_length"),
     )
 
     status_str = "PASSED ✅" if val_res["valid"] else "FAILED ❌"
@@ -124,22 +135,19 @@ def _handle_validate_op(
     return "\n".join(output), val_res["valid"]
 
 
-def _handle_split_op(
-    file_path: Path,
-    output_dir: str,
-    train_ratio: float,
-    val_ratio: float,
-    test_ratio: float,
-    stratify_column: str | None,
-) -> tuple[str, bool]:
-    target_dir = output_dir or str(file_path.parent / f"{file_path.stem}_splits")
+def _op_split(path: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    file_path = _resolve_target_file(path)
+    if not file_path:
+        return f"Error: Dataset file not found at '{path}'.", False
+    out_dir_param = str(kwargs.get("output_dir", ""))
+    target_dir = out_dir_param or str(file_path.parent / f"{file_path.stem}_splits")
     manifest = DatasetProfiler.split_dataset(
         file_path,
         output_dir=target_dir,
-        train_ratio=train_ratio,
-        val_ratio=val_ratio,
-        test_ratio=test_ratio,
-        stratify_column=stratify_column,
+        train_ratio=float(kwargs.get("train_ratio", 0.8)),
+        val_ratio=float(kwargs.get("val_ratio", 0.1)),
+        test_ratio=float(kwargs.get("test_ratio", 0.1)),
+        stratify_column=kwargs.get("stratify_column"),
     )
 
     output = [
@@ -153,46 +161,48 @@ def _handle_split_op(
     return "\n".join(output), True
 
 
-def _handle_register_op(
-    file_path: Path | None,
-    dataset_name: str,
-    description: str,
-    tags: Any,
-    session: Any,
-) -> tuple[str, bool]:
-    name = dataset_name or (file_path.stem if file_path else "dataset")
-    profile = DatasetProfiler.profile(file_path, sample_size=1000) if file_path and file_path.exists() else None
+def _sync_kg(session: Any, name: str, file_path: Path | None, profile: DatasetProfile | None, description: str, tags: Any) -> bool:
+    kg = getattr(getattr(session, "workspace", None), "knowledge_graph", None)
+    if not kg:
+        return False
+    props = {
+        "path": str(file_path) if file_path else "",
+        "format": profile.format if profile else "",
+        "total_rows": profile.total_rows if profile else 0,
+        "health_score": profile.health_score if profile else 100,
+        "description": description,
+        "tags": _parse_list(tags) if tags else [],
+    }
+    kg.add_entity(
+        entity_id=f"dataset_{name}",
+        entity_type="dataset",
+        name=name,
+        properties=props,
+    )
+    return True
 
-    kg_synced = False
-    if session and hasattr(session, "workspace"):
-        ws = getattr(session, "workspace", None)
-        if ws and hasattr(ws, "knowledge_graph") and ws.knowledge_graph:
-            props = {
-                "path": str(file_path) if file_path else "",
-                "format": profile.format if profile else "",
-                "total_rows": profile.total_rows if profile else 0,
-                "health_score": profile.health_score if profile else 100,
-                "description": description,
-                "tags": _parse_list(tags) if tags else [],
-            }
-            ws.knowledge_graph.add_entity(
-                entity_id=f"dataset_{name}",
-                entity_type="dataset",
-                name=name,
-                properties=props,
-            )
-            kg_synced = True
+
+def _op_register(path: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    file_path = _resolve_target_file(path) if path else None
+    dataset_name = str(kwargs.get("dataset_name", ""))
+    description = str(kwargs.get("description", ""))
+    tags = kwargs.get("tags")
+    session = kwargs.get("session")
+
+    name = dataset_name or (file_path.stem if file_path else "dataset")
+    profile = DatasetProfiler.profile(file_path, sample_size=1000) if file_path else None
+    kg_synced = _sync_kg(session, name, file_path, profile, description, tags)
 
     output = [
         f"# Dataset Registered: `{name}`",
-        f"- **Path**: `{file_path or 'N/A'}`",
+        f"- **Path**: `{file_path or path or 'N/A'}`",
         f"- **Knowledge Graph Synced**: {'Yes' if kg_synced else 'No (in-memory only)'}",
         f"- **Description**: {description or 'N/A'}",
     ]
     return "\n".join(output), True
 
 
-def _handle_summary_op() -> tuple[str, bool]:
+def _op_summary(_path: str, _kwargs: dict[str, Any]) -> tuple[str, bool]:
     return (
         "Datasets Tool Operations:\n"
         "- `profile`: Compute statistics, column distributions, null analysis, text token lengths, and health score.\n"
@@ -201,6 +211,23 @@ def _handle_summary_op() -> tuple[str, bool]:
         "- `split`: Partition dataset into train/val/test splits.\n"
         "- `register`: Register dataset in project Knowledge Graph."
     ), True
+
+
+_OP_HANDLERS: dict[str, Callable[[str, dict[str, Any]], tuple[str, bool]]] = {
+    "profile": _op_profile,
+    "analyze": _op_profile,
+    "inspect_samples": _op_inspect,
+    "sample": _op_inspect,
+    "preview": _op_inspect,
+    "validate": _op_validate,
+    "check": _op_validate,
+    "split": _op_split,
+    "partition": _op_split,
+    "register": _op_register,
+    "register_kg": _op_register,
+    "summary": _op_summary,
+    "help": _op_summary,
+}
 
 
 async def _handle_datasets(
@@ -215,66 +242,15 @@ async def _handle_datasets(
     if not path and op not in ("summary", "help"):
         return "Error: 'path' parameter is required for dataset operations.", False
 
-    file_path = Path(path).resolve() if path else None
+    handler = _OP_HANDLERS.get(op)
+    if not handler:
+        return (
+            f"Unknown datasets operation '{operation}'. Supported: profile, inspect_samples, validate, split, register, summary.",
+            False,
+        )
 
     try:
-        if op in ("profile", "analyze"):
-            if not file_path or not file_path.exists():
-                return f"Error: Dataset file not found at '{path}'.", False
-            sample_size = int(kwargs.get("sample_size", 2000))
-            return _handle_profile_op(file_path, sample_size)
-
-        elif op in ("inspect_samples", "sample", "preview"):
-            if not file_path or not file_path.exists():
-                return f"Error: Dataset file not found at '{path}'.", False
-            return _handle_inspect_op(
-                file_path,
-                n=int(kwargs.get("n", 5)),
-                offset=int(kwargs.get("offset", 0)),
-                strategy=str(kwargs.get("strategy", "head")),
-                label_column=kwargs.get("label_column"),
-            )
-
-        elif op in ("validate", "check"):
-            if not file_path or not file_path.exists():
-                return f"Error: Dataset file not found at '{path}'.", False
-            return _handle_validate_op(
-                file_path,
-                expected_columns=kwargs.get("expected_columns"),
-                max_null_pct=float(kwargs.get("max_null_pct", 20.0)),
-                max_token_length=kwargs.get("max_token_length"),
-            )
-
-        elif op in ("split", "partition"):
-            if not file_path or not file_path.exists():
-                return f"Error: Dataset file not found at '{path}'.", False
-            return _handle_split_op(
-                file_path,
-                output_dir=str(kwargs.get("output_dir", "")),
-                train_ratio=float(kwargs.get("train_ratio", 0.8)),
-                val_ratio=float(kwargs.get("val_ratio", 0.1)),
-                test_ratio=float(kwargs.get("test_ratio", 0.1)),
-                stratify_column=kwargs.get("stratify_column"),
-            )
-
-        elif op in ("register", "register_kg"):
-            return _handle_register_op(
-                file_path,
-                dataset_name=str(kwargs.get("dataset_name", "")),
-                description=str(kwargs.get("description", "")),
-                tags=kwargs.get("tags"),
-                session=kwargs.get("session"),
-            )
-
-        elif op in ("summary", "help"):
-            return _handle_summary_op()
-
-        else:
-            return (
-                f"Unknown datasets operation '{operation}'. Supported: profile, inspect_samples, validate, split, register, summary.",
-                False,
-            )
-
+        return handler(path, kwargs)
     except Exception as e:
         log.exception("Error executing datasets operation '%s': %s", op, e)
         return f"Error executing datasets operation '{op}': {e}", False
