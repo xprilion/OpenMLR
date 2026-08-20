@@ -7,6 +7,8 @@ and generating partitioned splits for ML training workflows.
 from __future__ import annotations
 
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -21,24 +23,18 @@ router = APIRouter(prefix="/api/datasets", tags=["datasets"])
 logger = logging.getLogger(__name__)
 
 DATASET_PATH_DESC = "Path to the dataset file"
+SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9_\-./ ]+$")
 
 
 def _safe_dataset_path(path_str: str) -> Path:
     """Safely validate and resolve a dataset file path, mitigating path injection risks."""
-    clean = str(path_str).strip()
-    if not clean or "\0" in clean or ".." in clean:
+    clean = os.path.normpath(str(path_str).strip())
+    if not clean or not SAFE_PATH_PATTERN.match(clean) or ".." in clean or clean.startswith(("/etc", "/proc", "/sys")):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid dataset path parameter",
+            detail="Invalid or disallowed dataset path parameter",
         )
     resolved = Path(clean).resolve()
-    try:
-        resolved.relative_to(resolved.anchor)
-    except (ValueError, RuntimeError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path traversal not allowed",
-        )
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -49,21 +45,13 @@ def _safe_dataset_path(path_str: str) -> Path:
 
 def _safe_output_dir(dir_str: str) -> Path:
     """Safely validate and resolve an output directory path."""
-    clean = str(dir_str).strip()
-    if not clean or "\0" in clean or ".." in clean:
+    clean = os.path.normpath(str(dir_str).strip())
+    if not clean or not SAFE_PATH_PATTERN.match(clean) or ".." in clean or clean.startswith(("/etc", "/proc", "/sys")):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid output directory path parameter",
+            detail="Invalid or disallowed output directory path parameter",
         )
-    resolved = Path(clean).resolve()
-    try:
-        resolved.relative_to(resolved.anchor)
-    except (ValueError, RuntimeError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path traversal not allowed",
-        )
-    return resolved
+    return Path(clean).resolve()
 
 
 class ProfileDatasetRequest(BaseModel):
