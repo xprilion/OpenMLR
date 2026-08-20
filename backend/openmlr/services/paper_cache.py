@@ -25,7 +25,9 @@ MAX_IN_MEMORY_ENTRIES = 500
 class PaperCache:
     """High-throughput multi-tier paper cache."""
 
-    def __init__(self, in_memory_limit: int = MAX_IN_MEMORY_ENTRIES, default_ttl: int = DEFAULT_CACHE_TTL):
+    def __init__(
+        self, in_memory_limit: int = MAX_IN_MEMORY_ENTRIES, default_ttl: int = DEFAULT_CACHE_TTL
+    ):
         self.in_memory_limit = in_memory_limit
         self.default_ttl = default_ttl
         self._lru_cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()

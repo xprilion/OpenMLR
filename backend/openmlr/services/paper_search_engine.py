@@ -101,7 +101,9 @@ async def get_paper_details(paper_id: str) -> tuple[str, bool]:
         return f"Paper not found: {paper_id}", False
 
     w = r.json()
-    authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or []))
+    authors = ", ".join(
+        a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])
+    )
     doi = (w.get("doi") or "").replace("https://doi.org/", "")
     oa_url = (w.get("open_access") or {}).get("oa_url", "")
     arxiv_id = extract_arxiv_from_ids(w.get("ids", {}))
@@ -131,7 +133,9 @@ async def get_paper_details(paper_id: str) -> tuple[str, bool]:
 async def get_crossref_details(doi: str) -> tuple[str, bool]:
     """Fallback details lookup via CrossRef API."""
     try:
-        r = await fetch_with_retry(f"{CROSSREF_API}/works/{doi}", params={"mailto": MAILTO}, timeout=15, max_retries=3)
+        r = await fetch_with_retry(
+            f"{CROSSREF_API}/works/{doi}", params={"mailto": MAILTO}, timeout=15, max_retries=3
+        )
     except RateLimitError:
         return "CrossRef rate limit reached. Try again later.", False
     except Exception as e:
@@ -143,8 +147,12 @@ async def get_crossref_details(doi: str) -> tuple[str, bool]:
 
     w = r.json().get("message", {})
     title = (w.get("title") or ["Untitled"])[0]
-    authors = ", ".join(f"{a.get('given', '')} {a.get('family', '')}" for a in (w.get("author") or []))
-    year = (w.get("published-print") or w.get("published-online") or {}).get("date-parts", [[None]])[0][0]
+    authors = ", ".join(
+        f"{a.get('given', '')} {a.get('family', '')}" for a in (w.get("author") or [])
+    )
+    year = (w.get("published-print") or w.get("published-online") or {}).get(
+        "date-parts", [[None]]
+    )[0][0]
 
     lines = [
         f"# {title}",
@@ -164,7 +172,9 @@ async def get_citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
     oa_id = to_openalex_id(paper_id)
     try:
-        r = await fetch_with_retry(f"{OPENALEX_API}/works/{oa_id}", params=get_openalex_params(), timeout=20, max_retries=3)
+        r = await fetch_with_retry(
+            f"{OPENALEX_API}/works/{oa_id}", params=get_openalex_params(), timeout=20, max_retries=3
+        )
     except RateLimitError:
         return "OpenAlex rate limit reached. Try again later.", False
     except Exception as e:
@@ -176,24 +186,42 @@ async def get_citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
     w = r.json()
     ref_ids = w.get("referenced_works", [])[:limit]
-    lines = [f"## References ({len(w.get('referenced_works', []))} total, showing {len(ref_ids)})\n"]
+    lines = [
+        f"## References ({len(w.get('referenced_works', []))} total, showing {len(ref_ids)})\n"
+    ]
 
     if ref_ids:
         pipe = "|".join(ref_ids)
         try:
-            r2 = await fetch_with_retry(f"{OPENALEX_API}/works", params=get_openalex_params({"filter": f"openalex:{pipe}", "per_page": limit}), timeout=20, max_retries=2)
+            r2 = await fetch_with_retry(
+                f"{OPENALEX_API}/works",
+                params=get_openalex_params({"filter": f"openalex:{pipe}", "per_page": limit}),
+                timeout=20,
+                max_retries=2,
+            )
             if r2.status_code == 200:
                 for rw in r2.json().get("results", []):
-                    lines.append(f"- **{rw.get('title', 'Untitled')}** ({rw.get('publication_year', '?')}) [{rw.get('cited_by_count', 0)} cites]")
+                    lines.append(
+                        f"- **{rw.get('title', 'Untitled')}** ({rw.get('publication_year', '?')}) [{rw.get('cited_by_count', 0)} cites]"
+                    )
         except Exception:
             lines.append("(Could not fetch reference details)")
 
     lines.append(f"\n## Cited by ({w.get('cited_by_count', 0)} total)\n")
     try:
-        r3 = await fetch_with_retry(f"{OPENALEX_API}/works", params=get_openalex_params({"filter": f"cites:{oa_id}", "sort": "cited_by_count:desc", "per_page": limit}), timeout=20, max_retries=2)
+        r3 = await fetch_with_retry(
+            f"{OPENALEX_API}/works",
+            params=get_openalex_params(
+                {"filter": f"cites:{oa_id}", "sort": "cited_by_count:desc", "per_page": limit}
+            ),
+            timeout=20,
+            max_retries=2,
+        )
         if r3.status_code == 200:
             for cw in r3.json().get("results", []):
-                lines.append(f"- **{cw.get('title', 'Untitled')}** ({cw.get('publication_year', '?')}) [{cw.get('cited_by_count', 0)} cites]")
+                lines.append(
+                    f"- **{cw.get('title', 'Untitled')}** ({cw.get('publication_year', '?')}) [{cw.get('cited_by_count', 0)} cites]"
+                )
     except Exception:
         lines.append("(Could not fetch citing papers)")
 
@@ -202,11 +230,19 @@ async def get_citations(paper_id: str, limit: int = 10) -> tuple[str, bool]:
 
 async def get_trending_papers(query: str | None = None, limit: int = 10) -> tuple[str, bool]:
     """Retrieve trending papers from OpenAlex."""
-    params = get_openalex_params({"sort": "cited_by_count:desc", "filter": "from_publication_date:2024-01-01", "per_page": min(limit, 50)})
+    params = get_openalex_params(
+        {
+            "sort": "cited_by_count:desc",
+            "filter": "from_publication_date:2024-01-01",
+            "per_page": min(limit, 50),
+        }
+    )
     if query:
         params["search"] = query
     try:
-        r = await fetch_with_retry(f"{OPENALEX_API}/works", params=params, timeout=20, max_retries=3)
+        r = await fetch_with_retry(
+            f"{OPENALEX_API}/works", params=params, timeout=20, max_retries=3
+        )
     except RateLimitError:
         return "OpenAlex rate limit reached. Try again later.", False
     except Exception as e:
@@ -222,8 +258,12 @@ async def get_trending_papers(query: str | None = None, limit: int = 10) -> tupl
 
     lines = [f"Trending papers{f' on: {query}' if query else ''}:\n"]
     for i, w in enumerate(works, 1):
-        authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3])
-        lines.append(f"{i}. **{w.get('title', 'Untitled')}** ({w.get('publication_year', '?')})\n   {authors}  |  {w.get('cited_by_count', 0)} citations\n")
+        authors = ", ".join(
+            a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3]
+        )
+        lines.append(
+            f"{i}. **{w.get('title', 'Untitled')}** ({w.get('publication_year', '?')})\n   {authors}  |  {w.get('cited_by_count', 0)} citations\n"
+        )
     return "\n".join(lines), True
 
 
@@ -234,7 +274,9 @@ async def get_recommendations(paper_id: str, limit: int = 10) -> tuple[str, bool
 
     oa_id = to_openalex_id(paper_id)
     try:
-        r = await fetch_with_retry(f"{OPENALEX_API}/works/{oa_id}", params=get_openalex_params(), timeout=20, max_retries=3)
+        r = await fetch_with_retry(
+            f"{OPENALEX_API}/works/{oa_id}", params=get_openalex_params(), timeout=20, max_retries=3
+        )
     except RateLimitError:
         return "OpenAlex rate limit reached. Try again later.", False
     except Exception as e:
@@ -250,7 +292,12 @@ async def get_recommendations(paper_id: str, limit: int = 10) -> tuple[str, bool
 
     pipe = "|".join(related)
     try:
-        r2 = await fetch_with_retry(f"{OPENALEX_API}/works", params=get_openalex_params({"filter": f"openalex:{pipe}", "per_page": limit}), timeout=20, max_retries=2)
+        r2 = await fetch_with_retry(
+            f"{OPENALEX_API}/works",
+            params=get_openalex_params({"filter": f"openalex:{pipe}", "per_page": limit}),
+            timeout=20,
+            max_retries=2,
+        )
     except Exception as e:
         log.warning("OpenAlex related works fetch error: %s", e)
         return "Failed to fetch related works.", False
@@ -260,8 +307,12 @@ async def get_recommendations(paper_id: str, limit: int = 10) -> tuple[str, bool
 
     lines = ["## Related Papers\n"]
     for i, w in enumerate(r2.json().get("results", []), 1):
-        authors = ", ".join(a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3])
-        lines.append(f"{i}. **{w.get('title', 'Untitled')}** ({w.get('publication_year', '?')})\n   {authors}  |  {w.get('cited_by_count', 0)} citations\n")
+        authors = ", ".join(
+            a.get("author", {}).get("display_name", "") for a in (w.get("authorships") or [])[:3]
+        )
+        lines.append(
+            f"{i}. **{w.get('title', 'Untitled')}** ({w.get('publication_year', '?')})\n   {authors}  |  {w.get('cited_by_count', 0)} citations\n"
+        )
     return "\n".join(lines), True
 
 
@@ -270,7 +321,9 @@ async def find_code_implementations(query: str) -> tuple[str, bool]:
     if not query:
         return "Provide a query.", False
     try:
-        r = await fetch_with_retry(f"{PWC_API}/search/", params={"q": query, "page": 1}, timeout=15, max_retries=3)
+        r = await fetch_with_retry(
+            f"{PWC_API}/search/", params={"q": query, "page": 1}, timeout=15, max_retries=3
+        )
     except RateLimitError:
         return "Papers With Code rate limit reached. Try again later.", False
     except Exception as e:
@@ -298,7 +351,9 @@ async def find_datasets_for_topic(query: str) -> tuple[str, bool]:
     if not query:
         return "Provide a query.", False
     try:
-        r = await fetch_with_retry(f"{PWC_API}/datasets/", params={"q": query, "page": 1}, timeout=15, max_retries=3)
+        r = await fetch_with_retry(
+            f"{PWC_API}/datasets/", params={"q": query, "page": 1}, timeout=15, max_retries=3
+        )
     except RateLimitError:
         return "Papers With Code rate limit reached. Try again later.", False
     except Exception as e:
@@ -329,15 +384,27 @@ async def get_author_papers(author_query: str, limit: int = 10) -> tuple[str, bo
     headers = get_semantic_scholar_headers()
 
     try:
-        r = await fetch_with_retry(f"{SEMANTIC_SCHOLAR_API}/author/search", params=params, headers=headers, timeout=20, max_retries=3)
+        r = await fetch_with_retry(
+            f"{SEMANTIC_SCHOLAR_API}/author/search",
+            params=params,
+            headers=headers,
+            timeout=20,
+            max_retries=3,
+        )
     except RateLimitError:
-        return ("Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False)
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     except Exception as e:
         log.warning("Semantic Scholar author search error: %s", e)
         return f"Author search error: {str(e)[:200]}", False
 
     if r.status_code in (429, 403):
-        return ("Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False)
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     if r.status_code != 200:
         return f"Author search error {r.status_code}: {r.text[:300]}", False
 
@@ -352,9 +419,18 @@ async def get_author_papers(author_query: str, limit: int = 10) -> tuple[str, bo
 
     params = {"fields": "paperId,title,year,citationCount,externalIds", "limit": min(limit, 100)}
     try:
-        r = await fetch_with_retry(f"{SEMANTIC_SCHOLAR_API}/author/{author_id}/papers", params=params, headers=headers, timeout=20, max_retries=3)
+        r = await fetch_with_retry(
+            f"{SEMANTIC_SCHOLAR_API}/author/{author_id}/papers",
+            params=params,
+            headers=headers,
+            timeout=20,
+            max_retries=3,
+        )
     except RateLimitError:
-        return ("Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.", False)
+        return (
+            "Semantic Scholar rate limit reached. Try again later or add SEMANTIC_SCHOLAR_API_KEY.",
+            False,
+        )
     except Exception as e:
         log.warning("Semantic Scholar author papers error: %s", e)
         return f"Error fetching author papers: {str(e)[:200]}", False
@@ -376,5 +452,7 @@ async def get_author_papers(author_query: str, limit: int = 10) -> tuple[str, bo
         id_info = f"DOI: {doi}" if doi else ""
         if arxiv:
             id_info += f"  arXiv: {arxiv}" if id_info else f"arXiv: {arxiv}"
-        lines.append(f"{i}. **{p.get('title', 'Untitled')}** ({p.get('year', '?')})\n   Citations: {p.get('citationCount', 0)}{f'  |  {id_info}' if id_info else ''}\n")
+        lines.append(
+            f"{i}. **{p.get('title', 'Untitled')}** ({p.get('year', '?')})\n   Citations: {p.get('citationCount', 0)}{f'  |  {id_info}' if id_info else ''}\n"
+        )
     return "\n".join(lines), True

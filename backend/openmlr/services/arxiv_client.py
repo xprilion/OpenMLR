@@ -102,7 +102,11 @@ async def search_arxiv(
     lines = [f"Found {len(filtered_entries)} arXiv papers for '{query}':\n"]
     for i, entry in enumerate(filtered_entries[:limit], 1):
         title_el = entry.find("atom:title", ARXIV_NS)
-        title = title_el.text.strip().replace("\n", " ") if title_el is not None and title_el.text else "Untitled"
+        title = (
+            title_el.text.strip().replace("\n", " ")
+            if title_el is not None and title_el.text
+            else "Untitled"
+        )
 
         id_el = entry.find("atom:id", ARXIV_NS)
         arxiv_id = ""
