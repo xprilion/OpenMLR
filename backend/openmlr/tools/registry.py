@@ -424,6 +424,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .github import create_github_tools
     from .huggingface import create_huggingface_tools
     from .inspect import create_inspect_tool
+    from .latex_compiler import create_latex_tool
     from .local import create_local_tools
     from .papers import create_papers_tool
     from .plan import create_plan_tool
@@ -440,6 +441,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router.register(create_plan_tool())
     router.register(create_papers_tool())
     router.register(create_writing_tool())
+    router.register(create_latex_tool())
     router.register(create_ask_user_tool())
 
     # Register session search tool
