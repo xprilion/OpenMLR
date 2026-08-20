@@ -55,6 +55,8 @@ MODE_TOOL_RESTRICTIONS = {
             "sweeps",
             # Model registry and checkpoint governance (read-only in plan mode)
             "models",
+            # Publication figures and plotting (read-only in plan mode)
+            "figures",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -440,6 +442,17 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .search import create_search_tools
     from .writing import create_writing_tool
 
+    from .session_search import create_session_search_tool
+    from .compute_tools import create_compute_tools
+    from .workspace_tools import create_workspace_tools
+    from .memory_tool import create_memory_tool
+    from .process_tool import create_process_tool
+    from .experiments import create_experiments_tool
+    from .datasets import create_datasets_tool
+    from .sweeps import create_sweeps_tool
+    from .models import create_models_tool
+    from .figures import create_figures_tool
+
     router.register_many(create_local_tools())
     router.register(create_inspect_tool())
     router.register_many(create_github_tools())
@@ -451,44 +464,17 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router.register(create_writing_tool())
     router.register(create_latex_tool())
     router.register(create_ask_user_tool())
-
-    # Register session search tool
-    from .session_search import create_session_search_tool
     router.register(create_session_search_tool())
-
-    # Register compute tools
-    from .compute_tools import create_compute_tools
     router.register_many(create_compute_tools())
-
-    # Register workspace tools
-    from .workspace_tools import create_workspace_tools
     router.register_many(create_workspace_tools())
-
-    # Register memory tool
-    from .memory_tool import create_memory_tool
     router.register(create_memory_tool())
-
-    # Register process management tool
-    from .process_tool import create_process_tool
     router.register(create_process_tool())
-
-    # Register experiments tracking tool
-    from .experiments import create_experiments_tool
     router.register(create_experiments_tool())
-
-    # Register datasets profiling & validation tool
-    from .datasets import create_datasets_tool
     router.register(create_datasets_tool())
-
-    # Register sweeps and HPO tool
-    from .sweeps import create_sweeps_tool
     router.register(create_sweeps_tool())
-
-    # Register model registry tool
-    from .models import create_models_tool
     router.register(create_models_tool())
+    router.register(create_figures_tool())
 
-    # Register sandbox tools if manager provided
     if sandbox_manager:
         from .sandbox_tools import create_sandbox_tools
         router.register_many(create_sandbox_tools(sandbox_manager))
