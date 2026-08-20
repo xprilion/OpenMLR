@@ -49,6 +49,8 @@ MODE_TOOL_RESTRICTIONS = {
             "process",
             # Experiments tracking and monitoring (read-only actions in plan mode)
             "experiments",
+            # Dataset profiling and inspection (read-only actions in plan mode)
+            "datasets",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -475,6 +477,11 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     from .experiments import create_experiments_tool
 
     router.register(create_experiments_tool())
+
+    # Register datasets profiling & validation tool
+    from .datasets import create_datasets_tool
+
+    router.register(create_datasets_tool())
 
     # Register sandbox tools if manager provided
     if sandbox_manager:
