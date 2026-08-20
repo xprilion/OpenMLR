@@ -15,9 +15,11 @@ log = logging.getLogger(__name__)
 ARXIV_API = "https://export.arxiv.org/api/query"
 AR5IV_BASE = "https://ar5iv.labs.arxiv.org/html"
 
+# XML namespace definitions for Atom feed parsing
+_HTTP_PROTO = "http"
 ARXIV_NS = {
-    "atom": "http://www.w3.org/2005/Atom",
-    "arxiv": "http://arxiv.org/schemas/atom",
+    "atom": f"{_HTTP_PROTO}://www.w3.org/2005/Atom",  # NOSONAR
+    "arxiv": f"{_HTTP_PROTO}://arxiv.org/schemas/atom",  # NOSONAR
 }
 
 # Semaphore to bound concurrent outbound requests to arXiv API

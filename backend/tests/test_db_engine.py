@@ -35,7 +35,7 @@ class TestEngineConfig:
         assert isinstance(eng, AsyncEngine)
 
     def test_create_database_engine_worker_mode(self):
-        eng = create_database_engine("postgresql+asyncpg://user:pass@localhost:5432/db", is_worker=True)
+        eng = create_database_engine("postgresql+asyncpg://localhost:5432/testdb", is_worker=True)
         assert isinstance(eng, AsyncEngine)
 
     def test_pool_status_structure(self):
