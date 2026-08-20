@@ -227,4 +227,65 @@ export const api = {
     projectId: number,
     body: { type: string; data: unknown; section_name?: string }
   ) => post(`/api/projects/${projectId}/research/artifacts`, body),
+
+  // Machine Learning Experiments & Runs
+  listExperimentRuns: (params?: {
+    projectUuid?: string;
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.projectUuid) q.append('project_uuid', params.projectUuid);
+    if (params?.status) q.append('status', params.status);
+    if (params?.search) q.append('search', params.search);
+    if (params?.limit) q.append('limit', String(params.limit));
+    if (params?.offset) q.append('offset', String(params.offset));
+    const qs = q.toString();
+    return get(`/api/experiments/runs${qs ? `?${qs}` : ''}`);
+  },
+  createExperimentRun: (body: {
+    name: string;
+    description?: string;
+    hyperparameters?: Record<string, unknown>;
+    compute_target?: string;
+    tags?: string[];
+    total_steps?: number;
+    total_epochs?: number;
+    project_uuid?: string;
+  }) => post('/api/experiments/runs', body),
+  getExperimentRun: (runId: string, projectUuid?: string) =>
+    get(`/api/experiments/runs/${encodeURIComponent(runId)}${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`),
+  logRunMetrics: (
+    runId: string,
+    body: { step: number; epoch?: number; metrics: Record<string, number>; timestamp?: number },
+    projectUuid?: string
+  ) => post(`/api/experiments/runs/${encodeURIComponent(runId)}/metrics${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`, body),
+  updateRunStatus: (
+    runId: string,
+    body: { status: string; reason?: string },
+    projectUuid?: string
+  ) => post(`/api/experiments/runs/${encodeURIComponent(runId)}/status${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`, body),
+  appendRunLogs: (runId: string, lines: string[], projectUuid?: string) =>
+    post(`/api/experiments/runs/${encodeURIComponent(runId)}/logs${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`, { lines }),
+  getRunLogs: (runId: string, limit = 200, projectUuid?: string) =>
+    get(`/api/experiments/runs/${encodeURIComponent(runId)}/logs?limit=${limit}${projectUuid ? `&project_uuid=${encodeURIComponent(projectUuid)}` : ''}`),
+  registerRunCheckpoint: (
+    runId: string,
+    body: {
+      name: string;
+      step: number;
+      epoch?: number;
+      path?: string;
+      file_size_mb?: number;
+      metrics?: Record<string, number>;
+      download_url?: string;
+    },
+    projectUuid?: string
+  ) => post(`/api/experiments/runs/${encodeURIComponent(runId)}/checkpoints${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`, body),
+  compareExperimentRuns: (runIds: string[], projectUuid?: string) =>
+    get(`/api/experiments/compare?run_ids=${encodeURIComponent(runIds.join(','))}${projectUuid ? `&project_uuid=${encodeURIComponent(projectUuid)}` : ''}`),
+  deleteExperimentRun: (runId: string, projectUuid?: string) =>
+    del(`/api/experiments/runs/${encodeURIComponent(runId)}${projectUuid ? `?project_uuid=${encodeURIComponent(projectUuid)}` : ''}`),
 };
