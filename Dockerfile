@@ -7,13 +7,15 @@ FROM node:20-slim AS frontend-build
 
 WORKDIR /app/frontend
 
-# Install dependencies with locked versions and disabled lifecycle scripts
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --ignore-scripts
+# Install pnpm for reproducible frontend builds
+RUN npm install -g pnpm@latest
 
-# Copy frontend source and build production static bundle
+# Install dependencies and build static assets
+COPY frontend/package.json ./
+RUN pnpm install --no-frozen-lockfile
+
 COPY frontend/ ./
-RUN npm run build
+RUN pnpm build
 
 
 # ── Stage 2: Python backend runtime ───────────────────────
@@ -34,9 +36,9 @@ RUN groupadd --gid 1000 openmlr && \
 
 WORKDIR /app
 
-# Copy backend source and install dependencies from frozen lockfile without builds
+# Copy backend source and install dependencies
 COPY backend/ ./backend/
-RUN cd backend && uv sync --frozen --no-dev --no-install-project --no-build
+RUN cd backend && uv sync --frozen --no-dev
 
 # Copy built frontend static bundle
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
