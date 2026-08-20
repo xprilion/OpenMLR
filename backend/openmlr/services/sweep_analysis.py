@@ -66,6 +66,14 @@ def _compute_parameter_sensitivities(
     return importance, correlations
 
 
+def _is_better_or_equal(val: float, baseline: float, goal: str) -> bool:
+    return val <= baseline if goal == "minimize" else val >= baseline
+
+
+def _is_strictly_better(val: float, baseline: float, goal: str) -> bool:
+    return val < baseline if goal == "minimize" else val > baseline
+
+
 def _is_dominated(candidate: Trial, others: list[Trial], goal: str) -> bool:
     """Check if candidate trial is dominated on both objective metric and duration."""
     c_obj = candidate.objective_value or 0.0
@@ -77,11 +85,8 @@ def _is_dominated(candidate: Trial, others: list[Trial], goal: str) -> bool:
         o_obj = other.objective_value or 0.0
         o_dur = other.duration_seconds
 
-        better_or_equal_obj = o_obj <= c_obj if goal == "minimize" else o_obj >= c_obj
-        strictly_better_obj = o_obj < c_obj if goal == "minimize" else o_obj > c_obj
-
-        if better_or_equal_obj and o_dur <= c_dur:
-            if strictly_better_obj or o_dur < c_dur:
+        if _is_better_or_equal(o_obj, c_obj, goal) and o_dur <= c_dur:
+            if _is_strictly_better(o_obj, c_obj, goal) or o_dur < c_dur:
                 return True
     return False
 

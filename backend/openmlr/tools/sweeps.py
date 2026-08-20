@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable
@@ -60,7 +61,7 @@ def _handle_create_sweep(engine: SweepEngine, proj: str, kwargs: dict[str, Any])
     return msg, True
 
 
-def _handle_list_sweeps(engine: SweepEngine, proj: str) -> tuple[str, bool]:
+def _handle_list_sweeps(engine: SweepEngine, proj: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
     sweeps = engine.list_sweeps(proj)
     if not sweeps:
         return f"No hyperparameter sweeps found for project `{proj}`.", True
@@ -76,7 +77,18 @@ def _handle_list_sweeps(engine: SweepEngine, proj: str) -> tuple[str, bool]:
     return "\n".join(lines), True
 
 
-def _handle_suggest_trial(engine: SweepEngine, proj: str, sweep_id: str | None) -> tuple[str, bool]:
+def _handle_get_sweep(engine: SweepEngine, proj: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    sweep_id = kwargs.get("sweep_id")
+    if not sweep_id:
+        return ERR_SWEEP_ID_REQUIRED, False
+    sweep = engine.get_sweep(proj, sweep_id)
+    if not sweep:
+        return f"Error: Sweep `{sweep_id}` not found.", False
+    return json.dumps(sweep.to_dict(), indent=2), True
+
+
+def _handle_suggest_trial(engine: SweepEngine, proj: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    sweep_id = kwargs.get("sweep_id")
     if not sweep_id:
         return ERR_SWEEP_ID_REQUIRED, False
     trial = engine.suggest_trial(proj, sweep_id)
@@ -132,6 +144,52 @@ def _handle_prune_check(engine: SweepEngine, proj: str, kwargs: dict[str, Any]) 
     return f"Prune evaluation for trial `{trial_id}` at step {step} (value={val}): **{verdict}**", True
 
 
+def _handle_analyze_sweep(engine: SweepEngine, proj: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    sweep_id = kwargs.get("sweep_id")
+    if not sweep_id:
+        return ERR_SWEEP_ID_REQUIRED, False
+    return json.dumps(engine.analyze_sweep(proj, sweep_id), indent=2), True
+
+
+def _handle_export_report(engine: SweepEngine, proj: str, kwargs: dict[str, Any]) -> tuple[str, bool]:
+    sweep_id = kwargs.get("sweep_id")
+    if not sweep_id:
+        return ERR_SWEEP_ID_REQUIRED, False
+    return engine.export_sweep_markdown(proj, sweep_id), True
+
+
+ACTION_DISPATCH: dict[str, Callable[[SweepEngine, str, dict[str, Any]], tuple[str, bool]]] = {
+    "create": _handle_create_sweep,
+    "create_sweep": _handle_create_sweep,
+    "list": _handle_list_sweeps,
+    "list_sweeps": _handle_list_sweeps,
+    "get": _handle_get_sweep,
+    "get_sweep": _handle_get_sweep,
+    "suggest": _handle_suggest_trial,
+    "suggest_trial": _handle_suggest_trial,
+    "next_trial": _handle_suggest_trial,
+    "record": _handle_record_trial,
+    "record_trial": _handle_record_trial,
+    "log_trial": _handle_record_trial,
+    "prune_check": _handle_prune_check,
+    "should_prune": _handle_prune_check,
+    "analyze": _handle_analyze_sweep,
+    "analyze_sweep": _handle_analyze_sweep,
+    "export": _handle_export_report,
+    "export_report": _handle_export_report,
+}
+
+
+def _resolve_project_id(project_id: str | None, get_project_id: Callable[[], str | None] | None) -> str:
+    if project_id and project_id.strip():
+        return project_id.strip()
+    if get_project_id:
+        pid = get_project_id()
+        if pid and pid.strip():
+            return pid.strip()
+    return "default"
+
+
 def create_sweeps_tool(
     get_project_id: Callable[[], str | None] | None = None,
     base_dir: Path | None = None,
@@ -139,53 +197,22 @@ def create_sweeps_tool(
     """Create the hyperparameter sweep and HPO tool for OpenMLR agent."""
     engine = SweepEngine(base_dir=base_dir)
 
-    def _resolve_project(proj: str | None = None) -> str:
-        if proj and proj.strip():
-            return proj.strip()
-        if get_project_id:
-            pid = get_project_id()
-            if pid and pid.strip():
-                return pid.strip()
-        return "default"
-
     async def _execute(action: str = "list_sweeps", **kwargs: Any) -> tuple[str, bool]:
-        proj = _resolve_project(kwargs.get("project_id"))
+        await asyncio.sleep(0)  # Async boundary
+        proj = _resolve_project_id(kwargs.get("project_id"), get_project_id)
         act = (action or "list_sweeps").lower().strip()
-        sweep_id = kwargs.get("sweep_id")
+        handler = ACTION_DISPATCH.get(act)
 
-        try:
-            if act in ("create", "create_sweep"):
-                return _handle_create_sweep(engine, proj, kwargs)
-            if act in ("list", "list_sweeps"):
-                return _handle_list_sweeps(engine, proj)
-            if act in ("get", "get_sweep"):
-                if not sweep_id:
-                    return ERR_SWEEP_ID_REQUIRED, False
-                sweep = engine.get_sweep(proj, sweep_id)
-                if not sweep:
-                    return f"Error: Sweep `{sweep_id}` not found.", False
-                return json.dumps(sweep.to_dict(), indent=2), True
-            if act in ("suggest", "suggest_trial", "next_trial"):
-                return _handle_suggest_trial(engine, proj, sweep_id)
-            if act in ("record", "record_trial", "log_trial"):
-                return _handle_record_trial(engine, proj, kwargs)
-            if act in ("prune_check", "should_prune"):
-                return _handle_prune_check(engine, proj, kwargs)
-            if act in ("analyze", "analyze_sweep"):
-                if not sweep_id:
-                    return ERR_SWEEP_ID_REQUIRED, False
-                return json.dumps(engine.analyze_sweep(proj, sweep_id), indent=2), True
-            if act in ("export", "export_report"):
-                if not sweep_id:
-                    return ERR_SWEEP_ID_REQUIRED, False
-                return engine.export_sweep_markdown(proj, sweep_id), True
-
+        if not handler:
             return (
                 f"Unknown action: '{action}'. "
                 "Allowed actions: `create_sweep`, `list_sweeps`, `get_sweep`, "
                 "`suggest_trial`, `record_trial`, `prune_check`, `analyze_sweep`, `export_report`.",
                 False,
             )
+
+        try:
+            return handler(engine, proj, kwargs)
         except Exception as e:
             log.exception("Sweeps tool error: %s", e)
             return f"Error executing sweeps action '{action}': {e}", False

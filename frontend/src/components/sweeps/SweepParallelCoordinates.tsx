@@ -68,7 +68,7 @@ export const SweepParallelCoordinates: React.FC<SweepParallelCoordinatesProps> =
     let numeric: number;
     if (axis.isCategorical && axis.choices) {
       const idx = axis.choices.indexOf(String(rawVal));
-      numeric = idx >= 0 ? idx : 0;
+      numeric = Math.max(0, idx);
     } else {
       numeric = typeof rawVal === 'number' ? rawVal : Number(rawVal) || 0;
     }
