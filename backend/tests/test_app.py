@@ -16,11 +16,11 @@ class TestAppCreation:
         assert app.version == __version__
 
     async def test_app_routers_registered(self):
-        route_paths = [r.path for r in app.routes]
-        assert "/api/auth/register" in route_paths
-        assert "/api/auth/login" in route_paths
-        assert "/api/health" in route_paths
-        assert "/api/message" in route_paths
+        paths = app.openapi()["paths"]
+        assert "/api/auth/register" in paths
+        assert "/api/auth/login" in paths
+        assert "/api/health" in paths
+        assert "/api/message" in paths
 
     async def test_cors_middleware_configured(self):
         from fastapi.middleware.cors import CORSMiddleware

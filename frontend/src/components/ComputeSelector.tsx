@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Cpu, ChevronDown, Monitor, Settings } from 'lucide-react';
 
-interface ComputeNode {
+export interface ComputeNode {
   id: number;
   name: string;
   type: string;

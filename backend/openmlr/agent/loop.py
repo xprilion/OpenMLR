@@ -1,30 +1,38 @@
-"""Agentic loop — the core turn-processing engine with tool execution."""
+"""Agentic loop — the core turn-processing engine with tool execution and research state tracking."""
+
+from __future__ import annotations
 
 import asyncio
-import json
-import time
 import traceback
+from typing import Any
 
-from ..config import AgentConfig
 from .doom_loop import detect_doom_loop
-from .llm import LLMProvider
+from .llm import LLMProvider  # noqa: F401
+from .loop_executor import (
+    compact_llm_call,
+    execute_tool,
+    non_stream_llm_call,
+    stream_llm_call,
+)
 from .session import Session
-from .types import AgentEvent, LLMResult, Message, OpType, Submission, ThinkingChunk, ToolCall
+from .types import AgentEvent, Message, OpType, Submission
+
+# Backward-compatible aliases for internal helpers
+_compact_llm_call = compact_llm_call
+_execute_tool = execute_tool
+_non_stream_llm_call = non_stream_llm_call
+_stream_llm_call = stream_llm_call
 
 
 def _append_hint_to_last_user_msg(messages: list[Message], hint: str) -> None:
-    """Append a system hint to the last user message instead of injecting a
-    separate system role message.  This avoids breaking Anthropic's strict
-    user/assistant alternation requirement."""
+    """Append a system hint to the last user message to preserve user/assistant alternation."""
     for msg in reversed(messages):
         if msg.role == "user":
             msg.content = (msg.content or "") + f"\n\n{hint}"
             return
-    # No user message found — this shouldn't happen in normal flow, but
-    # if it does, just skip the hint rather than injecting a broken message.
 
 
-async def submission_loop(session: Session, tool_router) -> None:
+async def submission_loop(session: Session, tool_router: Any) -> None:
     """Top-level loop: process submissions from the queue indefinitely."""
     await session.emit(AgentEvent(event_type="ready", data={"status": "ready"}))
 
@@ -47,14 +55,14 @@ async def submission_loop(session: Session, tool_router) -> None:
 
 
 async def run_agent_turn(
-    session: Session, tool_router, user_message: str, mode: str | None = None
+    session: Session, tool_router: Any, user_message: str, mode: str | None = None
 ) -> None:
     """Direct entry point: run one agent turn."""
     await _run_agent(session, tool_router, user_message, mode)
 
 
 async def _run_agent(
-    session: Session, tool_router, user_message: str, mode: str | None = None
+    session: Session, tool_router: Any, user_message: str, mode: str | None = None
 ) -> None:
     """Execute the agentic loop for a user message."""
     session.clear_cancel()
@@ -62,19 +70,13 @@ async def _run_agent(
     if session.pending_approval:
         session.pending_approval = None
 
-    # Set the mode on the tool router for strict enforcement.
-    # Default to plan (safe) if mode is missing or invalid.
-    # If mode is explicitly provided, use it and persist on session.
-    # If not provided (e.g. approval continuation), fall back to session's stored mode.
     if mode in ("plan", "execute"):
         effective_mode = mode
         session.current_mode = mode
     else:
-        effective_mode = session.current_mode  # preserved from the last explicit mode
+        effective_mode = session.current_mode
     tool_router.set_mode(effective_mode)
 
-    # Inject per-message mode hint as part of the user message
-    # (using role="system" breaks Anthropic's strict user/assistant alternation)
     mode_hint = f"[Mode: {effective_mode.upper()}] " + (
         "Plan only — ask questions, create plan. "
         "Use search/papers only for quick feasibility checks. "
@@ -82,8 +84,15 @@ async def _run_agent(
         if effective_mode == "plan"
         else "Execute the plan — do the work, no questions. All tools except ask_user."
     )
-    # Only add the user message if there's actual content (skip empty
-    # strings from approval continuations to avoid junk messages)
+
+    # Append research orchestrator context if active
+    if session.research_orchestrator and hasattr(
+        session.research_orchestrator, "format_research_context"
+    ):
+        r_ctx = session.research_orchestrator.format_research_context()
+        if r_ctx:
+            mode_hint = f"{mode_hint}\n\n{r_ctx}"
+
     if user_message:
         user_content = f"{mode_hint}\n\n{user_message}"
         session.context_manager.add_message(Message(role="user", content=user_content))
@@ -91,15 +100,13 @@ async def _run_agent(
     await session.emit(AgentEvent(event_type="processing", data={"status": "thinking..."}))
 
     try:
-        for iteration in range(session.config.max_iterations):
+        for _iteration in range(session.config.max_iterations):
             if session.is_cancelled():
                 await session.emit(AgentEvent(event_type="interrupted"))
                 break
 
             # Auto-compaction check
             if session.context_manager.needs_compaction():
-                # Pre-compaction knowledge flush nudge — append to last user msg
-                # (only once per compaction, not every iteration)
                 _append_hint_to_last_user_msg(
                     session.context_manager.messages,
                     "[URGENT: Context compaction imminent] Save any unsaved findings, "
@@ -113,7 +120,7 @@ async def _run_agent(
                     )
                 )
                 summary = await session.context_manager.compact(
-                    lambda msgs, cfg: _compact_llm_call(msgs, cfg)
+                    lambda msgs, cfg: compact_llm_call(msgs, cfg)
                 )
                 if summary:
                     await session.emit(
@@ -123,18 +130,12 @@ async def _run_agent(
                         )
                     )
 
-            # Inject at most ONE hint per iteration to avoid accumulating
-            # multiple hints on the same user message across loop iterations.
-            # Priority: doom loop > knowledge nudge (compaction nudge is above).
             hint_injected = False
-
-            # Doom loop detection — append hint to last user msg
             doom_msg = detect_doom_loop(session.context_manager.messages)
             if doom_msg:
                 _append_hint_to_last_user_msg(session.context_manager.messages, doom_msg)
                 hint_injected = True
 
-            # Knowledge persistence nudge (every N turns, skip if doom hint already added)
             if not hint_injected and session.turns_since_nudge >= session.nudge_interval:
                 session.turns_since_nudge = 0
                 _append_hint_to_last_user_msg(
@@ -143,7 +144,6 @@ async def _run_agent(
                     "`workspace knowledge_add`, or `workspace note`.",
                 )
 
-            # Emit context usage for frontend gauge
             await session.emit(
                 AgentEvent(
                     event_type="context_usage",
@@ -151,39 +151,30 @@ async def _run_agent(
                 )
             )
 
-            # Get tool specs for LLM
             tool_specs = tool_router.get_tool_specs_for_llm()
-
-            # Get messages for LLM
             messages = session.context_manager.get_messages()
 
-            # LLM call
             if session.config.stream:
-                result = await _stream_llm_call(session, messages, tool_specs)
+                result = await stream_llm_call(session, messages, tool_specs)
             else:
-                result = await _non_stream_llm_call(session, messages, tool_specs)
+                result = await non_stream_llm_call(session, messages, tool_specs)
 
             if result is None:
                 break
 
-            # Update token count
             if result.usage:
                 session.context_manager.running_token_count = result.usage.get(
                     "total_tokens",
                     result.usage.get("input_tokens", 0) + result.usage.get("output_tokens", 0),
                 )
 
-            # Handle finish_reason == "length" with truncated tool calls
             if result.finish_reason == "length" and result.tool_calls:
-                # Drop truncated tool calls and hint — append to last user msg
-                # (using role="system" gets hoisted into Anthropic system prompt)
                 _append_hint_to_last_user_msg(
                     session.context_manager.messages,
                     "[System: Your response was truncated. Be more concise and focus on essential tool calls only.]",
                 )
                 continue
 
-            # No tool calls = done
             if not result.tool_calls:
                 if result.content:
                     session.context_manager.add_message(
@@ -197,7 +188,6 @@ async def _run_agent(
                     )
                 break
 
-            # Add assistant message with tool calls to context
             session.context_manager.add_message(
                 Message(
                     role="assistant",
@@ -206,9 +196,6 @@ async def _run_agent(
                 )
             )
 
-            # Persist assistant text that accompanies tool calls (otherwise
-            # it only lives in the in-memory ContextManager and is lost on
-            # page refresh).
             if result.content:
                 await session.emit(
                     AgentEvent(
@@ -217,7 +204,6 @@ async def _run_agent(
                     )
                 )
 
-            # Check for approval-required tools
             needs_approval = []
             auto_approve = []
             for tc in result.tool_calls:
@@ -228,10 +214,9 @@ async def _run_agent(
                         continue
                 auto_approve.append(tc)
 
-            # Execute auto-approved tools in parallel
             if auto_approve:
                 results = await asyncio.gather(
-                    *[_execute_tool(session, tool_router, tc) for tc in auto_approve],
+                    *[execute_tool(session, tool_router, tc) for tc in auto_approve],
                     return_exceptions=True,
                 )
 
@@ -242,7 +227,6 @@ async def _run_agent(
                     else:
                         output, success = res
 
-                    # Add tool result to context
                     session.context_manager.add_message(
                         Message(
                             role="tool",
@@ -264,7 +248,6 @@ async def _run_agent(
                         )
                     )
 
-            # Handle approval-required tools
             if needs_approval:
                 session.pending_approval = {
                     "tool_calls": needs_approval,
@@ -285,7 +268,7 @@ async def _run_agent(
                         },
                     )
                 )
-                break  # Wait for approval submission
+                break
 
     except Exception as e:
         await session.emit(
@@ -296,9 +279,7 @@ async def _run_agent(
         )
     finally:
         session.turn_count += 1
-        # Self-nudge: remind agent to persist knowledge periodically
         session.turns_since_nudge += 1
-        # Emit final context usage
         await session.emit(
             AgentEvent(
                 event_type="context_usage",
@@ -311,164 +292,9 @@ async def _run_agent(
         await session.emit(AgentEvent(event_type="status", data={"status": "ready"}))
 
 
-async def _stream_llm_call(
-    session: Session,
-    messages: list[dict],
-    tools: list[dict],
-) -> LLMResult | None:
-    """Execute a streaming LLM call, emitting chunks to SSE."""
-    content_buffer = ""
-    tool_calls: list[ToolCall] = []
-    usage_data = None
-    thinking_started: float | None = None
-    was_thinking = False
-
-    async for chunk in LLMProvider.generate_stream(messages, session.config, tools):
-        if session.is_cancelled():
-            return None
-
-        if isinstance(chunk, ThinkingChunk):
-            # Extended thinking / reasoning content
-            if thinking_started is None:
-                thinking_started = time.time()
-            was_thinking = True
-            await session.emit(
-                AgentEvent(
-                    event_type="thinking_chunk",
-                    data={"chunk": chunk.text},
-                )
-            )
-        elif isinstance(chunk, str):
-            # Transition from thinking to text — emit thinking_end
-            if was_thinking:
-                duration = time.time() - thinking_started if thinking_started else 0
-                await session.emit(
-                    AgentEvent(
-                        event_type="thinking_end",
-                        data={"duration_seconds": round(duration, 1)},
-                    )
-                )
-                was_thinking = False
-            content_buffer += chunk
-            await session.emit(
-                AgentEvent(
-                    event_type="assistant_chunk",
-                    data={"chunk": chunk},
-                )
-            )
-        elif isinstance(chunk, ToolCall):
-            # Transition from thinking to tool call — emit thinking_end
-            if was_thinking:
-                duration = time.time() - thinking_started if thinking_started else 0
-                await session.emit(
-                    AgentEvent(
-                        event_type="thinking_end",
-                        data={"duration_seconds": round(duration, 1)},
-                    )
-                )
-                was_thinking = False
-            tool_calls.append(chunk)
-            await session.emit(
-                AgentEvent(
-                    event_type="tool_call",
-                    data={
-                        "id": chunk.id,
-                        "tool": chunk.name,
-                        "arguments": json.dumps(chunk.arguments)
-                        if isinstance(chunk.arguments, dict)
-                        else str(chunk.arguments),
-                    },
-                )
-            )
-        elif isinstance(chunk, dict):
-            if chunk.get("event") == "usage":
-                usage_data = chunk.get("usage")
-
-    # If thinking was still active at end of stream (no text/tool followed), close it
-    if was_thinking and thinking_started:
-        duration = time.time() - thinking_started
-        await session.emit(
-            AgentEvent(
-                event_type="thinking_end",
-                data={"duration_seconds": round(duration, 1)},
-            )
-        )
-
-    if content_buffer or tool_calls:
-        await session.emit(AgentEvent(event_type="assistant_stream_end"))
-
-    return LLMResult(
-        content=content_buffer,
-        tool_calls=tool_calls,
-        finish_reason="tool_calls" if tool_calls else "stop",
-        usage=usage_data,
-    )
-
-
-async def _non_stream_llm_call(
-    session: Session,
-    messages: list[dict],
-    tools: list[dict],
-) -> LLMResult | None:
-    """Execute a non-streaming LLM call."""
-    result = await LLMProvider.generate(messages, session.config, tools)
-
-    if result.content:
-        await session.emit(
-            AgentEvent(
-                event_type="assistant_chunk",
-                data={"chunk": result.content},
-            )
-        )
-        await session.emit(AgentEvent(event_type="assistant_stream_end"))
-
-    for tc in result.tool_calls:
-        await session.emit(
-            AgentEvent(
-                event_type="tool_call",
-                data={
-                    "id": tc.id,
-                    "tool": tc.name,
-                    "arguments": json.dumps(tc.arguments),
-                },
-            )
-        )
-
-    return result
-
-
-async def _execute_tool(
-    session: Session,
-    tool_router,
-    tool_call: ToolCall,
-) -> tuple[str, bool]:
-    """Execute a single tool call."""
-    await session.emit(
-        AgentEvent(
-            event_type="tool_state_change",
-            data={"tool_call_id": tool_call.id, "state": "running"},
-        )
-    )
-
-    try:
-        output, success = await tool_router.call_tool(
-            tool_call.name, tool_call.arguments, session=session
-        )
-        return output, success
-    except Exception as e:
-        return f"Tool execution error: {str(e)}", False
-    finally:
-        await session.emit(
-            AgentEvent(
-                event_type="tool_state_change",
-                data={"tool_call_id": tool_call.id, "state": "done"},
-            )
-        )
-
-
 async def _handle_approval(
     session: Session,
-    tool_router,
+    tool_router: Any,
     approvals: dict[str, bool],
 ) -> None:
     """Handle user approval/rejection of tool calls."""
@@ -481,7 +307,7 @@ async def _handle_approval(
     for tc in pending_tcs:
         approved = approvals.get(tc.id, False)
         if approved:
-            output, success = await _execute_tool(session, tool_router, tc)
+            output, success = await execute_tool(session, tool_router, tc)
         else:
             output = "Tool execution rejected by user."
             success = False
@@ -506,27 +332,19 @@ async def _handle_approval(
             )
         )
 
-    # Continue the agent loop after approval
     await _run_agent(session, tool_router, "")
 
 
 async def _compact(session: Session) -> None:
     """Compact the context."""
-    summary = await session.context_manager.compact(lambda msgs, cfg: _compact_llm_call(msgs, cfg))
-    if summary:
-        await session.emit(
-            AgentEvent(
-                event_type="compacted",
-                data={"summary": summary[:500]},
-            )
+    summary = await session.context_manager.compact(lambda msgs, cfg: compact_llm_call(msgs, cfg))
+    status_msg = summary[:500] if summary else "Nothing to compact."
+    await session.emit(
+        AgentEvent(
+            event_type="compacted",
+            data={"summary": status_msg},
         )
-    else:
-        await session.emit(
-            AgentEvent(
-                event_type="compacted",
-                data={"summary": "Nothing to compact."},
-            )
-        )
+    )
 
 
 async def _undo(session: Session) -> None:
@@ -538,9 +356,3 @@ async def _undo(session: Session) -> None:
             data={"removed_messages": removed},
         )
     )
-
-
-async def _compact_llm_call(messages: list[dict], config: AgentConfig) -> str:
-    """Helper: make an LLM call for context compaction."""
-    result = await LLMProvider.generate(messages, config)
-    return result.content

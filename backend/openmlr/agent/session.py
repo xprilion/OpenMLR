@@ -51,6 +51,9 @@ class Session:
     nudge_interval: int = 5  # Nudge every N turns
     turns_since_nudge: int = 0
 
+    # Research State & Orchestration
+    research_orchestrator: Any | None = None
+
     # Event listeners
     _listeners: list[Callable] = field(default_factory=list)
 

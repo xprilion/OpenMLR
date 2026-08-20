@@ -14,6 +14,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import networkx as nx
 
@@ -373,3 +374,57 @@ class KnowledgeGraph:
     @property
     def edge_count(self) -> int:
         return self._graph.number_of_edges()
+
+    # ── Hybrid search integration ────────────────────────
+
+    def sync_hybrid_index(self) -> Any:
+        """Index all entities and their textual descriptions into the hybrid search engine."""
+        from ..services.hybrid_search import HybridSearchEngine
+
+        engine = HybridSearchEngine(workspace_path=self.workspace_path)
+        for node_id, attrs in self._graph.nodes(data=True):
+            text_parts = [
+                attrs.get("label", node_id),
+                attrs.get("description", ""),
+                attrs.get("abstract", ""),
+                attrs.get("content", ""),
+            ]
+            full_text = " ".join(p for p in text_parts if p).strip()
+            if not full_text:
+                full_text = node_id
+
+            engine.index_document(
+                doc_id=node_id,
+                text=full_text,
+                metadata={
+                    "type": attrs.get("type", "concept"),
+                    "label": attrs.get("label", node_id),
+                    **{k: v for k, v in attrs.items() if isinstance(v, (str, int, float, bool))},
+                },
+            )
+        return engine
+
+    def hybrid_search(
+        self,
+        query: str,
+        top_k: int = 10,
+        alpha: float = 0.5,
+        entity_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search knowledge graph entities using hybrid lexical (BM25) + dense vector scoring."""
+        engine = self.sync_hybrid_index()
+        filter_meta = {"type": entity_type} if entity_type else None
+        results = engine.search(
+            query=query,
+            top_k=top_k,
+            alpha=alpha,
+            filter_metadata=filter_meta,
+        )
+        output = []
+        for r in results:
+            item = r.to_dict()
+            entity = self.get_entity(r.doc_id)
+            if entity:
+                item["entity"] = entity
+            output.append(item)
+        return output
