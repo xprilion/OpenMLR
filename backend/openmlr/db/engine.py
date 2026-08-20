@@ -26,7 +26,9 @@ DATABASE_URL = os.environ.get(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/openmlr",
 )
 
-# Ensure the URL uses the asyncpg driver for PostgreSQL
+# Ensure the URL uses the asyncpg driver for PostgreSQL and clean sslmode query param
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 elif DATABASE_URL.startswith("postgresql://"):
@@ -69,6 +71,24 @@ def create_database_engine(
     connect_args: dict[str, Any] = {}
     if "asyncpg" in db_url:
         connect_args["statement_cache_size"] = DEFAULT_STATEMENT_CACHE_SIZE
+        # Parse and sanitize query string if sslmode or other incompatible query args are present
+        parsed = urlparse(db_url)
+        if parsed.query:
+            params = parse_qs(parsed.query)
+            ssl_val = params.pop("sslmode", [None])[0] or params.pop("ssl", [None])[0]
+            if ssl_val and ssl_val.lower() in ("require", "verify-ca", "verify-full", "true", "1"):
+                connect_args["ssl"] = True
+            elif ssl_val and ssl_val.lower() in ("disable", "false", "0"):
+                connect_args["ssl"] = False
+            new_query = urlencode({k: v[0] for k, v in params.items()})
+            db_url = urlunparse((
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                new_query,
+                parsed.fragment,
+            ))
 
     return create_async_engine(
         db_url,

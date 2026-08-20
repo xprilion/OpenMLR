@@ -21,14 +21,29 @@ FRONTEND_DIST = Path(__file__).parent.parent.parent / "frontend" / "dist"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: create tables & shared state.  Shutdown: teardown sessions."""
+    """Startup: create tables & shared state. Shutdown: teardown sessions."""
+    import asyncio
     import logging
 
     logger = logging.getLogger("openmlr.app")
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created")
+    # Retry creating tables in case DB is initializing on container launch
+    for attempt in range(1, 6):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables created successfully")
+            break
+        except Exception as e:
+            logger.warning(
+                "Database initialization attempt %d/5 failed: %s",
+                attempt,
+                e,
+            )
+            if attempt < 5:
+                await asyncio.sleep(2)
+            else:
+                logger.error("Proceeding without verified database connection: %s", e)
 
     config = load_config()
     event_bus = EventBus()
@@ -39,16 +54,28 @@ async def lifespan(app: FastAPI):
     app.state.session_manager = session_manager
 
     # Start Redis event bridge for cross-worker communication (background jobs)
-    await event_bus.start_redis_bridge()
-    logger.info("Redis event bridge started")
+    try:
+        await event_bus.start_redis_bridge()
+        logger.info("Redis event bridge started")
+    except Exception as e:
+        logger.warning("Failed to start Redis event bridge: %s", e)
 
     yield
 
     # Cleanup
-    await event_bus.stop_redis_bridge()
+    try:
+        await event_bus.stop_redis_bridge()
+    except Exception:
+        pass
     for conv_id in list(session_manager.sessions.keys()):
-        await session_manager.remove_session(conv_id)
-    await engine.dispose()
+        try:
+            await session_manager.remove_session(conv_id)
+        except Exception:
+            pass
+    try:
+        await engine.dispose()
+    except Exception:
+        pass
 
 
 _DEV_MODE = os.environ.get("DEV_MODE", "").lower() in ("1", "true", "yes")
@@ -149,3 +176,10 @@ else:
                 return FileResponse(str(file_path))
 
             return FileResponse(str(FRONTEND_DIST / "index.html"))
+    else:
+        @app.get("/")
+        async def root_status():
+            """Root endpoint fallback when static assets are not served."""
+            return JSONResponse(
+                content={"status": "ok", "app": "OpenMLR", "version": __version__}
+            )
