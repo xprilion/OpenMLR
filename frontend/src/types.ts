@@ -309,3 +309,69 @@ export interface EvalSuiteRunResult {
   execution_time_seconds: number;
   results: EvalTaskResult[];
 }
+
+// ── Autonomous Research Workflow ─────────────────────────
+
+export type ResearchPhaseType =
+  | 'idle'
+  | 'reconnaissance'
+  | 'hypothesis'
+  | 'experimentation'
+  | 'analysis'
+  | 'paper_drafting'
+  | 'completed';
+
+export type MilestoneStatusType =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'skipped';
+
+export interface PhaseTransitionItem {
+  from_phase: ResearchPhaseType;
+  to_phase: ResearchPhaseType;
+  reason: string;
+  timestamp: number;
+  artifacts_produced: string[];
+  milestone_id?: string | null;
+}
+
+export interface ResearchMilestoneItem {
+  milestone_id: string;
+  phase: ResearchPhaseType;
+  title: string;
+  description: string;
+  status: MilestoneStatusType;
+  criteria: string[];
+  output_artifacts: string[];
+  created_at: number;
+  completed_at?: number | null;
+}
+
+export interface ResearchArtifactsSummary {
+  papers: Array<Record<string, unknown>>;
+  hypotheses: Array<Record<string, unknown>>;
+  experiments: Array<Record<string, unknown>>;
+  metrics: Record<string, unknown>;
+  manuscript_sections: Record<string, string>;
+  bibtex_entries: string[];
+}
+
+export interface ResearchStateData {
+  goal: string;
+  current_phase: ResearchPhaseType;
+  milestones: ResearchMilestoneItem[];
+  artifacts: ResearchArtifactsSummary;
+  history: PhaseTransitionItem[];
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ProjectResearchStateResponse {
+  project_id: number;
+  project_name: string;
+  state: ResearchStateData;
+  guidelines: string;
+  context_prompt: string;
+}

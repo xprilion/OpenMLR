@@ -200,4 +200,31 @@ export const api = {
     post('/api/eval/custom-task/reproduction', body),
   registerCustomOptimizationTask: (body: Record<string, unknown>) =>
     post('/api/eval/custom-task/optimization', body),
+
+  // Research State Machine & Orchestrator
+  getResearchPhases: () => get('/api/research/phases'),
+  getResearchGuidelines: () => get('/api/research/guidelines'),
+  getProjectResearchState: (projectId: number) =>
+    get(`/api/projects/${projectId}/research/state`),
+  startProjectResearch: (
+    projectId: number,
+    body: { goal: string; initial_phase?: string; generate_default_milestones?: boolean }
+  ) => post(`/api/projects/${projectId}/research/start`, body),
+  transitionProjectResearchPhase: (
+    projectId: number,
+    body: { next_phase: string; reason: string; artifacts_produced?: string[]; milestone_id?: string }
+  ) => post(`/api/projects/${projectId}/research/transition`, body),
+  createResearchMilestone: (
+    projectId: number,
+    body: { title: string; description?: string; phase?: string; criteria?: string[] }
+  ) => post(`/api/projects/${projectId}/research/milestones`, body),
+  updateResearchMilestone: (
+    projectId: number,
+    milestoneId: string,
+    body: { status?: string; output_artifacts?: string[] }
+  ) => put(`/api/projects/${projectId}/research/milestones/${encodeURIComponent(milestoneId)}`, body),
+  addResearchArtifact: (
+    projectId: number,
+    body: { type: string; data: unknown; section_name?: string }
+  ) => post(`/api/projects/${projectId}/research/artifacts`, body),
 };

@@ -114,6 +114,7 @@ from .routes.health import router as health_router
 from .routes.keys import router as keys_router
 from .routes.mcp import router as mcp_router
 from .routes.projects import router as projects_router
+from .routes.research import router as research_router
 from .routes.review import router as review_router
 from .routes.settings import router as settings_router
 from .routes.terminal import router as terminal_router
@@ -126,6 +127,7 @@ app.include_router(keys_router)
 app.include_router(compute_router)
 app.include_router(mcp_router)
 app.include_router(projects_router)
+app.include_router(research_router)
 app.include_router(review_router)
 app.include_router(eval_router)
 app.include_router(terminal_router)
