@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   Play, 
   Pause, 
@@ -14,12 +14,13 @@ import {
   HardDrive,
   Activity
 } from 'lucide-react';
-import type { ExperimentRun, RunStatus, ActiveTab } from './types';
+import type { ExperimentRun, RunStatus, ActiveTab, MetricPoint, HardwareMetricPoint, HardwareMetrics, CheckpointArtifact, Hyperparameters } from './types';
 import { MetricCharts } from './MetricCharts';
 import { CheckpointViewer } from './CheckpointViewer';
 import { RunSidebar } from './RunSidebar';
 import { RunComparisonView } from './RunComparisonView';
 import { INITIAL_MOCK_RUNS } from './mockData';
+import { api } from '../../api';
 
 function statusColor(status: RunStatus): string {
   switch (status) {
@@ -41,7 +42,11 @@ function statusIcon(status: RunStatus) {
   }
 }
 
-export function RunDashboard() {
+interface RunDashboardProps {
+  projectUuid?: string;
+}
+
+export function RunDashboard({ projectUuid }: Readonly<RunDashboardProps>) {
   const [runs, setRuns] = useState<ExperimentRun[]>(INITIAL_MOCK_RUNS);
   const [selectedRunId, setSelectedRunId] = useState<string>(INITIAL_MOCK_RUNS[0].id);
   const [activeTab, setActiveTab] = useState<ActiveTab>('metrics');
@@ -49,6 +54,64 @@ export function RunDashboard() {
   const [statusFilter, setStatusFilter] = useState<'all' | RunStatus>('all');
   const [compareRunIds, setCompareRunIds] = useState<string[]>([]);
   const [isComparing, setIsComparing] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRuns = async () => {
+      try {
+        const res = await api.listExperimentRuns({ projectUuid });
+        if (isMounted && res?.runs && res.runs.length > 0) {
+          const mappedRuns: ExperimentRun[] = res.runs.map((r: Record<string, unknown>) => {
+            const rawMetrics = (r.metrics as Record<string, unknown>) || {};
+            return {
+              id: String(r.id),
+              name: String(r.name),
+              description: String(r.description || ''),
+              status: (r.status as RunStatus) || 'running',
+              started_at: String(r.started_at || new Date().toISOString()),
+              ended_at: r.ended_at ? String(r.ended_at) : undefined,
+              duration_seconds: Number(r.duration_seconds || 0),
+              compute_target: String(r.compute_target || 'Local GPU'),
+              tags: (r.tags as string[]) || [],
+              hyperparameters: (r.hyperparameters as Hyperparameters) || ({} as Hyperparameters),
+              current_step: Number(r.current_step || 0),
+              total_steps: Number(r.total_steps || 100),
+              current_epoch: Number(r.current_epoch || 1),
+              total_epochs: Number(r.total_epochs || 1),
+              best_val_loss: typeof r.best_val_loss === 'number' ? r.best_val_loss : undefined,
+              metrics: {
+                train_loss: (rawMetrics.train_loss as MetricPoint[]) || [],
+                val_loss: (rawMetrics.val_loss as MetricPoint[]) || [],
+                learning_rate: (rawMetrics.learning_rate as MetricPoint[]) || [],
+                val_accuracy: rawMetrics.val_accuracy as MetricPoint[] | undefined,
+              },
+              hardware_history: (r.hardware_history as HardwareMetricPoint[]) || [],
+              latest_hardware: (r.latest_hardware as HardwareMetrics) || {
+                gpu_utilization_pct: 0,
+                gpu_memory_used_mb: 0,
+                gpu_memory_total_mb: 0,
+                gpu_temperature_c: 0,
+                power_draw_watts: 0,
+                cpu_utilization_pct: 0,
+                ram_used_gb: 0,
+                ram_total_gb: 0,
+              },
+              checkpoints: (r.checkpoints as CheckpointArtifact[]) || [],
+              logs: (r.logs as string[]) || [],
+            };
+          });
+          setRuns(mappedRuns);
+          setSelectedRunId((prev) => mappedRuns.some((mr) => mr.id === prev) ? prev : mappedRuns[0].id);
+        }
+      } catch {
+        // Fallback to local mock data gracefully
+      }
+    };
+    fetchRuns();
+    return () => {
+      isMounted = false;
+    };
+  }, [projectUuid]);
 
   const selectedRun = useMemo(() => {
     return runs.find((r) => r.id === selectedRunId) || runs[0];
@@ -60,7 +123,7 @@ export function RunDashboard() {
     );
   }, []);
 
-  const handleCreateNewRun = useCallback(() => {
+  const handleCreateNewRun = useCallback(async () => {
     const newId = `run-${Date.now().toString(36)}`;
     const newRun: ExperimentRun = {
       id: newId,
@@ -130,10 +193,36 @@ export function RunDashboard() {
       ],
       logs: ['[INFO] Initialized autonomous experiment trial...'],
     };
+
     setRuns((prev) => [newRun, ...prev]);
     setSelectedRunId(newId);
     setIsComparing(false);
-  }, [runs.length]);
+
+    try {
+      await api.createExperimentRun({
+        name: newRun.name,
+        description: newRun.description,
+        hyperparameters: newRun.hyperparameters,
+        compute_target: newRun.compute_target,
+        tags: newRun.tags,
+        total_steps: newRun.total_steps,
+        total_epochs: newRun.total_epochs,
+        project_uuid: projectUuid,
+      });
+    } catch {
+      // Offline fallback
+    }
+  }, [runs.length, projectUuid]);
+
+  const handleStatusChange = useCallback(async (newStatus: RunStatus) => {
+    if (!selectedRun) return;
+    setRuns((prev) => prev.map((r) => r.id === selectedRun.id ? { ...r, status: newStatus } : r));
+    try {
+      await api.updateRunStatus(selectedRun.id, { status: newStatus }, projectUuid);
+    } catch {
+      // Optimistic update retained
+    }
+  }, [selectedRun, projectUuid]);
 
   const handleExportCSV = useCallback(() => {
     if (!selectedRun) return;
@@ -213,9 +302,7 @@ export function RunDashboard() {
                     <button
                       type="button"
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-bg text-xs text-text hover:bg-surface transition-colors"
-                      onClick={() => {
-                        setRuns((prev) => prev.map((r) => r.id === selectedRun.id ? { ...r, status: 'paused' } : r));
-                      }}
+                      onClick={() => handleStatusChange('paused')}
                     >
                       <Pause size={13} />
                       <span>Pause</span>
@@ -223,9 +310,7 @@ export function RunDashboard() {
                     <button
                       type="button"
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-error/40 bg-error/10 text-xs text-error hover:bg-error/20 transition-colors"
-                      onClick={() => {
-                        setRuns((prev) => prev.map((r) => r.id === selectedRun.id ? { ...r, status: 'completed' } : r));
-                      }}
+                      onClick={() => handleStatusChange('completed')}
                     >
                       <Square size={13} />
                       <span>Stop</span>
@@ -235,9 +320,7 @@ export function RunDashboard() {
                   <button
                     type="button"
                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/10 text-xs text-primary hover:bg-primary/20 transition-colors"
-                    onClick={() => {
-                      setRuns((prev) => prev.map((r) => r.id === selectedRun.id ? { ...r, status: 'running' } : r));
-                    }}
+                    onClick={() => handleStatusChange('running')}
                   >
                     <Play size={13} />
                     <span>Resume</span>

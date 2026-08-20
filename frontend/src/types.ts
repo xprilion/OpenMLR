@@ -187,6 +187,34 @@ export interface AgentJob {
 
 // ── Peer Review Simulation ──────────────────────────────
 
+export interface ReviewCriteria {
+  name: string;
+  weight: number;
+  description: string;
+  scale?: string;
+}
+
+export interface ConferenceRubric {
+  venue: string;
+  name: string;
+  description: string;
+  criteria: ReviewCriteria[];
+  acceptance_threshold: number;
+  score_range: [number, number];
+}
+
+export interface ReviewerPersona {
+  id: string;
+  name: string;
+  role: string;
+  focus_areas: string[];
+}
+
+export interface ReviewRubricsResponse {
+  rubrics: Record<string, ConferenceRubric>;
+  personas: ReviewerPersona[];
+}
+
 export interface SingleReview {
   reviewer_id: string;
   reviewer_name: string;
@@ -223,4 +251,127 @@ export interface PeerReviewResult {
   evaluated_at: number;
   status: string;
   markdown_report?: string;
+}
+
+// ── Evaluation & Benchmark Suite ─────────────────────────
+
+export interface EvalTaskInfo {
+  task_id: string;
+  name: string;
+  description: string;
+  category: 'reproduction' | 'optimization' | 'hypothesis';
+  difficulty: 'easy' | 'medium' | 'hard';
+  timeout_seconds: number;
+  paper_title?: string;
+  dataset_name?: string;
+  target_metrics?: Record<string, number>;
+  kernel_name?: string;
+  framework?: string;
+  baseline_latency_ms?: number;
+  target_speedup?: number;
+}
+
+export interface EvalSuiteInfo {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  tasks: string[];
+}
+
+export interface EvalMetricResult {
+  metric_name: string;
+  target_value: number;
+  achieved_value: number;
+  passed: boolean;
+  relative_error: number;
+  tolerance: number;
+}
+
+export interface EvalTaskResult {
+  task_id: string;
+  task_name: string;
+  category: string;
+  passed: boolean;
+  score: number;
+  metrics: EvalMetricResult[];
+  execution_time_seconds: number;
+  error?: string | null;
+}
+
+export interface EvalSuiteRunResult {
+  suite_name: string;
+  total_tasks: number;
+  passed_tasks: number;
+  failed_tasks: number;
+  pass_rate: number;
+  average_score: number;
+  execution_time_seconds: number;
+  results: EvalTaskResult[];
+}
+
+// ── Autonomous Research Workflow ─────────────────────────
+
+export type ResearchPhaseType =
+  | 'idle'
+  | 'reconnaissance'
+  | 'hypothesis'
+  | 'experimentation'
+  | 'analysis'
+  | 'paper_drafting'
+  | 'completed';
+
+export type MilestoneStatusType =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'skipped';
+
+export interface PhaseTransitionItem {
+  from_phase: ResearchPhaseType;
+  to_phase: ResearchPhaseType;
+  reason: string;
+  timestamp: number;
+  artifacts_produced: string[];
+  milestone_id?: string | null;
+}
+
+export interface ResearchMilestoneItem {
+  milestone_id: string;
+  phase: ResearchPhaseType;
+  title: string;
+  description: string;
+  status: MilestoneStatusType;
+  criteria: string[];
+  output_artifacts: string[];
+  created_at: number;
+  completed_at?: number | null;
+}
+
+export interface ResearchArtifactsSummary {
+  papers: Array<Record<string, unknown>>;
+  hypotheses: Array<Record<string, unknown>>;
+  experiments: Array<Record<string, unknown>>;
+  metrics: Record<string, unknown>;
+  manuscript_sections: Record<string, string>;
+  bibtex_entries: string[];
+}
+
+export interface ResearchStateData {
+  goal: string;
+  current_phase: ResearchPhaseType;
+  milestones: ResearchMilestoneItem[];
+  artifacts: ResearchArtifactsSummary;
+  history: PhaseTransitionItem[];
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ProjectResearchStateResponse {
+  project_id: number;
+  project_name: string;
+  state: ResearchStateData;
+  guidelines: string;
+  context_prompt: string;
 }

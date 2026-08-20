@@ -47,6 +47,16 @@ MODE_TOOL_RESTRICTIONS = {
             "session_search",
             # Process management (read-only actions: list, poll, log)
             "process",
+            # Experiments tracking and monitoring (read-only actions in plan mode)
+            "experiments",
+            # Dataset profiling and inspection (read-only actions in plan mode)
+            "datasets",
+            # Hyperparameter optimization and sweeps (read-only actions in plan mode)
+            "sweeps",
+            # Model registry and checkpoint governance (read-only in plan mode)
+            "models",
+            # Publication figures and plotting (read-only in plan mode)
+            "figures",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -421,15 +431,26 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
 
     # Import and register all built-in tools
     from .ask_user import create_ask_user_tool
+    from .compute_tools import create_compute_tools
+    from .datasets import create_datasets_tool
+    from .experiments import create_experiments_tool
+    from .figures import create_figures_tool
     from .github import create_github_tools
     from .huggingface import create_huggingface_tools
     from .inspect import create_inspect_tool
     from .latex_compiler import create_latex_tool
     from .local import create_local_tools
+    from .memory_tool import create_memory_tool
+    from .models import create_models_tool
     from .papers import create_papers_tool
     from .plan import create_plan_tool
+    from .process_tool import create_process_tool
+    from .reproducibility import create_reproducibility_tool
     from .research import create_research_tool
     from .search import create_search_tools
+    from .session_search import create_session_search_tool
+    from .sweeps import create_sweeps_tool
+    from .workspace_tools import create_workspace_tools
     from .writing import create_writing_tool
 
     router.register_many(create_local_tools())
@@ -443,36 +464,20 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router.register(create_writing_tool())
     router.register(create_latex_tool())
     router.register(create_ask_user_tool())
-
-    # Register session search tool
-    from .session_search import create_session_search_tool
-
     router.register(create_session_search_tool())
-
-    # Register compute tools
-    from .compute_tools import create_compute_tools
-
     router.register_many(create_compute_tools())
-
-    # Register workspace tools
-    from .workspace_tools import create_workspace_tools
-
     router.register_many(create_workspace_tools())
-
-    # Register memory tool
-    from .memory_tool import create_memory_tool
-
     router.register(create_memory_tool())
-
-    # Register process management tool
-    from .process_tool import create_process_tool
-
     router.register(create_process_tool())
+    router.register(create_experiments_tool())
+    router.register(create_datasets_tool())
+    router.register(create_sweeps_tool())
+    router.register(create_models_tool())
+    router.register(create_figures_tool())
+    router.register(create_reproducibility_tool())
 
-    # Register sandbox tools if manager provided
     if sandbox_manager:
         from .sandbox_tools import create_sandbox_tools
-
         router.register_many(create_sandbox_tools(sandbox_manager))
 
     return router

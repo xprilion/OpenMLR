@@ -6,7 +6,7 @@ import { TodoReviewDrawer } from '../TodoReviewDrawer';
 import { QuestionDrawer } from '../QuestionDrawer';
 import { ImageViewer } from '../ImageViewer';
 import { useChat } from '../../context/ChatContext';
-import { useProject } from '../../context/ProjectContext';
+import { useProject, type MainTab } from '../../context/ProjectContext';
 import { useCompute } from '../../context/ComputeContext';
 import { nextMsgId } from '../../context/agentEventReducers';
 
@@ -19,6 +19,47 @@ const CitationGraph = lazy(() =>
 const RunDashboard = lazy(() =>
   import('../experiments/RunDashboard').then((m) => ({ default: m.RunDashboard }))
 );
+const PeerReviewStudio = lazy(() =>
+  import('../review/PeerReviewStudio').then((m) => ({ default: m.PeerReviewStudio }))
+);
+const EvalBenchmarkDashboard = lazy(() =>
+  import('../eval/EvalBenchmarkDashboard').then((m) => ({ default: m.EvalBenchmarkDashboard }))
+);
+const ResearchWorkflowStudio = lazy(() =>
+  import('../research/ResearchWorkflowStudio').then((m) => ({ default: m.ResearchWorkflowStudio }))
+);
+const DatasetStudio = lazy(() =>
+  import('../datasets/DatasetStudio').then((m) => ({ default: m.DatasetStudio }))
+);
+const SweepStudio = lazy(() =>
+  import('../sweeps/SweepStudio').then((m) => ({ default: m.SweepStudio }))
+);
+const ModelStudio = lazy(() =>
+  import('../models/ModelStudio').then((m) => ({ default: m.ModelStudio }))
+);
+const FigureStudio = lazy(() =>
+  import('../figures/FigureStudio').then((m) => ({ default: m.FigureStudio }))
+);
+const ReproducibilityStudio = lazy(() =>
+  import('../reproducibility/ReproducibilityStudio').then((m) => ({ default: m.ReproducibilityStudio }))
+);
+
+const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
+  { id: 'agent', label: 'Agent' },
+  { id: 'workflow', label: 'Workflow' },
+  { id: 'editor', label: 'Editor' },
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'paper', label: 'Paper Studio' },
+  { id: 'research', label: 'Citation Graph' },
+  { id: 'experiments', label: 'Experiments' },
+  { id: 'datasets', label: 'Datasets' },
+  { id: 'sweeps', label: 'Sweeps' },
+  { id: 'models', label: 'Models' },
+  { id: 'figures', label: 'Figures' },
+  { id: 'reproducibility', label: 'Reproducibility' },
+  { id: 'review', label: 'Peer Review' },
+  { id: 'eval', label: 'Benchmarks' },
+];
 
 export function ChatContainer() {
   const {
@@ -60,78 +101,31 @@ export function ChatContainer() {
     <div className="flex flex-col flex-1 overflow-hidden relative">
       {/* Agent / Editor / Terminal / Paper / Research tab bar */}
       <div role="tablist" className="flex items-center border-b border-border shrink-0 bg-surface">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'agent'}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            mainTab === 'agent' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('agent')}
-        >
-          Agent
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'editor'}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            mainTab === 'editor' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('editor')}
-        >
-          Editor
-          {openFiles.length > 0 && (
-            <span className="ml-1.5 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
-              {openFiles.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'terminal'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'terminal' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('terminal')}
-        >
-          {'Terminal '}
-          <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'paper'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'paper' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('paper')}
-        >
-          Paper Studio
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'research'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'research' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('research')}
-        >
-          Citation Graph
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'experiments'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'experiments' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('experiments')}
-        >
-          Experiments
-        </button>
+        {NAVIGATION_TABS.map((tab) => {
+          const isSelected = mainTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                isSelected ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab(tab.id)}
+            >
+              {tab.label}
+              {tab.id === 'editor' && openFiles.length > 0 && (
+                <span className="ml-1 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                  {openFiles.length}
+                </span>
+              )}
+              {tab.id === 'terminal' && (
+                <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
+              )}
+            </button>
+          );
+        })}
         {/* Closable Image tab */}
         {imageTab && (
           <div
@@ -235,6 +229,13 @@ export function ChatContainer() {
         />
       </div>
 
+      {/* Workflow Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'workflow' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Workflow Studio...</div>}>
+          <ResearchWorkflowStudio />
+        </Suspense>
+      </div>
+
       {/* Editor tab */}
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'editor' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading...</div>}>
@@ -276,6 +277,55 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'experiments' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Experiment Dashboard...</div>}>
           <RunDashboard />
+        </Suspense>
+      </div>
+
+      {/* Dataset Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'datasets' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Dataset Studio...</div>}>
+          <DatasetStudio />
+        </Suspense>
+      </div>
+
+      {/* Sweep Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'sweeps' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Sweep Studio...</div>}>
+          <SweepStudio projectId={activeProject?.uuid} />
+        </Suspense>
+      </div>
+
+      {/* Models Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'models' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Model Studio...</div>}>
+          <ModelStudio />
+        </Suspense>
+      </div>
+
+      {/* Publication Figures Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'figures' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Figure Studio...</div>}>
+          <FigureStudio projectId={activeProject?.uuid} />
+        </Suspense>
+      </div>
+
+      {/* Reproducibility Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'reproducibility' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Reproducibility Studio...</div>}>
+          <ReproducibilityStudio />
+        </Suspense>
+      </div>
+
+      {/* Peer Review tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'review' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Peer Review Studio...</div>}>
+          <PeerReviewStudio />
+        </Suspense>
+      </div>
+
+      {/* Evaluation Benchmark tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'eval' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Benchmark Harness...</div>}>
+          <EvalBenchmarkDashboard />
         </Suspense>
       </div>
 
