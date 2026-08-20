@@ -1,8 +1,9 @@
-"""Doom loop detection — identifies repetitive tool call patterns."""
+"""Doom loop and repetitive ML failure detection — identifies repetitive tool call patterns and recurring ML errors."""
 
 import hashlib
 import json
 
+from .ml_debugger import diagnose_ml_error
 from .types import Message
 
 
@@ -12,16 +13,57 @@ def _hash_tool_call(name: str, args: dict) -> str:
     return hashlib.md5(key.encode()).hexdigest()
 
 
+def detect_ml_failure_loop(messages: list[Message], window: int = 15) -> str | None:
+    """
+    Analyze recent tool outputs for recurring ML failure modes (OOM, NaN, shape mismatch).
+
+    Returns a specialized self-healing corrective prompt if a recurring ML failure is detected.
+    """
+    recent = messages[-window:]
+    ml_errors = []
+
+    for msg in recent:
+        if msg.role == "tool" and msg.content:
+            diag = diagnose_ml_error(msg.content)
+            if diag is not None:
+                ml_errors.append(diag)
+
+    if not ml_errors:
+        return None
+
+    # Check if the same ML error category occurred at least twice
+    category_counts: dict[str, int] = {}
+    for err in ml_errors:
+        category_counts[err.category.value] = category_counts.get(err.category.value, 0) + 1
+
+    for _cat_name, count in category_counts.items():
+        if count >= 2:
+            latest_err = ml_errors[-1]
+            return (
+                f"[REPETITIVE ML FAILURE DETECTED]\n"
+                f"You have encountered {latest_err.category.value} {count} times in recent steps.\n"
+                f"{latest_err.remedy_prompt}"
+            )
+
+    return None
+
+
 def detect_doom_loop(messages: list[Message], window: int = 30) -> str | None:
     """
-    Analyze recent messages for doom loop patterns.
+    Analyze recent messages for doom loop patterns and repetitive ML failures.
 
     Returns a corrective prompt string if a loop is detected, None otherwise.
 
     Detects:
-    1. Identical consecutive calls: 3+ calls to the same tool with same args
-    2. Repeating sequences: patterns like [A,B,A,B] over sequence lengths 2-5
+    1. Recurring ML execution failures (OOM, NaN, Shape, Missing Package)
+    2. Identical consecutive calls: 3+ calls to the same tool with same args
+    3. Repeating sequences: patterns like [A,B,A,B] over sequence lengths 2-5
     """
+    # Check for recurring ML error loop first
+    ml_loop = detect_ml_failure_loop(messages, window=min(window, 15))
+    if ml_loop:
+        return ml_loop
+
     # Extract tool calls from recent assistant messages
     recent = messages[-window:]
     call_hashes: list[tuple[str, str]] = []  # (tool_name, args_hash)

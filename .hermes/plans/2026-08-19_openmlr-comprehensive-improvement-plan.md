@@ -142,18 +142,20 @@
   - Modify: `backend/openmlr/agent/loop.py`
   - Modify: `backend/openmlr/agent/prompts.py`
 
-### Task 3.2: Automated ML Error Diagnostic & Self-Healing Engine
+### Task 3.2: Automated ML Error Diagnostic & Self-Healing Engine (Completed - PR #48)
 - **Objective:** Add specialized recovery agents that catch and repair common ML failures during execution:
   - CUDA Out-of-Memory (OOM) → Automatically injects gradient accumulation, batch size reduction, or FlashAttention/FP16.
   - Loss NaN / Divergence → Diagnoses learning rate, gradient clipping, or numerical instability.
   - Tensor Shape Mismatch → Analyzes PyTorch traceback and applies tensor reshaping or dimension alignment.
   - Missing Package / Version Conflict → Probes environment and auto-installs compatible wheel binaries.
+  - Process Timeout / Hung CUDA Kernel → Diagnoses deadlocks in DDP or hanging dataloaders.
 - **Files:**
   - Create: `backend/openmlr/agent/ml_debugger.py`
   - Modify: `backend/openmlr/agent/doom_loop.py`
-  - Modify: `backend/openmlr/tools/compute_tools.py`
+  - Modify: `backend/openmlr/agent/loop_executor.py`
+  - Create: `backend/tests/test_ml_debugger.py`
 
-### Task 3.3: Autonomous Multi-Agent Peer Review Simulation
+### Task 3.3: Autonomous Multi-Agent Peer Review Simulation (NEXT)
 - **Objective:** Deploy a committee of 3 independent reviewer subagents + 1 Meta-Reviewer that evaluate research plans and drafted papers against standard conference rubrics (ICLR / NeurIPS / ICML):
   - Reviewer 1 (Theory & Novelty): Rigor, mathematical correctness, theoretical claims.
   - Reviewer 2 (Empirical Validation): Baselines, ablation completeness, statistical significance.
