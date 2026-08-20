@@ -79,6 +79,28 @@ class KernelOptimizationTask(BenchmarkTaskBase):
         )
         return cls(config=config, specification=specification)
 
+    def _extract_agent_metrics(self, agent_output: Any) -> tuple[float | None, bool, float, float | None]:
+        """Extract optimized latency, numerical correctness, error, and memory from agent output."""
+        optimized_latency_ms = None
+        numerical_passed = True
+        max_num_error = 0.0
+        optimized_memory_mb = None
+
+        if isinstance(agent_output, dict):
+            optimized_latency_ms = agent_output.get("optimized_latency_ms") or agent_output.get("latency_ms")
+            if optimized_latency_ms is None and "speedup" in agent_output:
+                speedup_reported = float(agent_output["speedup"])
+                if speedup_reported > 0:
+                    optimized_latency_ms = self.specification.baseline_latency_ms / speedup_reported
+
+            numerical_passed = agent_output.get("numerical_correctness", True)
+            max_num_error = agent_output.get("max_relative_numerical_error", 0.0)
+            optimized_memory_mb = agent_output.get("optimized_memory_mb")
+        elif isinstance(agent_output, (int, float)):
+            optimized_latency_ms = float(agent_output)
+
+        return optimized_latency_ms, numerical_passed, max_num_error, optimized_memory_mb
+
     async def evaluate(self, agent_output: Any) -> TaskResult:
         """Evaluate agent's optimized kernel implementation or latency measurement."""
         start_time = time.time()
@@ -89,24 +111,9 @@ class KernelOptimizationTask(BenchmarkTaskBase):
                     execution_time_s=time.time() - start_time,
                 )
 
-            # Agent output can be a dict with measured latency or code/bench results
-            optimized_latency_ms = None
-            numerical_passed = True
-            max_num_error = 0.0
-            optimized_memory_mb = None
-
-            if isinstance(agent_output, dict):
-                optimized_latency_ms = agent_output.get("optimized_latency_ms") or agent_output.get("latency_ms")
-                if optimized_latency_ms is None and "speedup" in agent_output:
-                    speedup_reported = float(agent_output["speedup"])
-                    if speedup_reported > 0:
-                        optimized_latency_ms = self.specification.baseline_latency_ms / speedup_reported
-
-                numerical_passed = agent_output.get("numerical_correctness", True)
-                max_num_error = agent_output.get("max_relative_numerical_error", 0.0)
-                optimized_memory_mb = agent_output.get("optimized_memory_mb")
-            elif isinstance(agent_output, (int, float)):
-                optimized_latency_ms = float(agent_output)
+            optimized_latency_ms, numerical_passed, max_num_error, optimized_memory_mb = (
+                self._extract_agent_metrics(agent_output)
+            )
 
             if optimized_latency_ms is None or optimized_latency_ms <= 0:
                 return TaskResult(
@@ -131,7 +138,6 @@ class KernelOptimizationTask(BenchmarkTaskBase):
             )
 
             is_success = speedup_metric.is_successful
-            # Normalized score: min(1.0, speedup / target_speedup) if numerical check passed
             score = 0.0
             if numerical_passed and speedup_metric.speedup_ratio > 0:
                 score = min(1.0, speedup_metric.speedup_ratio / self.specification.target_speedup)

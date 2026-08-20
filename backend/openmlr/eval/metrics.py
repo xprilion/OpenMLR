@@ -37,7 +37,7 @@ class MetricTolerance:
 
     def is_within_tolerance(self, target: float, actual: float) -> bool:
         """Check if an actual value is within tolerance of the target."""
-        if target == 0.0:
+        if math.isclose(target, 0.0, abs_tol=1e-9):
             return abs(actual) <= self.absolute_tolerance
         rel_diff = abs(actual - target) / abs(target)
         if rel_diff <= self.relative_tolerance:
@@ -61,7 +61,7 @@ class ReproductionMetric:
 
     @property
     def relative_delta(self) -> float:
-        if self.reported_value == 0.0:
+        if math.isclose(self.reported_value, 0.0, abs_tol=1e-9):
             return abs(self.reproduced_value)
         return abs(self.reproduced_value - self.reported_value) / abs(self.reported_value)
 
@@ -245,7 +245,7 @@ class BenchmarkAggregateSummary:
         variance = sum((x - mean) ** 2 for x in values) / (n - 1)
         std_dev = math.sqrt(variance)
         # Approximate z-score for 95% = 1.96
-        z = 1.96 if confidence == 0.95 else 2.576
+        z = 1.96 if math.isclose(confidence, 0.95, abs_tol=1e-5) else 2.576
         margin = z * (std_dev / math.sqrt(n))
         return (max(0.0, mean - margin), mean + margin)
 

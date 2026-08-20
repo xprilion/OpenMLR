@@ -155,6 +155,18 @@ class BenchmarkReport:
         return "\n".join(md)
 
 
+def _accumulate_category_metrics(summary: BenchmarkAggregateSummary, r: TaskResult) -> None:
+    """Extract category-specific metrics from a task result into summary."""
+    if r.category == TaskCategory.OPTIMIZATION and "speedup_ratio" in r.metrics:
+        summary.speedup_ratios.append(r.metrics["speedup_ratio"])
+    elif r.category == TaskCategory.HYPOTHESIS and "composite_score" in r.metrics:
+        summary.hypothesis_scores.append(r.metrics["composite_score"])
+    elif r.category == TaskCategory.REPRODUCTION:
+        for m_val in r.metrics.values():
+            if isinstance(m_val, dict) and "percentage_error" in m_val:
+                summary.reproduction_percentage_errors.append(m_val["percentage_error"])
+
+
 class BenchmarkHarness:
     """Harness for orchestrating agent evaluation benchmarks."""
 
@@ -215,14 +227,7 @@ class BenchmarkHarness:
         )
 
         for r in results:
-            if r.category == TaskCategory.OPTIMIZATION and "speedup_ratio" in r.metrics:
-                summary.speedup_ratios.append(r.metrics["speedup_ratio"])
-            elif r.category == TaskCategory.HYPOTHESIS and "composite_score" in r.metrics:
-                summary.hypothesis_scores.append(r.metrics["composite_score"])
-            elif r.category == TaskCategory.REPRODUCTION:
-                for m_val in r.metrics.values():
-                    if isinstance(m_val, dict) and "percentage_error" in m_val:
-                        summary.reproduction_percentage_errors.append(m_val["percentage_error"])
+            _accumulate_category_metrics(summary, r)
 
         return BenchmarkReport(
             suite_name=suite.name,

@@ -36,9 +36,9 @@ class TestBenchmarkHarness:
         assert result.score >= 0.95
 
     @pytest.mark.asyncio
-    async def test_run_single_task_timeout(self):
+    async def test_run_single_task_timeout(self, monkeypatch):
         harness = BenchmarkHarness(default_timeout_seconds=0.1)
-        RESNET18_CIFAR10_TASK.config.timeout_seconds = 0.1
+        monkeypatch.setattr(RESNET18_CIFAR10_TASK.config, "timeout_seconds", 0.1)
 
         async def hanging_agent_runner(task: BenchmarkTaskBase):
             await asyncio.sleep(1.0)
