@@ -152,9 +152,7 @@ class Message(Base):
 
     conversation = relationship("Conversation", back_populates="messages")
 
-    __table_args__ = (
-        Index("ix_messages_conv_created", "conversation_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_messages_conv_created", "conversation_id", "created_at"),)
 
 
 class SandboxConfig(Base):
@@ -235,9 +233,7 @@ class ResearchCorpus(Base):
     user = relationship("User", back_populates="research_corpus")
     conversation = relationship("Conversation", back_populates="corpus")
 
-    __table_args__ = (
-        Index("ix_research_corpus_user_source", "user_id", "source"),
-    )
+    __table_args__ = (Index("ix_research_corpus_user_source", "user_id", "source"),)
 
 
 class WritingProject(Base):
@@ -260,9 +256,7 @@ class WritingProject(Base):
     user = relationship("User", back_populates="writing_projects")
     conversation = relationship("Conversation", back_populates="writing_project")
 
-    __table_args__ = (
-        Index("ix_writing_projects_user_status", "user_id", "status"),
-    )
+    __table_args__ = (Index("ix_writing_projects_user_status", "user_id", "status"),)
 
 
 class ConversationTask(Base):
@@ -285,9 +279,7 @@ class ConversationTask(Base):
 
     conversation = relationship("Conversation", back_populates="tasks")
 
-    __table_args__ = (
-        Index("ix_conversation_tasks_conv_status", "conversation_id", "status"),
-    )
+    __table_args__ = (Index("ix_conversation_tasks_conv_status", "conversation_id", "status"),)
 
 
 class ConversationResource(Base):
@@ -310,9 +302,7 @@ class ConversationResource(Base):
 
     conversation = relationship("Conversation", back_populates="resources")
 
-    __table_args__ = (
-        Index("ix_conversation_resources_conv_type", "conversation_id", "type"),
-    )
+    __table_args__ = (Index("ix_conversation_resources_conv_type", "conversation_id", "type"),)
 
 
 class AgentJob(Base):

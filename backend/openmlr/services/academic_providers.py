@@ -26,7 +26,7 @@ def _get_active_fetch():
     """Retrieve fetch_with_retry dynamically to support unittest.mock patching."""
     papers_mod = sys.modules.get("openmlr.tools.papers")
     if papers_mod and hasattr(papers_mod, "fetch_with_retry"):
-        return getattr(papers_mod, "fetch_with_retry")
+        return papers_mod.fetch_with_retry
     return _default_fetch
 
 

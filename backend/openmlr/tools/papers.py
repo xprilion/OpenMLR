@@ -16,27 +16,59 @@ from typing import Any
 from ..agent.types import ToolSpec
 from ..services.academic_providers import (
     get_paperclip_headers as _get_paperclip_headers,
+)
+from ..services.academic_providers import (
     openalex_search as _openalex_search,
+)
+from ..services.academic_providers import (
     paperclip_lookup as _paperclip_lookup,
+)
+from ..services.academic_providers import (
     paperclip_search as _paperclip_search,
+)
+from ..services.academic_providers import (
     reconstruct_abstract as _reconstruct_abstract,
+)
+from ..services.academic_providers import (
     semantic_scholar_search as _semantic_scholar_search,
+)
+from ..services.academic_providers import (
     to_openalex_id as _to_openalex_id,
 )
 from ..services.arxiv_client import (
     extract_arxiv_id as _extract_arxiv_id,
+)
+from ..services.arxiv_client import (
     read_arxiv_paper as _read_paper,
+)
+from ..services.arxiv_client import (
     search_arxiv as _arxiv_search,
 )
 from ..services.paper_search_engine import (
     find_code_implementations as _find_code,
+)
+from ..services.paper_search_engine import (
     find_datasets_for_topic as _find_datasets,
+)
+from ..services.paper_search_engine import (
     get_author_papers as _author_papers,
+)
+from ..services.paper_search_engine import (
     get_citations as _citations,
+)
+from ..services.paper_search_engine import (
     get_crossref_details as _crossref_details,
+)
+from ..services.paper_search_engine import (
     get_paper_details as _details,
+)
+from ..services.paper_search_engine import (
     get_recommendations as _recommend,
+)
+from ..services.paper_search_engine import (
     get_trending_papers as _trending,
+)
+from ..services.paper_search_engine import (
     search_papers_parallel as _search,
 )
 from .http_utils import fetch_with_retry
