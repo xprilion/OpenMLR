@@ -314,4 +314,45 @@ export const api = {
     stratify_column?: string;
     seed?: number;
   }) => post('/api/datasets/split', body),
+
+  // Hyperparameter Sweeps & HPO
+  listSweeps: (projectUuid?: string) =>
+    get(`/api/sweeps${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`),
+  createSweep: (projectUuid: string | undefined, body: Record<string, unknown>) =>
+    post('/api/sweeps', { ...body, project_uuid: projectUuid }),
+  getSweep: (projectUuid: string | undefined, sweepId: string) =>
+    get(`/api/sweeps/${encodeURIComponent(sweepId)}${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`),
+  suggestTrial: (projectUuid: string | undefined, sweepId: string) =>
+    post(`/api/sweeps/${encodeURIComponent(sweepId)}/suggest${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`, {}),
+  recordTrial: (
+    projectUuid: string | undefined,
+    sweepId: string,
+    trialId: string,
+    body: {
+      metrics: Record<string, unknown>;
+      status?: string;
+      step_history?: Record<string, unknown>[];
+      error_message?: string;
+    }
+  ) =>
+    post(
+      `/api/sweeps/${encodeURIComponent(sweepId)}/trials/${encodeURIComponent(trialId)}/record${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`,
+      body
+    ),
+  checkPrune: (
+    projectUuid: string | undefined,
+    sweepId: string,
+    trialId: string,
+    body: { current_step: number; current_metric_val: number }
+  ) =>
+    post(
+      `/api/sweeps/${encodeURIComponent(sweepId)}/trials/${encodeURIComponent(trialId)}/prune-check${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`,
+      body
+    ),
+  getSweepAnalysis: (projectUuid: string | undefined, sweepId: string) =>
+    get(`/api/sweeps/${encodeURIComponent(sweepId)}/analysis${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`),
+  exportSweepReport: (projectUuid: string | undefined, sweepId: string) =>
+    post(`/api/sweeps/${encodeURIComponent(sweepId)}/export${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`, {}),
+  deleteSweep: (projectUuid: string | undefined, sweepId: string) =>
+    del(`/api/sweeps/${encodeURIComponent(sweepId)}${projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : ''}`),
 };

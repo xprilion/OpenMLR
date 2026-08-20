@@ -119,6 +119,7 @@ from .routes.projects import router as projects_router
 from .routes.research import router as research_router
 from .routes.review import router as review_router
 from .routes.settings import router as settings_router
+from .routes.sweeps import router as sweeps_router
 from .routes.terminal import router as terminal_router
 
 app.include_router(auth_router)
@@ -134,6 +135,7 @@ app.include_router(review_router)
 app.include_router(eval_router)
 app.include_router(experiments_router)
 app.include_router(datasets_router)
+app.include_router(sweeps_router)
 app.include_router(terminal_router)
 
 

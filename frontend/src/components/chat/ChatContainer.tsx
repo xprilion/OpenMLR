@@ -31,6 +31,9 @@ const ResearchWorkflowStudio = lazy(() =>
 const DatasetStudio = lazy(() =>
   import('../datasets/DatasetStudio').then((m) => ({ default: m.DatasetStudio }))
 );
+const SweepStudio = lazy(() =>
+  import('../sweeps/SweepStudio').then((m) => ({ default: m.SweepStudio }))
+);
 
 export function ChatContainer() {
   const {
@@ -165,6 +168,17 @@ export function ChatContainer() {
           onClick={() => setMainTab('datasets')}
         >
           Datasets
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'sweeps'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'sweeps' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('sweeps')}
+        >
+          Sweeps
         </button>
         <button
           type="button"
@@ -346,6 +360,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'datasets' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Dataset Studio...</div>}>
           <DatasetStudio />
+        </Suspense>
+      </div>
+
+      {/* Sweep Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'sweeps' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Sweep Studio...</div>}>
+          <SweepStudio projectId={activeProject?.uuid} />
         </Suspense>
       </div>
 
