@@ -37,3 +37,14 @@ export interface LiteratureMatrixRow {
   baseline: string;
   gap: string;
 }
+
+export type {
+  ResearchPhaseType,
+  MilestoneStatusType,
+  PhaseTransitionItem,
+  ResearchMilestoneItem,
+  ResearchArtifactsSummary,
+  ResearchStateData,
+  ProjectResearchStateResponse,
+} from '../../types';
+

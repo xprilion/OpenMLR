@@ -25,6 +25,9 @@ const PeerReviewStudio = lazy(() =>
 const EvalBenchmarkDashboard = lazy(() =>
   import('../eval/EvalBenchmarkDashboard').then((m) => ({ default: m.EvalBenchmarkDashboard }))
 );
+const ResearchWorkflowStudio = lazy(() =>
+  import('../research/ResearchWorkflowStudio').then((m) => ({ default: m.ResearchWorkflowStudio }))
+);
 
 export function ChatContainer() {
   const {
@@ -76,6 +79,17 @@ export function ChatContainer() {
           onClick={() => setMainTab('agent')}
         >
           Agent
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'workflow'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'workflow' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('workflow')}
+        >
+          Workflow
         </button>
         <button
           type="button"
@@ -261,6 +275,13 @@ export function ChatContainer() {
           mcpServers={mcpServers}
           projectUuid={activeProject?.uuid ?? null}
         />
+      </div>
+
+      {/* Workflow Studio tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'workflow' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Workflow Studio...</div>}>
+          <ResearchWorkflowStudio />
+        </Suspense>
       </div>
 
       {/* Editor tab */}
