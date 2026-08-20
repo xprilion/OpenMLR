@@ -49,7 +49,7 @@ export function AddKeyModal({ onClose, onSubmit }: AddKeyModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} onKeyDown={(e) => e.key === 'Escape' && onClose()} role="dialog" aria-modal="true" aria-labelledby="add-key-title" tabIndex={-1}>
-      <div className="bg-surface rounded-xl border border-border w-full max-w-lg mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface rounded-xl border border-border w-full max-w-lg mx-4 shadow-xl" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 id="add-key-title" className="font-semibold text-text flex items-center gap-2">
             <KeyRound size={16} />

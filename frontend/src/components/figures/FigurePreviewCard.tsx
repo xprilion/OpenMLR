@@ -40,12 +40,12 @@ export function FigurePreviewCard({
     URL.revokeObjectURL(url);
   };
 
-  const codeContent =
-    activeCodeTab === 'latex'
-      ? figure.latex_snippet
-      : activeCodeTab === 'python'
-      ? figure.python_script
-      : figure.tikz_code || '% TikZ code not available for this plot.';
+  let codeContent = figure.tikz_code || '% TikZ code not available for this plot.';
+  if (activeCodeTab === 'latex') {
+    codeContent = figure.latex_snippet;
+  } else if (activeCodeTab === 'python') {
+    codeContent = figure.python_script;
+  }
 
   return (
     <div
@@ -58,7 +58,6 @@ export function FigurePreviewCard({
           onSelect(figure.id);
         }
       }}
-      role="button"
       tabIndex={0}
     >
       {/* Header */}

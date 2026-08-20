@@ -134,8 +134,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
           {/* Common fields */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-text-dim font-medium mb-1">Task ID</label>
+              <label htmlFor="eval-task-id" className="block text-text-dim font-medium mb-1">Task ID</label>
               <input
+                id="eval-task-id"
                 type="text"
                 required
                 value={taskId}
@@ -145,8 +146,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
               />
             </div>
             <div>
-              <label className="block text-text-dim font-medium mb-1">Task Name</label>
+              <label htmlFor="eval-task-name" className="block text-text-dim font-medium mb-1">Task Name</label>
               <input
+                id="eval-task-name"
                 type="text"
                 required
                 value={name}
@@ -159,8 +161,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-text-dim font-medium mb-1">Difficulty</label>
+              <label htmlFor="eval-task-difficulty" className="block text-text-dim font-medium mb-1">Difficulty</label>
               <select
+                id="eval-task-difficulty"
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value)}
                 className="w-full bg-bg border border-border rounded-xl px-3 py-1.5 text-text focus:border-primary focus:outline-none"
@@ -171,20 +174,22 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
               </select>
             </div>
             <div>
-              <label className="block text-text-dim font-medium mb-1">Timeout (seconds)</label>
+              <label htmlFor="eval-task-timeout" className="block text-text-dim font-medium mb-1">Timeout (seconds)</label>
               <input
+                id="eval-task-timeout"
                 type="number"
                 min="10"
                 value={timeoutSeconds}
-                onChange={(e) => setTimeoutSeconds(parseInt(e.target.value) || 300)}
+                onChange={(e) => setTimeoutSeconds(Number.parseInt(e.target.value, 10) || 300)}
                 className="w-full bg-bg border border-border rounded-xl px-3 py-1.5 text-text focus:border-primary focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-text-dim font-medium mb-1">Description</label>
+            <label htmlFor="eval-task-desc" className="block text-text-dim font-medium mb-1">Description</label>
             <textarea
+              id="eval-task-desc"
               required
               rows={2}
               value={description}
@@ -199,8 +204,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">Paper Title</label>
+                  <label htmlFor="eval-paper-title" className="block text-text-dim font-medium mb-1">Paper Title</label>
                   <input
+                    id="eval-paper-title"
                     type="text"
                     required
                     value={paperTitle}
@@ -210,8 +216,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
                   />
                 </div>
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">arXiv ID (optional)</label>
+                  <label htmlFor="eval-arxiv-id" className="block text-text-dim font-medium mb-1">arXiv ID (optional)</label>
                   <input
+                    id="eval-arxiv-id"
                     type="text"
                     value={arxivId}
                     onChange={(e) => setArxivId(e.target.value)}
@@ -222,8 +229,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">Dataset Name</label>
+                  <label htmlFor="eval-dataset-name" className="block text-text-dim font-medium mb-1">Dataset Name</label>
                   <input
+                    id="eval-dataset-name"
                     type="text"
                     value={datasetName}
                     onChange={(e) => setDatasetName(e.target.value)}
@@ -231,22 +239,11 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
                     className="w-full bg-bg border border-border rounded-xl px-3 py-1.5 text-text focus:border-primary focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-text-dim font-medium mb-1">Difficulty</label>
-                  <select
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl px-3 py-1.5 text-text focus:border-primary focus:outline-none"
-                  >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
               </div>
               <div>
-                <label className="block text-text-dim font-medium mb-1">Target Metrics (JSON)</label>
+                <label htmlFor="eval-target-metrics" className="block text-text-dim font-medium mb-1">Target Metrics (JSON)</label>
                 <input
+                  id="eval-target-metrics"
                   type="text"
                   required
                   value={targetMetricsJson}
@@ -260,8 +257,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">Kernel Name</label>
+                  <label htmlFor="eval-kernel-name" className="block text-text-dim font-medium mb-1">Kernel Name</label>
                   <input
+                    id="eval-kernel-name"
                     type="text"
                     required
                     value={kernelName}
@@ -271,8 +269,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
                   />
                 </div>
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">Framework</label>
+                  <label htmlFor="eval-framework" className="block text-text-dim font-medium mb-1">Framework</label>
                   <select
+                    id="eval-framework"
                     value={framework}
                     onChange={(e) => setFramework(e.target.value)}
                     className="w-full bg-bg border border-border rounded-xl px-3 py-1.5 text-text focus:border-primary focus:outline-none"
@@ -285,8 +284,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">Baseline Latency (ms)</label>
+                  <label htmlFor="eval-baseline-latency" className="block text-text-dim font-medium mb-1">Baseline Latency (ms)</label>
                   <input
+                    id="eval-baseline-latency"
                     type="number"
                     step="0.1"
                     min="0.01"
@@ -297,8 +297,9 @@ export function CustomTaskModal({ onClose, onCreated }: Readonly<Props>) {
                   />
                 </div>
                 <div>
-                  <label className="block text-text-dim font-medium mb-1">Target Speedup (x)</label>
+                  <label htmlFor="eval-target-speedup" className="block text-text-dim font-medium mb-1">Target Speedup (x)</label>
                   <input
+                    id="eval-target-speedup"
                     type="number"
                     step="0.1"
                     min="1.1"

@@ -142,7 +142,7 @@ export function AddNodeModal({ keys, node, onClose, onSubmit }: AddNodeModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose} onKeyDown={(e) => e.key === 'Escape' && onClose()} role="dialog" aria-modal="true" aria-labelledby="add-node-title" tabIndex={-1}>
-      <div className="bg-surface rounded-xl border border-border w-full max-w-lg mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface rounded-xl border border-border w-full max-w-lg mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 id="add-node-title" className="font-semibold text-text">
             {isEditing ? 'Edit Compute Node' : 'Add Compute Node'}

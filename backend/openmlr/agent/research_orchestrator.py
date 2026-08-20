@@ -123,7 +123,8 @@ class ResearchOrchestrator:
         self.state.history.append(transition)
         self.state.current_phase = next_phase
         self.state.updated_at = time.time()
-        logger.info("Research phase transition: %s -> %s (%s)", from_phase.value, next_phase.value, reason)
+        clean_reason = "".join(c for c in str(reason) if c.isprintable()).strip()[:150]
+        logger.info("Research phase transition: %s -> %s (%s)", from_phase.value, next_phase.value, clean_reason)
         return transition
 
     def add_milestone(
@@ -230,30 +231,31 @@ class ResearchOrchestrator:
 
         return "\n".join(lines)
 
+    def _get_safe_state_path(self, path: str | Path | None = None) -> Path:
+        """Resolve a safe, contained path for saving/loading state."""
+        if path is not None:
+            raw_path = Path(path)
+            # Prevent absolute escapes or directory traversals if workspace is configured
+            if self.workspace_path:
+                resolved_base = self.workspace_path.resolve()
+                resolved_target = (resolved_base / raw_path.name).resolve()
+                return resolved_target
+            return raw_path.resolve()
+
+        if self.workspace_path:
+            return (self.workspace_path / ".project-meta" / "research_state.json").resolve()
+        return Path("research_state.json").resolve()
+
     def save_state(self, path: str | Path | None = None) -> Path:
         """Persist state JSON to disk."""
-        target = Path(
-            path
-            or (
-                self.workspace_path / ".project-meta" / "research_state.json"
-                if self.workspace_path
-                else "research_state.json"
-            )
-        )
+        target = self._get_safe_state_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(self.state.to_dict(), indent=2), encoding="utf-8")
         return target
 
     def load_state(self, path: str | Path | None = None) -> bool:
         """Load state JSON from disk."""
-        target = Path(
-            path
-            or (
-                self.workspace_path / ".project-meta" / "research_state.json"
-                if self.workspace_path
-                else "research_state.json"
-            )
-        )
+        target = self._get_safe_state_path(path)
         if not target.exists():
             return False
         try:

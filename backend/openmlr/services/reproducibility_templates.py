@@ -9,12 +9,24 @@ if TYPE_CHECKING:
 
 
 def generate_badge_markdown(score: float, grade: str) -> str:
-    color = "brightgreen" if score >= 90 else "green" if score >= 80 else "yellow" if score >= 70 else "red"
+    if score >= 90:
+        color = "brightgreen"
+    elif score >= 80:
+        color = "green"
+    elif score >= 70:
+        color = "yellow"
+    else:
+        color = "red"
     return f"[![OpenMLR Reproducibility](https://img.shields.io/badge/reproducibility-{grade}%20({score:.0f}%25)-{color}.svg)](#reproducibility)"
 
 
 def generate_badge_svg(score: float, grade: str) -> str:
-    bg_color = "#10b981" if score >= 85 else "#f59e0b" if score >= 70 else "#ef4444"
+    if score >= 85:
+        bg_color = "#10b981"
+    elif score >= 70:
+        bg_color = "#f59e0b"
+    else:
+        bg_color = "#ef4444"
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="165" height="24" viewBox="0 0 165 24">\n'
         f'  <rect width="105" height="24" fill="#18181b"/>\n'

@@ -100,16 +100,9 @@ export function ChecklistTable({ items }: Readonly<ChecklistTableProps>) {
                 key={item.id}
                 className="border border-border/80 rounded-lg bg-bg/50 overflow-hidden transition-colors"
               >
-                <div
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
                   onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setExpandedId(isExpanded ? null : item.id);
-                    }
-                  }}
                   className="w-full flex items-center justify-between p-3 text-left hover:bg-surface-hover/50 cursor-pointer select-none"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
@@ -133,7 +126,7 @@ export function ChecklistTable({ items }: Readonly<ChecklistTableProps>) {
                       <ChevronDown className="w-4 h-4 text-text-dim" />
                     )}
                   </div>
-                </div>
+                </button>
 
                 {isExpanded && (
                   <div className="px-3.5 pb-3.5 pt-1 border-t border-border/60 bg-surface/30 flex flex-col gap-2.5 text-xs">

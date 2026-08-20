@@ -72,9 +72,10 @@ describe('ProvidersSettings', () => {
   it('enables save when key entered', async () => {
     render(<ProvidersSettings />);
     await waitFor(() => {
-      const input = screen.getByPlaceholderText('ANTHROPIC_API_KEY');
-      fireEvent.change(input, { target: { value: 'sk-ant-test' } });
+      expect(screen.getByPlaceholderText('ANTHROPIC_API_KEY')).toBeInTheDocument();
     });
+    const input = screen.getByPlaceholderText('ANTHROPIC_API_KEY');
+    fireEvent.change(input, { target: { value: 'sk-ant-test' } });
     const btn = screen.getByText('Save Keys');
     expect(btn).not.toBeDisabled();
   });

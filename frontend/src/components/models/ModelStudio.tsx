@@ -290,7 +290,6 @@ export function ModelStudio() {
                         setSelectedModelId(m.id);
                       }
                     }}
-                    role="button"
                     tabIndex={0}
                   >
                     <div className="flex items-start justify-between gap-2">

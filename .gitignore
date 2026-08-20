@@ -36,9 +36,6 @@ frontend/node_modules/
 # pnpm
 pnpm-lock.yaml
 
-# uv
-uv.lock
-
 # Alembic
 backend/openmlr/db/migrations/versions/*.py
 !backend/openmlr/db/migrations/versions/__init__.py

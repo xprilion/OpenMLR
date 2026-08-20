@@ -57,6 +57,10 @@ MODE_TOOL_RESTRICTIONS = {
             "models",
             # Publication figures and plotting (read-only in plan mode)
             "figures",
+            # Reproducibility auditing and determinism inspection (read-only in plan mode)
+            "reproducibility",
+            # Ablation studies and statistical significance (read-only in plan mode)
+            "ablation",
         },
         "blocked_message": (
             "Tool '{tool}' is not available in PLAN mode. "
@@ -430,6 +434,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router = ToolRouter()
 
     # Import and register all built-in tools
+    from .ablation import create_ablation_tool
     from .ask_user import create_ask_user_tool
     from .compute_tools import create_compute_tools
     from .datasets import create_datasets_tool
@@ -475,6 +480,7 @@ def create_tool_router(sandbox_manager=None) -> ToolRouter:
     router.register(create_models_tool())
     router.register(create_figures_tool())
     router.register(create_reproducibility_tool())
+    router.register(create_ablation_tool())
 
     if sandbox_manager:
         from .sandbox_tools import create_sandbox_tools

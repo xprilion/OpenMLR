@@ -40,6 +40,9 @@ const ModelStudio = lazy(() =>
 const FigureStudio = lazy(() =>
   import('../figures/FigureStudio').then((m) => ({ default: m.FigureStudio }))
 );
+const AblationStudio = lazy(() =>
+  import('../ablation/AblationStudio').then((m) => ({ default: m.AblationStudio }))
+);
 const ReproducibilityStudio = lazy(() =>
   import('../reproducibility/ReproducibilityStudio').then((m) => ({ default: m.ReproducibilityStudio }))
 );
@@ -56,6 +59,7 @@ const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
   { id: 'sweeps', label: 'Sweeps' },
   { id: 'models', label: 'Models' },
   { id: 'figures', label: 'Figures' },
+  { id: 'ablation', label: 'Ablations' },
   { id: 'reproducibility', label: 'Reproducibility' },
   { id: 'review', label: 'Peer Review' },
   { id: 'eval', label: 'Benchmarks' },
@@ -305,6 +309,13 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'figures' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Figure Studio...</div>}>
           <FigureStudio projectId={activeProject?.uuid} />
+        </Suspense>
+      </div>
+
+      {/* Ablation Studies & Significance Testing tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'ablation' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Ablation Studio...</div>}>
+          <AblationStudio projectId={activeProject?.uuid} />
         </Suspense>
       </div>
 

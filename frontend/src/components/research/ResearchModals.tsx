@@ -167,10 +167,11 @@ export function AddMilestoneModal({
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="text-[11px] font-semibold text-text-dim uppercase tracking-wider block mb-1">
+            <label htmlFor="milestone-title-input" className="text-[11px] font-semibold text-text-dim uppercase tracking-wider block mb-1">
               Milestone Title
             </label>
             <input
+              id="milestone-title-input"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -181,10 +182,11 @@ export function AddMilestoneModal({
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-text-dim uppercase tracking-wider block mb-1">
+            <label htmlFor="milestone-desc-input" className="text-[11px] font-semibold text-text-dim uppercase tracking-wider block mb-1">
               Description & Criteria
             </label>
             <textarea
+              id="milestone-desc-input"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Measure latency under batch size 32, seq len 2048 on A100 GPU."

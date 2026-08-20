@@ -107,6 +107,7 @@ app.add_middleware(
 
 # ── API routers ──────────────────────────────────────────
 from .auth.router import router as auth_router
+from .routes.ablation import router as ablation_router
 from .routes.agent import router as agent_router
 from .routes.compute import router as compute_router
 from .routes.datasets import router as datasets_router
@@ -142,6 +143,7 @@ app.include_router(sweeps_router)
 app.include_router(models_router)
 app.include_router(figures_router)
 app.include_router(reproducibility_router)
+app.include_router(ablation_router)
 app.include_router(terminal_router)
 
 

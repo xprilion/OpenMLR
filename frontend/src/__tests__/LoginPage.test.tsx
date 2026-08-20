@@ -114,8 +114,9 @@ describe('LoginPage', () => {
     renderLoginPage(onAuth);
 
     await waitFor(() => {
-      fireEvent.click(screen.getByText('Register'));
+      expect(screen.getByText('Register')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByText('Register'));
 
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Username'), 'newuser');
@@ -179,8 +180,9 @@ describe('LoginPage', () => {
     renderLoginPage();
 
     await waitFor(() => {
-      fireEvent.click(screen.getByText('Register'));
+      expect(screen.getByText('Register')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByText('Register'));
 
     // Fill required fields and submit register form
     const user = userEvent.setup();

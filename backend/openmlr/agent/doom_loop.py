@@ -8,9 +8,9 @@ from .types import Message
 
 
 def _hash_tool_call(name: str, args: dict) -> str:
-    """Create a hash of a tool call for comparison."""
+    """Create a non-cryptographic fingerprint of a tool call for loop comparison."""
     key = json.dumps({"name": name, "args": args}, sort_keys=True)
-    return hashlib.md5(key.encode()).hexdigest()
+    return hashlib.sha256(key.encode(), usedforsecurity=False).hexdigest()
 
 
 def detect_ml_failure_loop(messages: list[Message], window: int = 15) -> str | None:

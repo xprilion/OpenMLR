@@ -461,4 +461,22 @@ export const api = {
     const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
     return del(`/api/reproducibility/reports/${encodeURIComponent(reportId)}${q}`);
   },
+
+  // Ablation Studies & Significance Testing
+  getAblationStudies: (projectUuid?: string | null) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/ablation${q}`);
+  },
+  getAblationStudy: (studyId: string) =>
+    get(`/api/ablation/${encodeURIComponent(studyId)}`),
+  createAblationStudy: (body: Record<string, unknown> | object) =>
+    post('/api/ablation', body as Record<string, unknown>),
+  deleteAblationStudy: (studyId: string) =>
+    del(`/api/ablation/${encodeURIComponent(studyId)}`),
+  recordAblationRuns: (studyId: string, body: Record<string, unknown> | object) =>
+    post(`/api/ablation/${encodeURIComponent(studyId)}/runs`, body as Record<string, unknown>),
+  analyzeAblationStudy: (studyId: string, body: Record<string, unknown> | object = {}) =>
+    post(`/api/ablation/${encodeURIComponent(studyId)}/analyze`, body as Record<string, unknown>),
+  getAblationLatex: (studyId: string, body: Record<string, unknown> | object = {}) =>
+    post(`/api/ablation/${encodeURIComponent(studyId)}/latex`, body as Record<string, unknown>),
 };

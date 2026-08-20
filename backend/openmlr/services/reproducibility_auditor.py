@@ -198,13 +198,13 @@ class ReproducibilityAuditorService:
         seeds_found: dict[str, int | str] = {}
         checklist: list[CheckItem] = []
 
-        has_torch_seed = bool(re.search(r"torch\.manual_seed\s*\(\s*([^)]+)\s*\)", combined_text))
-        has_np_seed = bool(re.search(r"np\.random\.seed\s*\(\s*([^)]+)\s*\)", combined_text))
-        has_random_seed = bool(re.search(r"random\.seed\s*\(\s*([^)]+)\s*\)", combined_text))
+        has_torch_seed = bool(re.search(r"torch\.manual_seed\([^)]+\)", combined_text))
+        has_np_seed = bool(re.search(r"np\.random\.seed\([^)]+\)", combined_text))
+        has_random_seed = bool(re.search(r"random\.seed\([^)]+\)", combined_text))
         has_cudnn_det = "cudnn.deterministic" in combined_text
         has_det_algo = "use_deterministic_algorithms" in combined_text or "CUBLAS_WORKSPACE_CONFIG" in combined_text
 
-        seed_match = re.search(r"(?:manual_seed|seed)\s*\(\s*([^)]+)\s*\)", combined_text)
+        seed_match = re.search(r"(?:manual_seed|seed)\(([^)]+)\)", combined_text)
         if seed_match:
             val_str = seed_match.group(1).strip()
             if val_str.isdigit():
@@ -253,7 +253,7 @@ class ReproducibilityAuditorService:
 
         # 2. Environment & Dependencies Audit
         has_req_file = any("requirements" in fn or "pyproject" in fn or "environment.yml" in fn or "Pipfile" in fn for fn in filenames)
-        has_pinned_deps = bool(re.search(r"[a-zA-Z0-9_\-]+==\d+\.\d+", combined_text))
+        has_pinned_deps = bool(re.search(r"[a-zA-Z0-9_\-]+==\d+", combined_text))
         has_dockerfile = any("Dockerfile" in fn or "docker-compose" in fn for fn in filenames)
 
         checklist.append(
@@ -373,20 +373,35 @@ class ReproducibilityAuditorService:
             passed = sum(1 for i in items if i.status == CheckStatus.PASS)
             warns = sum(1 for i in items if i.status == CheckStatus.WARN)
             score = max(0.0, min(100.0, ((passed * 1.0) + (warns * 0.6)) / len(items) * 100.0))
-            status = CheckStatus.PASS if score >= 80 else CheckStatus.WARN if score >= 60 else CheckStatus.FAIL
+            if score >= 80:
+                cat_status = CheckStatus.PASS
+            elif score >= 60:
+                cat_status = CheckStatus.WARN
+            else:
+                cat_status = CheckStatus.FAIL
+
             categories_scores.append(
                 CategoryScore(
                     category=cat,
                     score=round(score, 1),
                     passed_checks=passed,
                     total_checks=len(items),
-                    status=status,
+                    status=cat_status,
                 )
             )
             total_score_sum += score
 
         overall_score = round(total_score_sum / len(CheckCategory), 1)
-        grade = "A+" if overall_score >= 95 else "A" if overall_score >= 85 else "B" if overall_score >= 70 else "C" if overall_score >= 50 else "F"
+        if overall_score >= 95:
+            grade = "A+"
+        elif overall_score >= 85:
+            grade = "A"
+        elif overall_score >= 70:
+            grade = "B"
+        elif overall_score >= 50:
+            grade = "C"
+        else:
+            grade = "F"
 
         detected_frameworks = []
         if "torch" in combined_text:
