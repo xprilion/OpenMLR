@@ -413,4 +413,26 @@ export const api = {
     const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
     return post(`/api/model-registry/compare${q}`, { model_ids: modelIds });
   },
+
+  // Publication Figures & Plots
+  listFigures: (projectUuid?: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/figures${q}`);
+  },
+  generateFigure: (projectUuid: string | undefined, body: Record<string, unknown>) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/figures${q}`, body);
+  },
+  getFigure: (projectUuid: string | undefined, figureId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return get(`/api/figures/${encodeURIComponent(figureId)}${q}`);
+  },
+  deleteFigure: (projectUuid: string | undefined, figureId: string) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return del(`/api/figures/${encodeURIComponent(figureId)}${q}`);
+  },
+  createMultiPanelLayout: (projectUuid: string | undefined, body: Record<string, unknown>) => {
+    const q = projectUuid ? `?project_id=${encodeURIComponent(projectUuid)}` : '';
+    return post(`/api/figures/multi-panel${q}`, body);
+  },
 };
