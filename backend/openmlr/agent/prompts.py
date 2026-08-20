@@ -29,6 +29,7 @@ def build_system_prompt(
     project_context: str = "",
     memory_context: str = "",
     knowledge_context: str = "",
+    research_context: str = "",
 ) -> str:
     """Build the full system prompt from YAML template."""
     template_path = PROMPT_DIR / "system_prompt.yaml"
@@ -65,7 +66,11 @@ def build_system_prompt(
         project_context=project_context,
         memory_context=memory_context,
         knowledge_context=knowledge_context,
+        research_context=research_context,
     )
+
+    if research_context and "{{ research_context }}" not in template_str:
+        prompt = f"{prompt}\n\n{research_context}"
 
     return prompt
 
