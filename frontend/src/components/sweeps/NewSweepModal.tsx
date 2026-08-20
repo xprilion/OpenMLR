@@ -9,6 +9,7 @@ interface NewSweepModalProps {
 }
 
 interface ParamRow {
+  id: string;
   name: string;
   type: ParamType;
   minVal: string;
@@ -28,26 +29,27 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
   const [submitting, setSubmitting] = useState(false);
 
   const [paramRows, setParamRows] = useState<ParamRow[]>([
-    { name: 'learning_rate', type: 'loguniform', minVal: '0.00001', maxVal: '0.01', step: '', choices: '' },
-    { name: 'batch_size', type: 'choice', minVal: '', maxVal: '', step: '', choices: '16, 32, 64' },
+    { id: 'p_1', name: 'learning_rate', type: 'loguniform', minVal: '0.00001', maxVal: '0.01', step: '', choices: '' },
+    { id: 'p_2', name: 'batch_size', type: 'choice', minVal: '', maxVal: '', step: '', choices: '16, 32, 64' },
   ]);
 
   if (!isOpen) return null;
 
   const handleAddParam = () => {
+    const nextId = `p_${Date.now()}_${paramRows.length + 1}`;
     setParamRows((rows) => [
       ...rows,
-      { name: `param_${rows.length + 1}`, type: 'uniform', minVal: '0.1', maxVal: '0.9', step: '0.1', choices: '' },
+      { id: nextId, name: `param_${rows.length + 1}`, type: 'uniform', minVal: '0.1', maxVal: '0.9', step: '0.1', choices: '' },
     ]);
   };
 
-  const handleRemoveParam = (index: number) => {
-    setParamRows((rows) => rows.filter((_, i) => i !== index));
+  const handleRemoveParam = (id: string) => {
+    setParamRows((rows) => rows.filter((r) => r.id !== id));
   };
 
-  const handleParamChange = (index: number, field: keyof ParamRow, value: string) => {
+  const handleParamChange = (id: string, field: keyof Omit<ParamRow, 'id'>, value: string) => {
     setParamRows((rows) =>
-      rows.map((r, i) => (i === index ? { ...r, [field]: value } : r))
+      rows.map((r) => (r.id === id ? { ...r, [field]: value } : r))
     );
   };
 
@@ -67,7 +69,7 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
           .split(',')
           .map((c) => {
             const trimmed = c.trim();
-            return !isNaN(Number(trimmed)) ? Number(trimmed) : trimmed;
+            return !Number.isNaN(Number(trimmed)) ? Number(trimmed) : trimmed;
           })
           .filter(Boolean);
       } else {
@@ -115,8 +117,9 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-xs">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1 col-span-2">
-              <label className="text-text-dim font-medium">Sweep Name *</label>
+              <label htmlFor="sweep-name" className="text-text-dim font-medium">Sweep Name *</label>
               <input
+                id="sweep-name"
                 type="text"
                 required
                 placeholder="e.g. BERT Attention & LR Sweep"
@@ -127,8 +130,9 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div className="flex flex-col gap-1 col-span-2">
-              <label className="text-text-dim font-medium">Description</label>
+              <label htmlFor="sweep-desc" className="text-text-dim font-medium">Description</label>
               <input
+                id="sweep-desc"
                 type="text"
                 placeholder="Hypothesis or optimization goal..."
                 value={description}
@@ -138,8 +142,9 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-text-dim font-medium">Search Method</label>
+              <label htmlFor="sweep-method" className="text-text-dim font-medium">Search Method</label>
               <select
+                id="sweep-method"
                 value={method}
                 onChange={(e) => setMethod(e.target.value as 'grid' | 'random' | 'bayesian' | 'hyperband')}
                 className="px-3 py-1.5 bg-bg border border-border rounded text-text text-xs focus:outline-none focus:border-primary"
@@ -152,8 +157,9 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-text-dim font-medium">Max Trials</label>
+              <label htmlFor="sweep-max-trials" className="text-text-dim font-medium">Max Trials</label>
               <input
+                id="sweep-max-trials"
                 type="number"
                 min={1}
                 max={200}
@@ -164,8 +170,9 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-text-dim font-medium">Objective Metric</label>
+              <label htmlFor="sweep-metric" className="text-text-dim font-medium">Objective Metric</label>
               <input
+                id="sweep-metric"
                 type="text"
                 value={objectiveMetric}
                 onChange={(e) => setObjectiveMetric(e.target.value)}
@@ -175,8 +182,9 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-text-dim font-medium">Goal</label>
+              <label htmlFor="sweep-goal" className="text-text-dim font-medium">Goal</label>
               <select
+                id="sweep-goal"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value as 'minimize' | 'maximize')}
                 className="px-3 py-1.5 bg-bg border border-border rounded text-text text-xs focus:outline-none focus:border-primary"
@@ -201,19 +209,21 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-              {paramRows.map((row, idx) => (
-                <div key={idx} className="bg-bg border border-border p-2 rounded flex flex-col gap-2">
+              {paramRows.map((row) => (
+                <div key={row.id} className="bg-bg border border-border p-2 rounded flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
+                      aria-label="Parameter name"
                       placeholder="Parameter name (e.g. lr)"
                       value={row.name}
-                      onChange={(e) => handleParamChange(idx, 'name', e.target.value)}
+                      onChange={(e) => handleParamChange(row.id, 'name', e.target.value)}
                       className="px-2 py-1 bg-surface border border-border rounded text-text text-xs flex-1"
                     />
                     <select
+                      aria-label="Parameter type"
                       value={row.type}
-                      onChange={(e) => handleParamChange(idx, 'type', e.target.value)}
+                      onChange={(e) => handleParamChange(row.id, 'type', e.target.value as ParamType)}
                       className="px-2 py-1 bg-surface border border-border rounded text-text text-xs w-32"
                     >
                       <option value="uniform">Uniform</option>
@@ -223,7 +233,8 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
                     </select>
                     <button
                       type="button"
-                      onClick={() => handleRemoveParam(idx)}
+                      aria-label={`Remove parameter ${row.name}`}
+                      onClick={() => handleRemoveParam(row.id)}
                       className="text-rose-400 hover:text-rose-300 p-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -233,32 +244,36 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
                   {row.type === 'choice' ? (
                     <input
                       type="text"
+                      aria-label="Parameter choices"
                       placeholder="Comma-separated values (e.g. 16, 32, 64, 128)"
                       value={row.choices}
-                      onChange={(e) => handleParamChange(idx, 'choices', e.target.value)}
+                      onChange={(e) => handleParamChange(row.id, 'choices', e.target.value)}
                       className="px-2 py-1 bg-surface border border-border rounded text-text text-xs w-full"
                     />
                   ) : (
                     <div className="grid grid-cols-3 gap-2">
                       <input
                         type="text"
+                        aria-label="Min value"
                         placeholder="Min"
                         value={row.minVal}
-                        onChange={(e) => handleParamChange(idx, 'minVal', e.target.value)}
+                        onChange={(e) => handleParamChange(row.id, 'minVal', e.target.value)}
                         className="px-2 py-1 bg-surface border border-border rounded text-text text-xs"
                       />
                       <input
                         type="text"
+                        aria-label="Max value"
                         placeholder="Max"
                         value={row.maxVal}
-                        onChange={(e) => handleParamChange(idx, 'maxVal', e.target.value)}
+                        onChange={(e) => handleParamChange(row.id, 'maxVal', e.target.value)}
                         className="px-2 py-1 bg-surface border border-border rounded text-text text-xs"
                       />
                       <input
                         type="text"
+                        aria-label="Step value"
                         placeholder="Step (optional)"
                         value={row.step}
-                        onChange={(e) => handleParamChange(idx, 'step', e.target.value)}
+                        onChange={(e) => handleParamChange(row.id, 'step', e.target.value)}
                         className="px-2 py-1 bg-surface border border-border rounded text-text text-xs"
                       />
                     </div>
@@ -271,10 +286,13 @@ export const NewSweepModal: React.FC<NewSweepModalProps> = ({ isOpen, onClose, o
           {/* Early Stopping Toggle */}
           <div className="border-t border-border pt-3 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-text font-medium">Enable Early Stopping / Pruning</span>
+              <label htmlFor="early-stopping-toggle" className="text-text font-medium cursor-pointer">
+                Enable Early Stopping / Pruning
+              </label>
               <span className="text-text-dim text-[11px]">Automatically halt unpromising trials via ASHA median comparison.</span>
             </div>
             <input
+              id="early-stopping-toggle"
               type="checkbox"
               checked={earlyStoppingEnabled}
               onChange={(e) => setEarlyStoppingEnabled(e.target.checked)}

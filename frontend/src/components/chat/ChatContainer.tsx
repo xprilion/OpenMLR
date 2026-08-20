@@ -6,7 +6,7 @@ import { TodoReviewDrawer } from '../TodoReviewDrawer';
 import { QuestionDrawer } from '../QuestionDrawer';
 import { ImageViewer } from '../ImageViewer';
 import { useChat } from '../../context/ChatContext';
-import { useProject } from '../../context/ProjectContext';
+import { useProject, type MainTab } from '../../context/ProjectContext';
 import { useCompute } from '../../context/ComputeContext';
 import { nextMsgId } from '../../context/agentEventReducers';
 
@@ -34,6 +34,20 @@ const DatasetStudio = lazy(() =>
 const SweepStudio = lazy(() =>
   import('../sweeps/SweepStudio').then((m) => ({ default: m.SweepStudio }))
 );
+
+const NAVIGATION_TABS: { id: MainTab; label: string }[] = [
+  { id: 'agent', label: 'Agent' },
+  { id: 'workflow', label: 'Workflow' },
+  { id: 'editor', label: 'Editor' },
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'paper', label: 'Paper Studio' },
+  { id: 'research', label: 'Citation Graph' },
+  { id: 'experiments', label: 'Experiments' },
+  { id: 'datasets', label: 'Datasets' },
+  { id: 'sweeps', label: 'Sweeps' },
+  { id: 'review', label: 'Peer Review' },
+  { id: 'eval', label: 'Benchmarks' },
+];
 
 export function ChatContainer() {
   const {
@@ -75,133 +89,31 @@ export function ChatContainer() {
     <div className="flex flex-col flex-1 overflow-hidden relative">
       {/* Agent / Editor / Terminal / Paper / Research tab bar */}
       <div role="tablist" className="flex items-center border-b border-border shrink-0 bg-surface">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'agent'}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            mainTab === 'agent' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('agent')}
-        >
-          Agent
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'workflow'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'workflow' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('workflow')}
-        >
-          Workflow
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'editor'}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            mainTab === 'editor' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('editor')}
-        >
-          Editor
-          {openFiles.length > 0 && (
-            <span className="ml-1.5 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
-              {openFiles.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'terminal'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'terminal' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('terminal')}
-        >
-          {'Terminal '}
-          <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'paper'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'paper' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('paper')}
-        >
-          Paper Studio
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'research'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'research' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('research')}
-        >
-          Citation Graph
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'experiments'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'experiments' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('experiments')}
-        >
-          Experiments
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'datasets'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'datasets' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('datasets')}
-        >
-          Datasets
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'sweeps'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'sweeps' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('sweeps')}
-        >
-          Sweeps
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'review'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'review' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('review')}
-        >
-          Peer Review
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mainTab === 'eval'}
-          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            mainTab === 'eval' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
-          }`}
-          onClick={() => setMainTab('eval')}
-        >
-          Benchmarks
-        </button>
+        {NAVIGATION_TABS.map((tab) => {
+          const isSelected = mainTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                isSelected ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+              }`}
+              onClick={() => setMainTab(tab.id)}
+            >
+              {tab.label}
+              {tab.id === 'editor' && openFiles.length > 0 && (
+                <span className="ml-1 text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                  {openFiles.length}
+                </span>
+              )}
+              {tab.id === 'terminal' && (
+                <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-text-dim'}`} />
+              )}
+            </button>
+          );
+        })}
         {/* Closable Image tab */}
         {imageTab && (
           <div

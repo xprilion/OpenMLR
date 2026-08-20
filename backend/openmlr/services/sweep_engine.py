@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-import random
+import secrets
 import time
 import uuid
 from pathlib import Path
@@ -24,6 +24,46 @@ __all__ = [
     "SweepEngine",
     "Trial",
 ]
+
+
+def _safe_uniform(min_v: float, max_v: float) -> float:
+    """Generate uniform float in range [min_v, max_v] using secure random bits."""
+    scale = secrets.randbits(32) / (1 << 32)
+    return min_v + scale * (max_v - min_v)
+
+
+def _safe_choice(choices: list[Any], default: Any) -> Any:
+    """Select a random choice safely."""
+    if not choices:
+        return default
+    idx = secrets.randbelow(len(choices))
+    return choices[idx]
+
+
+def _score_param_match(spec: ParameterSpec, val1: Any, val2: Any) -> float:
+    """Score similarity between two parameter values."""
+    if val1 is None or val2 is None:
+        return 0.0
+    if spec.param_type in ("categorical", "choice"):
+        return 1.0 if val1 == val2 else 0.0
+    norm_range = (spec.max_val or 1.0) - (spec.min_val or 0.0)
+    if norm_range <= 0:
+        return 1.0
+    dist = abs(float(val1) - float(val2)) / norm_range
+    return max(0.0, 1.0 - dist)
+
+
+def _score_candidate(candidate: dict[str, Any], good_trials: list[Trial], parameters: dict[str, ParameterSpec]) -> float:
+    """Score candidate similarity against top-performing historical trials."""
+    sim_score = 0.0
+    total_count = max(1, len(parameters))
+    for good_t in good_trials:
+        match_count = sum(
+            _score_param_match(spec, candidate.get(p_name), good_t.parameters.get(p_name))
+            for p_name, spec in parameters.items()
+        )
+        sim_score += match_count / total_count
+    return sim_score
 
 
 class SweepEngine:
@@ -54,8 +94,8 @@ class SweepEngine:
             with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
             return SweepConfig.from_dict(data)
-        except Exception as e:
-            log.error("Failed to load sweep %s/%s: %s", project_id, sweep_id, e)
+        except Exception:
+            log.exception("Failed to load sweep %s/%s", project_id, sweep_id)
             return None
 
     def list_sweeps(self, project_id: str) -> list[SweepConfig]:
@@ -142,7 +182,6 @@ class SweepEngine:
         trial_num = len(sweep.trials) + 1
         trial_id = f"tr_{sweep_id[-4:]}_{trial_num:03d}"
 
-        # Sample parameters according to sweep method
         if sweep.method == "grid":
             params = self._suggest_grid(sweep, trial_num)
         elif sweep.method in ("bayesian", "bayes"):
@@ -165,21 +204,22 @@ class SweepEngine:
     def _sample_single_param(self, spec: ParameterSpec) -> Any:
         """Sample a single parameter randomly within its spec."""
         if spec.param_type in ("categorical", "choice"):
-            return random.choice(spec.choices) if spec.choices else spec.default
+            return _safe_choice(spec.choices, spec.default)
         if spec.param_type == "int_uniform":
             min_v = int(spec.min_val or 0)
             max_v = int(spec.max_val or 10)
-            step = int(spec.step or 1)
-            return random.randrange(min_v, max_v + 1, step)
+            step = max(1, int(spec.step or 1))
+            count = max(1, ((max_v - min_v) // step) + 1)
+            return min_v + secrets.randbelow(count) * step
         if spec.param_type == "loguniform":
             min_v = max(1e-7, spec.min_val or 1e-4)
             max_v = spec.max_val or 1.0
             log_min, log_max = math.log(min_v), math.log(max_v)
-            val = math.exp(random.uniform(log_min, log_max))
+            val = math.exp(_safe_uniform(log_min, log_max))
             return round(val, 6)
         min_v = spec.min_val or 0.0
         max_v = spec.max_val or 1.0
-        val = random.uniform(min_v, max_v)
+        val = _safe_uniform(min_v, max_v)
         if spec.step:
             val = round(round((val - min_v) / spec.step) * spec.step + min_v, 4)
         else:
@@ -188,10 +228,7 @@ class SweepEngine:
 
     def _suggest_random(self, sweep: SweepConfig) -> dict[str, Any]:
         """Generate a random parameter sample across all dimensions."""
-        params = {}
-        for name, spec in sweep.parameters.items():
-            params[name] = self._sample_single_param(spec)
-        return params
+        return {name: self._sample_single_param(spec) for name, spec in sweep.parameters.items()}
 
     def _suggest_grid(self, sweep: SweepConfig, trial_num: int) -> dict[str, Any]:
         """Generate parameter combination using deterministic Cartesian product indexing."""
@@ -241,27 +278,9 @@ class SweepEngine:
         best_score = -1.0
 
         for cand in candidates:
-            sim_score = 0.0
-            for good_t in good_trials:
-                match_count = 0
-                total_count = len(sweep.parameters)
-                for p_name, spec in sweep.parameters.items():
-                    val1 = cand.get(p_name)
-                    val2 = good_t.parameters.get(p_name)
-                    if val1 is None or val2 is None:
-                        continue
-                    if spec.param_type in ("categorical", "choice"):
-                        if val1 == val2:
-                            match_count += 1
-                    else:
-                        norm_range = (spec.max_val or 1.0) - (spec.min_val or 0.0)
-                        if norm_range > 0:
-                            dist = abs(float(val1) - float(val2)) / norm_range
-                            match_count += max(0.0, 1.0 - dist)
-                sim_score += match_count / max(1, total_count)
-
-            if sim_score > best_score:
-                best_score = sim_score
+            score = _score_candidate(cand, good_trials, sweep.parameters)
+            if score > best_score:
+                best_score = score
                 best_candidate = cand
 
         return best_candidate
@@ -331,13 +350,13 @@ class SweepEngine:
             if sweep.goal == "maximize" and current_metric_val < es.metric_threshold:
                 return True
 
-        past_metrics = []
-        for t in sweep.trials:
-            if t.trial_id == trial_id:
-                continue
-            for entry in t.step_history:
-                if entry.get("step") == current_step and sweep.objective_metric in entry:
-                    past_metrics.append(float(entry[sweep.objective_metric]))
+        past_metrics = [
+            float(entry[sweep.objective_metric])
+            for t in sweep.trials
+            if t.trial_id != trial_id
+            for entry in t.step_history
+            if entry.get("step") == current_step and sweep.objective_metric in entry
+        ]
 
         if len(past_metrics) < 2:
             return False
@@ -348,8 +367,7 @@ class SweepEngine:
 
         if sweep.goal == "minimize":
             return current_metric_val > cutoff * 1.15
-        else:
-            return current_metric_val < cutoff * 0.85
+        return current_metric_val < cutoff * 0.85
 
     def analyze_sweep(self, project_id: str, sweep_id: str) -> dict[str, Any]:
         """Calculate parameter sensitivities, correlation matrix, optimal trial, and Pareto frontier."""

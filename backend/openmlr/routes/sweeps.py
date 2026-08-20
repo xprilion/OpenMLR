@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from ..db.models import User
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 _global_engine = SweepEngine()
 
 
-def _get_engine(request: Request, project_uuid: str | None = None) -> SweepEngine:
+def _get_engine(project_uuid: str | None = None) -> SweepEngine:
     """Get the active SweepEngine with project workspace isolation."""
     if project_uuid:
         base_dir = WORKSPACES_ROOT / project_uuid / ".project-meta" / "sweeps"
@@ -64,14 +64,13 @@ class PruneCheckRequest(BaseModel):
 @router.post("/api/sweeps", status_code=status.HTTP_201_CREATED)
 @router.post("/api/projects/{project_uuid}/sweeps", status_code=status.HTTP_201_CREATED)
 async def create_sweep(
-    request: Request,
     payload: CreateSweepRequest,
     project_uuid: str | None = None,
     current_user: User | None = Depends(get_current_user_optional),
 ):
     """Create and initialize a new hyperparameter sweep."""
     proj = project_uuid or payload.project_uuid or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
 
     try:
         sweep = engine.create_sweep(
@@ -97,14 +96,13 @@ async def create_sweep(
 @router.get("/api/sweeps")
 @router.get("/api/projects/{project_uuid}/sweeps")
 async def list_sweeps(
-    request: Request,
     project_uuid: str | None = None,
     project_id: str | None = Query(default=None),
     current_user: User | None = Depends(get_current_user_optional),
 ):
     """List all hyperparameter sweeps in a project."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     sweeps = engine.list_sweeps(proj)
     return {
         "project_id": proj,
@@ -116,7 +114,6 @@ async def list_sweeps(
 @router.get("/api/sweeps/{sweep_id}")
 @router.get("/api/projects/{project_uuid}/sweeps/{sweep_id}")
 async def get_sweep_details(
-    request: Request,
     sweep_id: str,
     project_uuid: str | None = None,
     project_id: str | None = Query(default=None),
@@ -124,7 +121,7 @@ async def get_sweep_details(
 ):
     """Get full sweep configuration, trial list, and current status."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     sweep = engine.get_sweep(proj, sweep_id)
     if not sweep:
         raise HTTPException(
@@ -137,7 +134,6 @@ async def get_sweep_details(
 @router.post("/api/sweeps/{sweep_id}/suggest")
 @router.post("/api/projects/{project_uuid}/sweeps/{sweep_id}/suggest")
 async def suggest_next_trial(
-    request: Request,
     sweep_id: str,
     project_uuid: str | None = None,
     project_id: str | None = Query(default=None),
@@ -145,7 +141,7 @@ async def suggest_next_trial(
 ):
     """Generate the next parameter candidate proposal for the sweep."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     try:
         trial = engine.suggest_trial(proj, sweep_id)
         if not trial:
@@ -161,7 +157,6 @@ async def suggest_next_trial(
 @router.post("/api/sweeps/{sweep_id}/trials/{trial_id}/record")
 @router.post("/api/projects/{project_uuid}/sweeps/{sweep_id}/trials/{trial_id}/record")
 async def record_trial_outcome(
-    request: Request,
     sweep_id: str,
     trial_id: str,
     payload: RecordTrialRequest,
@@ -171,7 +166,7 @@ async def record_trial_outcome(
 ):
     """Record metrics, completion status, or failure for a trial."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     try:
         trial = engine.record_trial_result(
             project_id=proj,
@@ -193,7 +188,6 @@ async def record_trial_outcome(
 @router.post("/api/sweeps/{sweep_id}/trials/{trial_id}/prune-check")
 @router.post("/api/projects/{project_uuid}/sweeps/{sweep_id}/trials/{trial_id}/prune-check")
 async def check_trial_pruning(
-    request: Request,
     sweep_id: str,
     trial_id: str,
     payload: PruneCheckRequest,
@@ -203,7 +197,7 @@ async def check_trial_pruning(
 ):
     """Evaluate whether the trial should be early stopped."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     should_prune = engine.should_prune_trial(
         project_id=proj,
         sweep_id=sweep_id,
@@ -217,7 +211,6 @@ async def check_trial_pruning(
 @router.get("/api/sweeps/{sweep_id}/analysis")
 @router.get("/api/projects/{project_uuid}/sweeps/{sweep_id}/analysis")
 async def get_sweep_analysis(
-    request: Request,
     sweep_id: str,
     project_uuid: str | None = None,
     project_id: str | None = Query(default=None),
@@ -225,7 +218,7 @@ async def get_sweep_analysis(
 ):
     """Calculate parameter sensitivities, correlation matrix, optimal trial, and Pareto frontier."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     try:
         analysis = engine.analyze_sweep(proj, sweep_id)
         return {"analysis": analysis}
@@ -239,7 +232,6 @@ async def get_sweep_analysis(
 @router.post("/api/sweeps/{sweep_id}/export")
 @router.post("/api/projects/{project_uuid}/sweeps/{sweep_id}/export")
 async def export_sweep_report(
-    request: Request,
     sweep_id: str,
     project_uuid: str | None = None,
     project_id: str | None = Query(default=None),
@@ -247,7 +239,7 @@ async def export_sweep_report(
 ):
     """Export markdown report for research papers and ablation sections."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     report = engine.export_sweep_markdown(proj, sweep_id)
     return {"report": report}
 
@@ -255,7 +247,6 @@ async def export_sweep_report(
 @router.delete("/api/sweeps/{sweep_id}")
 @router.delete("/api/projects/{project_uuid}/sweeps/{sweep_id}")
 async def delete_sweep(
-    request: Request,
     sweep_id: str,
     project_uuid: str | None = None,
     project_id: str | None = Query(default=None),
@@ -263,7 +254,7 @@ async def delete_sweep(
 ):
     """Delete a sweep and all trial records."""
     proj = project_uuid or project_id or "default"
-    engine = _get_engine(request, proj)
+    engine = _get_engine(proj)
     deleted = engine.delete_sweep(proj, sweep_id)
     if not deleted:
         raise HTTPException(

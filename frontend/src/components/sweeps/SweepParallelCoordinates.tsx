@@ -18,7 +18,7 @@ export const SweepParallelCoordinates: React.FC<SweepParallelCoordinatesProps> =
 
     Object.entries(sweep.parameters).forEach(([name, spec]) => {
       if (spec.choices && spec.choices.length > 0) {
-        const choiceStrings = spec.choices.map((c) => String(c));
+        const choiceStrings = spec.choices.map(String);
         list.push({
           key: name,
           label: name,
@@ -34,7 +34,7 @@ export const SweepParallelCoordinates: React.FC<SweepParallelCoordinatesProps> =
           key: name,
           label: name,
           min: minVal,
-          max: maxVal === minVal ? minVal + 1 : maxVal,
+          max: Math.max(minVal + 1e-4, maxVal),
         });
       }
     });
@@ -47,7 +47,7 @@ export const SweepParallelCoordinates: React.FC<SweepParallelCoordinatesProps> =
       key: sweep.objective_metric,
       label: `${sweep.objective_metric} (${sweep.goal})`,
       min: minObj,
-      max: maxObj === minObj ? minObj + 1 : maxObj,
+      max: Math.max(minObj + 1e-4, maxObj),
     });
 
     return list;
@@ -73,9 +73,8 @@ export const SweepParallelCoordinates: React.FC<SweepParallelCoordinatesProps> =
       numeric = typeof rawVal === 'number' ? rawVal : Number(rawVal) || 0;
     }
 
-    const range = axis.max - axis.min || 1;
+    const range = Math.max(1e-6, axis.max - axis.min);
     const norm = Math.max(0, Math.min(1, (numeric - axis.min) / range));
-    // Inverted Y (0 at bottom, 1 at top)
     return svgHeight - paddingY - norm * (svgHeight - 2 * paddingY);
   };
 
@@ -92,6 +91,7 @@ export const SweepParallelCoordinates: React.FC<SweepParallelCoordinatesProps> =
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-text flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-primary" />
+          {' '}
           Hyperparameter Parallel Coordinates
         </h4>
         <span className="text-xs text-text-dim">{completedTrials.length} completed trials plotted</span>

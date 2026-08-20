@@ -5,7 +5,94 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .sweep_types import SweepConfig
+from .sweep_types import ParameterSpec, SweepConfig, Trial
+
+
+def _compute_single_param_correlation(
+    completed: list[Trial],
+    p_name: str,
+    spec: ParameterSpec,
+) -> tuple[float, float]:
+    """Compute Spearman/Pearson correlation and importance for a single parameter."""
+    x_vals: list[float] = []
+    valid_y: list[float] = []
+
+    for t in completed:
+        val = t.parameters.get(p_name)
+        if val is None or t.objective_value is None:
+            continue
+        if spec.param_type in ("categorical", "choice"):
+            x_vals.append(float(hash(str(val)) % 1000))
+        else:
+            try:
+                x_vals.append(float(val))
+            except (ValueError, TypeError):
+                continue
+        valid_y.append(t.objective_value)
+
+    if len(x_vals) < 3 or len(set(x_vals)) <= 1:
+        return 0.0, 0.1
+
+    mean_x = sum(x_vals) / len(x_vals)
+    mean_y = sum(valid_y) / len(valid_y)
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_vals, valid_y, strict=False))
+    var_x = sum((x - mean_x) ** 2 for x in x_vals)
+    var_y = sum((y - mean_y) ** 2 for y in valid_y)
+
+    if var_x > 1e-9 and var_y > 1e-9:
+        r = cov / (math.sqrt(var_x) * math.sqrt(var_y))
+        return round(r, 3), round(abs(r), 3)
+
+    return 0.0, 0.0
+
+
+def _compute_parameter_sensitivities(
+    completed: list[Trial],
+    parameters: dict[str, ParameterSpec],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Compute normalized parameter importance and correlations."""
+    importance: dict[str, float] = {}
+    correlations: dict[str, float] = {}
+
+    for p_name, spec in parameters.items():
+        corr, imp = _compute_single_param_correlation(completed, p_name, spec)
+        correlations[p_name] = corr
+        importance[p_name] = imp
+
+    total_imp = sum(importance.values())
+    if total_imp > 0:
+        importance = {k: round(v / total_imp, 3) for k, v in importance.items()}
+
+    return importance, correlations
+
+
+def _is_dominated(candidate: Trial, others: list[Trial], goal: str) -> bool:
+    """Check if candidate trial is dominated on both objective metric and duration."""
+    c_obj = candidate.objective_value or 0.0
+    c_dur = candidate.duration_seconds
+
+    for other in others:
+        if other.trial_id == candidate.trial_id:
+            continue
+        o_obj = other.objective_value or 0.0
+        o_dur = other.duration_seconds
+
+        better_or_equal_obj = o_obj <= c_obj if goal == "minimize" else o_obj >= c_obj
+        strictly_better_obj = o_obj < c_obj if goal == "minimize" else o_obj > c_obj
+
+        if better_or_equal_obj and o_dur <= c_dur:
+            if strictly_better_obj or o_dur < c_dur:
+                return True
+    return False
+
+
+def _compute_pareto_frontier(completed: list[Trial], goal: str) -> list[dict[str, Any]]:
+    """Find all non-dominated trials in the multi-objective space."""
+    pareto: list[dict[str, Any]] = []
+    for t in completed:
+        if not _is_dominated(t, completed, goal):
+            pareto.append(t.to_dict())
+    return pareto
 
 
 def calculate_sweep_analysis(sweep: SweepConfig) -> dict[str, Any]:
@@ -23,72 +110,12 @@ def calculate_sweep_analysis(sweep: SweepConfig) -> dict[str, Any]:
             "pareto_frontier": [],
         }
 
-    # Determine best trial
     reverse_sort = sweep.goal == "maximize"
     sorted_trials = sorted(completed, key=lambda t: t.objective_value or 0.0, reverse=reverse_sort)
     best_trial = sorted_trials[0]
 
-    # Calculate parameter importance and correlation
-    importance: dict[str, float] = {}
-    correlations: dict[str, float] = {}
-
-    for p_name, spec in sweep.parameters.items():
-        x_vals = []
-        valid_y = []
-        for t in completed:
-            val = t.parameters.get(p_name)
-            if val is not None and t.objective_value is not None:
-                if spec.param_type in ("categorical", "choice"):
-                    x_vals.append(float(hash(str(val)) % 1000))
-                else:
-                    try:
-                        x_vals.append(float(val))
-                    except (ValueError, TypeError):
-                        continue
-                valid_y.append(t.objective_value)
-
-        if len(x_vals) >= 3 and len(set(x_vals)) > 1:
-            mean_x = sum(x_vals) / len(x_vals)
-            mean_y = sum(valid_y) / len(valid_y)
-            cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_vals, valid_y, strict=False))
-            var_x = sum((x - mean_x) ** 2 for x in x_vals)
-            var_y = sum((y - mean_y) ** 2 for y in valid_y)
-            if var_x > 1e-9 and var_y > 1e-9:
-                r = cov / (math.sqrt(var_x) * math.sqrt(var_y))
-                correlations[p_name] = round(r, 3)
-                importance[p_name] = round(abs(r), 3)
-            else:
-                correlations[p_name] = 0.0
-                importance[p_name] = 0.0
-        else:
-            correlations[p_name] = 0.0
-            importance[p_name] = 0.1
-
-    total_imp = sum(importance.values())
-    if total_imp > 0:
-        importance = {k: round(v / total_imp, 3) for k, v in importance.items()}
-
-    # Pareto frontier for multi-objective (objective vs duration_seconds)
-    pareto = []
-    for t in completed:
-        dominated = False
-        for other in completed:
-            if other.trial_id == t.trial_id:
-                continue
-            t_obj = t.objective_value or 0.0
-            other_obj = other.objective_value or 0.0
-            if sweep.goal == "minimize":
-                if other_obj <= t_obj and other.duration_seconds <= t.duration_seconds:
-                    if other_obj < t_obj or other.duration_seconds < t.duration_seconds:
-                        dominated = True
-                        break
-            else:
-                if other_obj >= t_obj and other.duration_seconds <= t.duration_seconds:
-                    if other_obj > t_obj or other.duration_seconds < t.duration_seconds:
-                        dominated = True
-                        break
-        if not dominated:
-            pareto.append(t.to_dict())
+    importance, correlations = _compute_parameter_sensitivities(completed, sweep.parameters)
+    pareto = _compute_pareto_frontier(completed, sweep.goal)
 
     return {
         "sweep_id": sweep.sweep_id,
