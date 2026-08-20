@@ -19,6 +19,12 @@ const CitationGraph = lazy(() =>
 const RunDashboard = lazy(() =>
   import('../experiments/RunDashboard').then((m) => ({ default: m.RunDashboard }))
 );
+const PeerReviewStudio = lazy(() =>
+  import('../review/PeerReviewStudio').then((m) => ({ default: m.PeerReviewStudio }))
+);
+const EvalBenchmarkDashboard = lazy(() =>
+  import('../eval/EvalBenchmarkDashboard').then((m) => ({ default: m.EvalBenchmarkDashboard }))
+);
 
 export function ChatContainer() {
   const {
@@ -131,6 +137,28 @@ export function ChatContainer() {
           onClick={() => setMainTab('experiments')}
         >
           Experiments
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'review'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'review' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('review')}
+        >
+          Peer Review
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mainTab === 'eval'}
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+            mainTab === 'eval' ? 'text-primary border-b-2 border-primary' : 'text-text-dim hover:text-text'
+          }`}
+          onClick={() => setMainTab('eval')}
+        >
+          Benchmarks
         </button>
         {/* Closable Image tab */}
         {imageTab && (
@@ -276,6 +304,20 @@ export function ChatContainer() {
       <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'experiments' ? '' : 'hidden'}`}>
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Experiment Dashboard...</div>}>
           <RunDashboard />
+        </Suspense>
+      </div>
+
+      {/* Peer Review tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'review' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Peer Review Studio...</div>}>
+          <PeerReviewStudio />
+        </Suspense>
+      </div>
+
+      {/* Evaluation Benchmark tab */}
+      <div role="tabpanel" className={`flex flex-col flex-1 overflow-hidden ${mainTab === 'eval' ? '' : 'hidden'}`}>
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-text-dim">Loading Benchmark Harness...</div>}>
+          <EvalBenchmarkDashboard />
         </Suspense>
       </div>
 
