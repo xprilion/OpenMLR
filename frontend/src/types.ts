@@ -184,3 +184,43 @@ export interface AgentJob {
   completed_at?: string;
   error?: string;
 }
+
+// ── Peer Review Simulation ──────────────────────────────
+
+export interface SingleReview {
+  reviewer_id: string;
+  reviewer_name: string;
+  role: string;
+  overall_score: number;
+  confidence: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  questions_for_authors: string[];
+  detailed_comments: string;
+  recommendation: string;
+  criteria_scores?: Record<string, number>;
+}
+
+export interface MetaReview {
+  decision: string;
+  decision_type: 'accept' | 'reject' | 'borderline';
+  consensus_score: number;
+  confidence: number;
+  summary_of_consensus: string;
+  justification: string;
+  key_strengths: string[];
+  primary_shortcomings: string[];
+  actionable_revision_plan: string[];
+}
+
+export interface PeerReviewResult {
+  submission_title: string;
+  venue: string;
+  average_score: number;
+  reviews: SingleReview[];
+  meta_review: MetaReview | null;
+  evaluated_at: number;
+  status: string;
+  markdown_report?: string;
+}
